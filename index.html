@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>PickleRank</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;800&family=Noto+Serif+TC:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { min-height: 100dvh; background: var(--bg-root, #0d0d0f); color: var(--text-root, #e8e8e8); transition: background 0.2s, color 0.2s; }
+      body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+      #root { min-height: 100dvh; }
+      input, select, button { font-family: inherit; }
+      input[type=number]::-webkit-inner-spin-button,
+      input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      input[type=number] { -moz-appearance: textfield; }
+      main { -webkit-overflow-scrolling: touch; }
+      .file-input-hidden { display: none; }
+      .badge-earned { opacity: 1; filter: none; }
+      .badge-locked { opacity: 0.35; filter: grayscale(100%); }
+      .star-btn { background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px; line-height: 1; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
