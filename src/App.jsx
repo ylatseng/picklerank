@@ -6,7 +6,7 @@ import StatsView from './views/StatsView.jsx';
 import Settings from './views/Settings.jsx';
 import Profile from './views/Profile.jsx';
 import { LogMatch, SessionMode, KingOfCourt, TournamentMode } from './views/MatchModes.jsx';
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { ThemeCtx } from './context.js';
 import {
   DEFAULT_RATING, STORAGE_KEY, APP_MODES, APP_ACCENTS, APP_FONTS,
@@ -21,21 +21,34 @@ import {
   Sec, Empty, Err, Sel, MiniMatchCard, MatchEloBreakdown, MatchEditModal
 } from './components/Shared.jsx';
 
-// ─── Main App Router (This was missing!) ──────────────────────────────────────
+// ─── Main App Router ──────────────────────────────────────
 export default function App() {
-  const [state, setState] = useState(() => {
-    const s = loadState() || blankState();
-    if (!s.langId) s.langId = "en";
-    if (!s.fontId) s.fontId = "sans";
-    if (!s.zoomLevel) s.zoomLevel = 1.0;
-    if (s.logoText === undefined) s.logoText = "LS";
-    if (s.isAdmin === undefined) s.isAdmin = false;
-    if (!s.adminPass) s.adminPass = "1234";
-    if (s.leaderboardFormat === undefined) s.leaderboardFormat = "doubles";
-    if (!s.favoredPlayerIds) s.favoredPlayerIds = [];
-    return s;
-  });
+  // FIX 1: Start with a blank state and a loading flag so React Hooks never break
+  const [state, setState] = useState(() => blankState());
+  const [isLoading, setIsLoading] = useState(true);
 
+  // 1. Download data from Cloud when the app opens
+  useEffect(() => {
+    loadState().then(cloudData => {
+      let s = cloudData || blankState();
+      if (!s.langId) s.langId = "en";
+      if (!s.fontId) s.fontId = "sans";
+      if (!s.zoomLevel) s.zoomLevel = 1.0;
+      if (s.logoText === undefined) s.logoText = "LS";
+      if (s.isAdmin === undefined) s.isAdmin = false;
+      if (!s.adminPass) s.adminPass = "1234";
+      if (s.leaderboardFormat === undefined) s.leaderboardFormat = "doubles";
+      if (!s.favoredPlayerIds) s.favoredPlayerIds = [];
+      
+      setState(s);
+      setIsLoading(false); // Turn off loading screen
+    }).catch(error => {
+      console.error("Firebase Error:", error);
+      setIsLoading(false); // FIX 2: Safety net! Turn off loading screen even if Firebase fails
+    });
+  }, []);
+
+  // 2. Destructure state safely
   const {
       players = [], matches = [], activeView = "dashboard", profileId, historyPlayerId, 
       modeId = "dark", accentId = "green", fontId = "sans", langId = "en", zoomLevel = 1.0, 
@@ -59,12 +72,18 @@ export default function App() {
     if (metaThemeColor) metaThemeColor.setAttribute("content", theme.bg);
   }, [theme.bg, theme.text, activeFont.css]);
 
+  // 3. Upload data to Cloud whenever you change something
   const set = useCallback((updater)=>{
     setState(prev=>{
       const next = typeof updater==="function" ? updater(prev) : {...prev,...updater};
-      saveState(next); return next;
+      
+      // FIX 3: Only save to cloud if we are completely done loading
+      if (!isLoading) {
+         saveState(next); 
+      }
+      return next;
     });
-  },[]);
+  },[isLoading]);
 
   const { derivedPlayers, derivedMatches } = useMemo(() => replayAllMatches(players, matches), [players, matches]);
   const stats = useMemo(() => computeStats(derivedPlayers, derivedMatches),[derivedPlayers, derivedMatches]);
@@ -88,6 +107,15 @@ export default function App() {
   const profilePlayer = profileId ? stats.find(p=>p.id===profileId) : null;
   const nav = (view,extra={}) => set(s=>({...s,activeView:view,...extra}));
 
+  // FIX 4: The loading screen now sits safely AFTER all the hooks!
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#121212", color: "#50c878", fontSize: "20px", fontWeight: "bold" }}>
+        Loading PickleRank... 🥒
+      </div>
+    );
+  }
+
   return (
     <ThemeCtx.Provider value={theme}>
       <div style={makeS(theme).app}>
@@ -105,12 +133,9 @@ export default function App() {
           {activeView==="stats"      && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme}/>}
           {activeView==="settings"   && <Settings state={state} set={set} nav={nav} theme={theme}/>}
         </main>
-        {/* 👇 ADD THE NEW LINE RIGHT HERE 👇 */}
         <div style={{textAlign: 'center', fontSize: '10px', color: 'gray', paddingBottom: '80px'}}>v1.0.5 - Updated 2026-06-18</div>
         <BottomNav active={activeView} nav={nav} theme={theme}/>
       </div>
     </ThemeCtx.Provider>
   );
 }
-
-

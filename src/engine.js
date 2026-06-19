@@ -1,3 +1,7 @@
+// Firebase connection setup
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "./firebase.js";
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 export const DEFAULT_RATING = 3.0;
 export const K_FACTOR = 0.08;
@@ -275,11 +279,46 @@ export function processImage(file, callback, maxDim = 120) {
   reader.readAsDataURL(file);
 }
 
-export function loadState() {
-  try { const r = localStorage.getItem(STORAGE_KEY); if (r) return JSON.parse(r); } catch {}
-  return null;
-}
-export function saveState(s) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch {} }
+const DB_DOC_ID = "main_group"; // A single document for you and your friends to share
+
+
 export function blankState() {
-  return { players:[], matches:[], activeView:"dashboard", profileId:null, historyPlayerId:null, compareIds:[null,null], modeId:"dark", accentId:"green", fontId:"sans", langId:"en", logoText:"LS", logoData:null, zoomLevel:1.0, savedGroups:[], isAdmin:false, adminPass:"1234", leaderboardFormat:"doubles", favoredPlayerIds:[] };
+  return {
+    players: [],
+    matches: [],
+    activeView: "dashboard",
+    modeId: "dark",
+    accentId: "green",
+    fontId: "sans",
+    langId: "en",
+    zoomLevel: 1.0,
+    logoText: "LS",
+    isAdmin: false,
+    adminPass: "1234",
+    leaderboardFormat: "doubles",
+    favoredPlayerIds: []
+  };
+}
+
+export async function loadState() {
+  try {
+    const docRef = doc(db, "picklerank", DB_DOC_ID);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data();
+    }
+    return blankState(); // If no data exists yet, start fresh
+  } catch (e) {
+    console.error("Error loading from cloud:", e);
+    return blankState();
+  }
+}
+
+export async function saveState(state) {
+  try {
+    const docRef = doc(db, "picklerank", DB_DOC_ID);
+    await setDoc(docRef, state);
+  } catch (e) {
+    console.error("Error saving to cloud:", e);
+  }
 }
