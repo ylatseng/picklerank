@@ -1,5 +1,5 @@
-import React from 'react';
-import { t, ratingColor, fmtDelta } from '../engine.js';
+import React, { useEffect } from 'react';
+import { t, ratingColor, fmtDelta, patchPlayerRatings } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, MiniMatchCard, Avatar } from '../components/Shared.jsx';
 
@@ -43,6 +43,14 @@ export function LeaderboardRow({player:p,rank,onClick,theme,format}) {
 }
 
 export default function Dashboard({players,matches,nav,theme,set,format}) {
+  // Migration hook to split old baseRating into singles/doubles ratings
+  useEffect(() => {
+    if (players.length > 0 && players[0].ratingSingles === undefined) {
+      const updatedPlayers = patchPlayerRatings(players);
+      set(s => ({ ...s, players: updatedPlayers }));
+    }
+  }, [players]);
+
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   const recent=[...matches].reverse().slice(0,5);
