@@ -306,7 +306,14 @@ export async function loadState() {
     const docRef = doc(db, "picklerank", DB_DOC_ID);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return docSnap.data();
+      const data = docSnap.data();
+      
+      // THE FIX: Translate the text string back into an array for the app
+      if (typeof data.matches === "string") {
+        data.matches = JSON.parse(data.matches);
+      }
+      
+      return data;
     }
     return blankState(); // If no data exists yet, start fresh
   } catch (e) {
@@ -318,7 +325,14 @@ export async function loadState() {
 export async function saveState(state) {
   try {
     const docRef = doc(db, "picklerank", DB_DOC_ID);
-    await setDoc(docRef, state);
+    
+    // THE FIX: Turn nested arrays into a text string to bypass Firestore's limit
+    const safeState = { ...state };
+    if (Array.isArray(safeState.matches)) {
+      safeState.matches = JSON.stringify(safeState.matches);
+    }
+    
+    await setDoc(docRef, safeState);
   } catch (e) {
     console.error("Error saving to cloud:", e);
   }

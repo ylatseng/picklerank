@@ -78,7 +78,7 @@ export default function Settings({state,set,nav,theme}) {
         const groupRef = doc(db, "picklerank", "main_group");
         await setDoc(groupRef, {
           players: data.players,
-          matches: data.matches,
+          matches: JSON.stringify(data.matches), // <-- THE FIX for failed data import from mobile.
           savedGroups: data.savedGroups || [],
           langId: data.langId || "en",
           logoText: data.logoText || "LS",
