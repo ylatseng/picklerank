@@ -14,7 +14,18 @@
     
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { min-height: 100dvh; background: var(--bg-root, #0d0d0f); color: var(--text-root, #e8e8e8); transition: background 0.2s, color 0.2s; }
+      
+      /* THE FIX: Added text-size-adjust and line-height here */
+      html, body { 
+        min-height: 100dvh; 
+        background: var(--bg-root, #0d0d0f); 
+        color: var(--text-root, #e8e8e8); 
+        transition: background 0.2s, color 0.2s; 
+        -webkit-text-size-adjust: 100%; 
+        text-size-adjust: 100%; 
+        line-height: 1.5; 
+      }
+      
       body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
       #root { min-height: 100dvh; }
       input, select, button { font-family: inherit; }
