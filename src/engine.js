@@ -1,6 +1,7 @@
 // Firebase connection setup
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "./firebase.js";
+export { db }; // This unlocks it for Settings.jsx!
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 export const DEFAULT_RATING = 3.0;
