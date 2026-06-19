@@ -322,6 +322,157 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin }) {
 }
 
 export function TournamentMode({ players, state, set, nav, theme }) {
-    // (Tournament implementation goes here)
-    return <div>Tournament View</div>;
+  const S = makeS(theme);
+  const z = theme.zoom || 1.0;
+  
+  // 0: Setup, 1: Playing
+  const [step, setStep] = useState(0); 
+  const [teams, setTeams] = useState([["",""], ["",""], ["",""], ["",""]]);
+  const [winTo, setWinTo] = useState(11);
+  const [winBy, setWinBy] = useState(2);
+  const [scores, setScores] = useState({ sf1a:"", sf1b:"", sf2a:"", sf2b:"", fina:"", finb:"" });
+  const [err, setErr] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const rawOpts = players.map(p => ({ value: p.id, label: p.name }));
+  const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
+  const getName = id => players.find(p => p.id === id)?.name ?? "TBD";
+
+  function upT(tIdx, pIdx, val) {
+    const n = [...teams];
+    n[tIdx] = [...n[tIdx]];
+    n[tIdx][pIdx] = val;
+    setTeams(n);
+  }
+
+  function upS(key, val) {
+    setScores(s => ({...s, [key]: val.replace(/-/g, '')}));
+  }
+
+  function start() {
+    setErr("");
+    const ids = teams.flat();
+    if(ids.some(id => !id)) return setErr(t("err_select_players"));
+    if(new Set(ids).size !== 8) return setErr(t("err_duplicate"));
+    setStep(1);
+  }
+
+  function logTournament() {
+    setErr(""); setSuccess("");
+    
+    const s_sf1a = parseInt(scores.sf1a), s_sf1b = parseInt(scores.sf1b);
+    const s_sf2a = parseInt(scores.sf2a), s_sf2b = parseInt(scores.sf2b);
+    const s_fina = parseInt(scores.fina), s_finb = parseInt(scores.finb);
+
+    if ([s_sf1a, s_sf1b, s_sf2a, s_sf2b, s_fina, s_finb].some(isNaN)) return setErr(t("err_valid_scores"));
+
+    const r_sf1 = validatePickleballScore(s_sf1a, s_sf1b, winTo, winBy);
+    const r_sf2 = validatePickleballScore(s_sf2a, s_sf2b, winTo, winBy);
+    const r_fin = validatePickleballScore(s_fina, s_finb, winTo, winBy);
+
+    if(!r_sf1 || !r_sf2 || !r_fin) return setErr(t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy));
+
+    const t1 = teams[0], t2 = teams[1], t3 = teams[2], t4 = teams[3];
+    const win_sf1 = r_sf1.winner === 0 ? t1 : t2;
+    const win_sf2 = r_sf2.winner === 0 ? t3 : t4;
+
+    const dateStr = new Date().toISOString();
+    
+    const m1 = { id: genId(), type: "doubles", date: dateStr, teams: [t1, t2], winnerTeam: r_sf1.winner, games: [{a:s_sf1a, b:s_sf1b, winner: r_sf1.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_sf1.winner===0?1:0, team2Wins: r_sf1.winner===1?1:0, venue: "Tournament SF1" };
+    const m2 = { id: genId(), type: "doubles", date: dateStr, teams: [t3, t4], winnerTeam: r_sf2.winner, games: [{a:s_sf2a, b:s_sf2b, winner: r_sf2.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_sf2.winner===0?1:0, team2Wins: r_sf2.winner===1?1:0, venue: "Tournament SF2" };
+    const m3 = { id: genId(), type: "doubles", date: dateStr, teams: [win_sf1, win_sf2], winnerTeam: r_fin.winner, games: [{a:s_fina, b:s_finb, winner: r_fin.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_fin.winner===0?1:0, team2Wins: r_fin.winner===1?1:0, venue: "Tournament Final" };
+
+    // Push standard match objects to state; engine.js will handle stringifying for Firebase!
+    set(s => ({...s, matches: [...(s.matches||[]), m1, m2, m3]}));
+    
+    setSuccess("✅ Tournament Logged! Champions: " + getName(win_sf1 === r_fin.winner ? win_sf1[0] : win_sf2[0]) + " & " + getName(win_sf1 === r_fin.winner ? win_sf1[1] : win_sf2[1]));
+    setStep(0);
+    setTeams([["",""],["",""],["",""],["",""]]);
+    setScores({ sf1a:"", sf1b:"", sf2a:"", sf2b:"", fina:"", finb:"" });
+  }
+
+  return (
+    <div style={S.view}>
+      <MatchesSubNav active="tournament" nav={nav} theme={theme} />
+      
+      {success && <div style={{background:"rgba(80,200,120,0.15)", color:"#50c878", padding:10*z, borderRadius:8*z, marginBottom:12*z, fontSize:13*z, fontWeight:"bold"}}>{success}</div>}
+      
+      {step === 0 && (
+        <Sec title={t("tourney_setup")} theme={theme}>
+          <div style={{display:"flex", gap:12*z, marginBottom:16*z}}>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("win_to_lbl")}</label>
+              <input style={S.input} type="number" min="1" value={winTo} onChange={e=>setWinTo(parseInt(e.target.value)||1)} />
+            </div>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("win_by_lbl")}</label>
+              <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
+            </div>
+          </div>
+          
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12*z}}>
+            {teams.map((tArr, i) => (
+              <div key={i} style={{background:theme.card, padding:10*z, borderRadius:8*z, border:`1px solid ${theme.border}`}}>
+                <div style={{fontSize:12*z, fontWeight:700, color:theme.sub, marginBottom:8*z}}>{t("team")} {i+1}</div>
+                <Sel opts={opts} value={tArr[0]} onChange={v=>upT(i, 0, v)} placeholder={t("player_1")} theme={theme}/>
+                <div style={{height:8*z}}/>
+                <Sel opts={opts} value={tArr[1]} onChange={v=>upT(i, 1, v)} placeholder={t("player_2")} theme={theme}/>
+              </div>
+            ))}
+          </div>
+          {err && <Err msg={err} theme={theme}/>}
+          <button style={{...S.btnPrimary, marginTop:16*z, width:"100%"}} onClick={start}>{t("start_tournament")}</button>
+        </Sec>
+      )}
+
+      {step === 1 && (
+        <Sec title={t("tournament")} theme={theme}>
+          <div style={{display:"flex", flexDirection:"column", gap:16*z}}>
+            
+            {/* Semifinal 1 */}
+            <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
+              <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("sf")} 1</div>
+              <div style={S.gameRow}>
+                <span style={{flex:1, fontSize:13*z, color:theme.text}}>{getName(teams[0][0])}/{getName(teams[0][1])}</span>
+                <input style={S.scoreInput} type="number" placeholder="T1" value={scores.sf1a} onChange={e=>upS("sf1a", e.target.value)}/>
+                <span style={{color:theme.sub}}>–</span>
+                <input style={S.scoreInput} type="number" placeholder="T2" value={scores.sf1b} onChange={e=>upS("sf1b", e.target.value)}/>
+                <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(teams[1][0])}/{getName(teams[1][1])}</span>
+              </div>
+            </div>
+
+            {/* Semifinal 2 */}
+            <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
+              <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("sf")} 2</div>
+              <div style={S.gameRow}>
+                <span style={{flex:1, fontSize:13*z, color:theme.text}}>{getName(teams[2][0])}/{getName(teams[2][1])}</span>
+                <input style={S.scoreInput} type="number" placeholder="T3" value={scores.sf2a} onChange={e=>upS("sf2a", e.target.value)}/>
+                <span style={{color:theme.sub}}>–</span>
+                <input style={S.scoreInput} type="number" placeholder="T4" value={scores.sf2b} onChange={e=>upS("sf2b", e.target.value)}/>
+                <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(teams[3][0])}/{getName(teams[3][1])}</span>
+              </div>
+            </div>
+
+            {/* Final */}
+            <div style={{background:theme.card, border:`2px solid ${theme.accent}`, borderRadius:12*z, padding:12*z}}>
+              <div style={{fontSize:14*z, fontWeight:800, color:theme.accent, marginBottom:8*z}}>🏆 {t("final")}</div>
+              <div style={S.gameRow}>
+                <span style={{flex:1, fontSize:13*z, color:theme.text}}>{t("winner")} SF1</span>
+                <input style={S.scoreInput} type="number" placeholder="W1" value={scores.fina} onChange={e=>upS("fina", e.target.value)}/>
+                <span style={{color:theme.sub}}>–</span>
+                <input style={S.scoreInput} type="number" placeholder="W2" value={scores.finb} onChange={e=>upS("finb", e.target.value)}/>
+                <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{t("winner")} SF2</span>
+              </div>
+            </div>
+
+          </div>
+          {err && <Err msg={err} theme={theme}/>}
+          <div style={{display:"flex", gap:10*z, marginTop:16*z}}>
+            <button style={{...S.btnBig, flex:1}} onClick={logTournament}>{t("log_tournament")}</button>
+            <button style={{...S.btnSecondary, marginTop:0}} onClick={() => setStep(0)}>{t("cancel")}</button>
+          </div>
+        </Sec>
+      )}
+    </div>
+  );
 }

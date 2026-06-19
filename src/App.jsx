@@ -133,7 +133,10 @@ export default function App() {
           {activeView==="stats"      && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme}/>}
           {activeView==="settings"   && <Settings state={state} set={set} nav={nav} theme={theme}/>}
         </main>
-        <div style={{textAlign: 'center', fontSize: '10px', color: 'gray', paddingBottom: '80px'}}>v1.0.5 - Updated 2026-06-18</div>
+        
+        {/* -- this is for footer note*/}
+        {/*<div style={{textAlign: 'center', fontSize: '10px', color: 'gray', paddingBottom: '80px'}}>v1.0.5 - Updated 2026-06-18</div>*/} 
+        
         <BottomNav active={activeView} nav={nav} theme={theme}/>
       </div>
     </ThemeCtx.Provider>

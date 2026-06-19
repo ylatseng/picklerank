@@ -225,9 +225,9 @@ export default function Settings({state,set,nav,theme}) {
       </Sec>
       <Sec title={t("backup_restore_sec")} theme={theme}>
         <p style={{fontSize:13*z,color:theme.sub,marginBottom:14*z}}>{t("backup_desc")}</p>
-        <div style={{display:"flex", gap:10*z}}>
-          <button style={{...S.btnPrimary, flex:1}} onClick={exportData}>{t("json_backup_btn")}</button>
-          <button style={{...S.btnPrimary, flex:1, background:theme.card, color:theme.accent, border:`1px solid ${theme.accent}`}} onClick={exportCSV}>{t("csv_export_btn")}</button>
+        <div style={{display:"flex", flexWrap:"wrap", gap:10*z}}>
+          <button style={{...S.btnPrimary, flex:"1 1 120px"}} onClick={exportData}>{t("json_backup_btn")}</button>
+          <button style={{...S.btnPrimary, flex:"1 1 120px", background:theme.card, color:theme.accent, border:`1px solid ${theme.accent}`}} onClick={exportCSV}>{t("csv_export_btn")}</button>
         </div>
         <div style={{marginTop:12*z}}>
           <button style={{...S.btnSecondary, width:"100%"}} onClick={()=>fileRef.current.click()}>{t("import_json_btn")}</button>
