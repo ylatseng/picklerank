@@ -2,6 +2,9 @@ import React, { useState, useRef } from 'react';
 import { t, APP_MODES, APP_ACCENTS, APP_FONTS, blankState, processImage } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Err, ConfirmInline } from '../components/Shared.jsx';
+import { doc, setDoc } from "firebase/firestore";
+// Ensure you import your db from wherever you initialized it, probably engine.js or firebase.js:
+import { db } from "./engine";
 
 export default function Settings({state,set,nav,theme}) {
   const S=makeS(theme);
@@ -43,17 +46,53 @@ export default function Settings({state,set,nav,theme}) {
     a.click(); URL.revokeObjectURL(url);
   }
 
-  function importData(e){
+  async function importData(e) {
     setImportErr(""); setImportOk(false);
-    const file=e.target.files[0]; if(!file)return;
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      try{
-        const data=JSON.parse(ev.target.result);
-        if(!Array.isArray(data.players)||!Array.isArray(data.matches)) throw new Error("Invalid format.");
-        set(s=>({...s,players:data.players,matches:data.matches,savedGroups:data.savedGroups||[],langId:data.langId||"en",logoText:data.logoText||"LS",logoData:data.logoData||null,zoomLevel:data.zoomLevel||1.0,favoredPlayerIds:data.favoredPlayerIds||[],adminPass:data.adminPass||"1234",isAdmin:false}));
+    const file = e.target.files[0]; 
+    if (!file) return;
+    
+    const reader = new FileReader();
+    
+    // 1. Make the reader function async so we can await Firebase
+    reader.onload = async (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data.players) || !Array.isArray(data.matches)) throw new Error("Invalid format.");
+        
+        // 2. Update local UI state (Your original code)
+        set(s => ({
+          ...s, 
+          players: data.players, 
+          matches: data.matches, 
+          savedGroups: data.savedGroups || [], 
+          langId: data.langId || "en", 
+          logoText: data.logoText || "LS", 
+          logoData: data.logoData || null, 
+          zoomLevel: data.zoomLevel || 1.0, 
+          favoredPlayerIds: data.favoredPlayerIds || [], 
+          adminPass: data.adminPass || "1234", 
+          isAdmin: false
+        }));
+
+        // 3. THE FIX: Push the uploaded data directly to Firebase
+        const groupRef = doc(db, "picklerank", "main_group");
+        await setDoc(groupRef, {
+          players: data.players,
+          matches: data.matches,
+          savedGroups: data.savedGroups || [],
+          langId: data.langId || "en",
+          logoText: data.logoText || "LS",
+          logoData: data.logoData || null,
+          zoomLevel: data.zoomLevel || 1.0,
+          favoredPlayerIds: data.favoredPlayerIds || [],
+          adminPass: data.adminPass || "1234"
+        }, { merge: true });
+
         setImportOk(true);
-      }catch(err){setImportErr("Import failed: "+err.message);}
+      } catch (err) {
+        setImportErr("Import failed: " + err.message);
+        console.error("Firebase Sync Error:", err); // Helpful if it fails
+      }
     };
     reader.readAsText(file);
   }
