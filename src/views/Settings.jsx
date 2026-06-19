@@ -4,7 +4,7 @@ import { makeS } from '../styles.js';
 import { Sec, Err, ConfirmInline } from '../components/Shared.jsx';
 import { doc, setDoc } from "firebase/firestore";
 // Ensure you import your db from wherever you initialized it, probably engine.js or firebase.js:
-import { db } from "./engine";
+import { db } from "../engine";
 
 export default function Settings({state,set,nav,theme}) {
   const S=makeS(theme);
