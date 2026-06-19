@@ -138,9 +138,10 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
       <div style={{display:"flex",gap:8*z,flexWrap:"wrap",marginBottom:8*z}}>
         {(m.games||[]).map((g,i)=>(
           <div key={i} style={S.gamePill}>
-            <span style={{color:g.winner===0?"#50c878":theme.sub, fontWeight:g.winner===0?700:400}}>{g.a}</span>
-            <span style={{color:theme.sub}}>–</span>
-            <span style={{color:g.winner===1?"#50c878":theme.sub, fontWeight:g.winner===1?700:400}}>{g.b}</span>
+            {/* FIX: Changed theme.sub to theme.text and boosted font weight */}
+            <span style={{color:g.winner===0?"#50c878":theme.text, fontWeight:g.winner===0?800:600}}>{g.a}</span>
+            <span style={{color:theme.text}}>–</span>
+            <span style={{color:g.winner===1?"#50c878":theme.text, fontWeight:g.winner===1?800:600}}>{g.b}</span>
           </div>
         ))}
       </div>
@@ -179,7 +180,8 @@ export function MiniMatchCard({match:m,players,theme}){
       <div style={{fontSize:11*z,color:theme.sub,marginBottom:4*z}}>{fmtDate(m.date)} · {m.type}{m.venue?` · 📍${m.venue}`:""}</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:13*z,fontWeight:m.winnerTeam===0?700:400,color:m.winnerTeam===0?"#50c878":theme.sub}}>{t1}</span>
-        <span style={{fontSize:11*z,color:theme.faint}}>{(m.games||[]).map(g=>`${g.a}-${g.b}`).join(", ")}</span>
+        {/* FIX: Replaced faint color with bright text and bold weight */}
+        <span style={{fontSize:13*z,fontWeight:700,color:theme.text}}>{(m.games||[]).map(g=>`${g.a}-${g.b}`).join(", ")}</span>
         <span style={{fontSize:13*z,fontWeight:m.winnerTeam===1?700:400,color:m.winnerTeam===1?"#50c878":theme.sub}}>{t2}</span>
       </div>
     </div>

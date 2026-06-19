@@ -14,7 +14,12 @@ export function LogMatch({state,players,set,nav,theme}) {
   const [venue,setVenue]=useState(""), [err,setErr]=useState(""), [result,setResult]=useState(null);
   const [matchDate,setMatchDate]=useState(()=>isoToDatetimeLocal(new Date().toISOString()));
   
-  function upSp(k,v){setSp(p=>({...p,[k]:v}));}
+  // Dynamic Duplicate Check
+  const activeIds = type === "singles" ? [sp.s1, sp.s2] : [sp.d1a, sp.d1b, sp.d2a, sp.d2b];
+  const filledActive = activeIds.filter(Boolean);
+  const hasDupes = new Set(filledActive).size < filledActive.length;
+
+  function upSp(k,v){setSp(p=>({...p,[k]:v})); setErr("");}
   function upTn(k,v){setTnames(t=>({...t,[k]:v}));}
   function addGame(){setGames(g=>[...g,{a:"",b:""}]);}
   function rmGame(i){setGames(g=>g.filter((_,idx)=>idx!==i));}
@@ -26,10 +31,10 @@ export function LogMatch({state,players,set,nav,theme}) {
   
   function submit(){
     setErr(""); setResult(null);
+    if(hasDupes) return setErr(t("err_duplicate"));
     const teams=getTeams(), allIds=teams.flat().filter(Boolean);
     if(type==="singles"&&(!sp.s1||!sp.s2)) return setErr(t("err_select_players"));
     if(type==="doubles"&&allIds.length<4) return setErr(t("err_select_4"));
-    if(new Set(allIds).size<allIds.length) return setErr(t("err_duplicate"));
     
     let t1w=0,t2w=0; const parsedGames=[];
     for(let i=0;i<games.length;i++){
@@ -88,12 +93,14 @@ export function LogMatch({state,players,set,nav,theme}) {
           </div>
         </div>
       </Sec>
+      
       {type==="singles"?(
         <Sec title={t("players")} theme={theme}>
           <label style={S.label}>{t("player_1")}</label>
           <Sel opts={opts} value={sp.s1} onChange={v=>upSp("s1",v)} placeholder={t("select_prompt")} theme={theme}/>
           <label style={{...S.label,marginTop:10*z}}>{t("player_2")}</label>
           <Sel opts={opts} value={sp.s2} onChange={v=>upSp("s2",v)} placeholder={t("select_prompt")} theme={theme}/>
+          {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
         </Sec>
       ):(
         <Sec title={t("teams")} theme={theme}>
@@ -110,8 +117,10 @@ export function LogMatch({state,players,set,nav,theme}) {
             <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><Sel opts={opts} value={sp.d2a} onChange={v=>upSp("d2a",v)} placeholder={t("select_prompt")} theme={theme}/></div>
             <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><Sel opts={opts} value={sp.d2b} onChange={v=>upSp("d2b",v)} placeholder={t("select_prompt")} theme={theme}/></div>
           </div>
+          {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
         </Sec>
       )}
+
       <Sec title={t("game_scores_sec")} theme={theme}>
         <div style={{fontSize:12*z,color:theme.sub,marginBottom:10*z}}>{t("score_win_by_2").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>
         {games.map((g,i)=>(
@@ -125,14 +134,19 @@ export function LogMatch({state,players,set,nav,theme}) {
         ))}
         <button style={S.btnSecondary} onClick={addGame}>{t("add_game_btn")}</button>
       </Sec>
+      
       <Sec title={t("date_venue_sec")} theme={theme}>
         <label style={S.label}>{t("date_time_lbl")}</label>
         <input style={{...S.input,marginBottom:12*z}} type="datetime-local" value={matchDate} onChange={e=>setMatchDate(e.target.value)}/>
         <label style={S.label}>{t("venue_opt")}</label>
         <input style={S.input} placeholder="e.g. Riverside Courts, Court 3" value={venue} onChange={e=>setVenue(e.target.value)}/>
       </Sec>
-      {err&&<Err msg={err} theme={theme}/>}
-      <button style={S.btnBig} onClick={submit}>{t("log_match_btn")}</button>
+      
+      {err && !hasDupes && <Err msg={err} theme={theme}/>}
+      
+      <button style={{...S.btnBig, opacity: hasDupes ? 0.5 : 1, cursor: hasDupes ? "not-allowed" : "pointer"}} disabled={hasDupes} onClick={submit}>
+        {t("log_match_btn")}
+      </button>
     </div>
   );
 }
@@ -143,18 +157,28 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin }) {
   const [sessionIds, setSessionIds] = useState(["","","",""]);
   const [winTo,setWinTo]=useState(11);
   const [winBy,setWinBy]=useState(2);
-  const [activeRound, setActiveRound] = useState(null);
-  const [scores, setScores] = useState({t1:11,t2:9});
+  const [roundScores, setRoundScores] = useState([{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
   const [err, setErr] = useState(""), [success, setSuccess] = useState("");
   const [groupName, setGroupName] = useState("");
   const savedGroups = state.savedGroups || [];
-  const isReady = sessionIds.every(id=>id!=="") && new Set(sessionIds).size===4;
+  
+  // Dynamic Duplicate Check
+  const filledIds = sessionIds.filter(Boolean);
+  const hasDupes = new Set(filledIds).size < filledIds.length;
+  const isReady = filledIds.length === 4 && !hasDupes;
+
   const rawOpts = players.map(p=>({value:p.id,label:p.name}));
   const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
   const getName = id => players.find(p=>p.id===id)?.name??"?";
-  const rounds = [{id:1,t1:[sessionIds[0],sessionIds[1]],t2:[sessionIds[2],sessionIds[3]]},{id:2,t1:[sessionIds[0],sessionIds[2]],t2:[sessionIds[1],sessionIds[3]]},{id:3,t1:[sessionIds[0],sessionIds[3]],t2:[sessionIds[1],sessionIds[2]]}];
+  
+  const matchups = [{ id: 1, t1: [0, 1], t2: [2, 3] }, { id: 2, t1: [0, 2], t2: [1, 3] }, { id: 3, t1: [0, 3], t2: [1, 2] }];
+  
   function upP(idx,val){const n=[...sessionIds];n[idx]=val;setSessionIds(n);}
-  function adjustScore(team,delta){setScores(s=>({...s,[team]:Math.max(0,s[team]+delta)}));}
+  function updScore(rIdx, team, val){
+     const cleanVal = val.replace(/-/g, '');
+     setRoundScores(rs => rs.map((r, i) => i === rIdx ? {...r, [team]: cleanVal} : r));
+  }
+  
   function saveCurrentGroup() {
     if(!isReady || !groupName.trim()) return;
     set(s => ({...s, savedGroups: [...(s.savedGroups||[]), { id: genId(), name: groupName.trim(), ids: sessionIds }]}));
@@ -162,18 +186,37 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin }) {
   }
   function loadGroup(g) { setSessionIds(g.ids); }
   function deleteGroup(id) { set(s => ({...s, savedGroups: (s.savedGroups||[]).filter(g=>g.id!==id)})); }
-  function submitRound(round){
+  
+  function submitSession(){
     setErr(""); setSuccess("");
-    const r=validatePickleballScore(scores.t1,scores.t2,winTo,winBy);
-    if(!r) return setErr(t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy));
-    const winnerTeam=r.winner, t1w=winnerTeam===0?1:0, t2w=winnerTeam===1?1:0;
-    const match={id:genId(),type:"doubles",date:new Date().toISOString(),teams:[round.t1,round.t2],winnerTeam,games:[{a:scores.t1,b:scores.t2,winner:winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:"Session Play"};
-    set(s => ({...s, matches: [...(s.matches||[]), match]}));
-    setSuccess("Round " + round.id + " OK"); setActiveRound(null);
+    if(sessionIds.some(id => !id)) return setErr(t("err_select_players"));
+    if(new Set(sessionIds).size !== 4) return setErr(t("err_duplicate"));
+
+    const matchesToLog = [];
+    for(let i=0; i<3; i++) {
+        const s1 = parseInt(roundScores[i].t1);
+        const s2 = parseInt(roundScores[i].t2);
+        if (isNaN(s1) || isNaN(s2)) return setErr(`Round ${i+1}: ${t("err_valid_scores")}`);
+        const r = validatePickleballScore(s1, s2, winTo, winBy);
+        if(!r) return setErr(`Round ${i+1}: ${t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}`);
+        const winnerTeam = r.winner;
+        const t1w = winnerTeam === 0 ? 1 : 0;
+        const t2w = winnerTeam === 1 ? 1 : 0;
+        const t1Ids = [sessionIds[matchups[i].t1[0]], sessionIds[matchups[i].t1[1]]];
+        const t2Ids = [sessionIds[matchups[i].t2[0]], sessionIds[matchups[i].t2[1]]];
+        matchesToLog.push({id:genId(),type:"doubles",date:new Date().toISOString(),teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:"Session Play"});
+    }
+    set(s => ({...s, matches: [...(s.matches||[]), ...matchesToLog]}));
+    setSuccess(`✅ 3 Session Matches Logged Successfully!`); 
+    setRoundScores([{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
+    setSessionIds(["","","",""]);
   }
+
   return (
     <div style={S.view}>
       <MatchesSubNav active="session" nav={nav} theme={theme} />
+      {success&&<div style={{background:"rgba(80,200,120,0.15)",color:"#50c878",padding:10*z,borderRadius:8*z,marginBottom:12*z,fontSize:13*z,fontWeight:"bold"}}>{success}</div>}
+      
       <Sec title={t("select_foursome")} theme={theme}>
         {savedGroups.length > 0 && (
           <div style={{marginBottom: 16*z}}>
@@ -191,6 +234,9 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z}}>
           {[0,1,2,3].map(i=><Sel key={i} opts={opts} value={sessionIds[i]} onChange={v=>upP(i,v)} placeholder={`Player ${i+1}`} theme={theme}/>)}
         </div>
+        
+        {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
+
         {isReady && (
           <div style={{marginTop: 12*z}}>
             <div style={{display:"flex", gap:12*z, marginBottom:12*z}}>
@@ -210,39 +256,26 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin }) {
           </div>
         )}
       </Sec>
+
       {isReady&&(
         <Sec title={t("rr_matchups")} theme={theme}>
-          {success&&<div style={{background:"rgba(80,200,120,0.15)",color:"#50c878",padding:10*z,borderRadius:8*z,marginBottom:12*z,fontSize:13*z,fontWeight:"bold"}}>✅ {success}</div>}
-          {rounds.map(r=>(
-            <div key={r.id} style={{background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:12*z,padding:12*z,marginBottom:10*z}}>
-              <div style={{fontSize:13*z,fontWeight:700,marginBottom:8*z,color:theme.accent}}>Round {r.id}</div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:14*z}}>
-                <div style={{flex:1}}>{getName(r.t1[0])} & {getName(r.t1[1])}</div>
-                <div style={{margin:"0 10px",fontSize:11*z,color:theme.sub,fontWeight:"bold"}}>VS</div>
-                <div style={{flex:1,textAlign:"right"}}>{getName(r.t2[0])} & {getName(r.t2[1])}</div>
-              </div>
-              {activeRound===r.id?(
-                <div style={{marginTop:16*z,borderTop:`1px solid ${theme.border}`,paddingTop:12*z}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:20*z}}>
-                    {["t1","t2"].map(team=>(
-                      <div key={team} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8*z}}>
-                        <button style={{...S.btnSecondary,fontSize:24*z,padding:"10px 20px"}} onClick={()=>adjustScore(team,1)}>+</button>
-                        <div style={{fontSize:28*z,fontWeight:800}}>{scores[team]}</div>
-                        <button style={{...S.btnSecondary,fontSize:24*z,padding:"10px 20px"}} onClick={()=>adjustScore(team,-1)}>-</button>
-                      </div>
-                    ))}
-                  </div>
-                  {err&&<Err msg={err} theme={theme}/>}
-                  <div style={{display:"flex",gap:10*z,marginTop:16*z}}>
-                    <button style={{...S.btnPrimary,flex:1}} onClick={()=>submitRound(r)}>{t("save_score_btn")}</button>
-                    <button style={{...S.btnSecondary,marginTop:0}} onClick={()=>setActiveRound(null)}>{t("cancel")}</button>
-                  </div>
+          <div style={{display:"flex", flexDirection:"column", gap:16*z}}>
+            {matchups.map((m, i) => (
+              <div key={i} style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
+                <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("round")} {i+1}</div>
+                <div style={S.gameRow}>
+                  <span style={{flex:1, fontSize:13*z, color:theme.text}}>{getName(sessionIds[m.t1[0]])}/{getName(sessionIds[m.t1[1]])}</span>
+                  <input style={S.scoreInput} type="number" placeholder="T1" value={roundScores[i].t1} onChange={e=>updScore(i, "t1", e.target.value)}/>
+                  <span style={{color:theme.sub}}>–</span>
+                  <input style={S.scoreInput} type="number" placeholder="T2" value={roundScores[i].t2} onChange={e=>updScore(i, "t2", e.target.value)}/>
+                  <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(sessionIds[m.t2[0]])}/{getName(sessionIds[m.t2[1]])}</span>
                 </div>
-              ):(
-                <button style={{...S.btnSecondary,width:"100%",marginTop:10*z}} onClick={()=>{setActiveRound(r.id);setScores({t1:winTo,t2:winTo-winBy});setErr("");}}>{t("log_score_btn")}</button>
-              )}
-            </div>
-          ))}
+              </div>
+            ))}
+            
+            {err && <Err msg={err} theme={theme}/>}
+            <button style={S.btnBig} onClick={submitSession}>{t("log_match_btn")}</button>
+          </div>
         </Sec>
       )}
     </div>
@@ -257,20 +290,25 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin }) {
   const [winBy,setWinBy]=useState(1);
   const [roundScores, setRoundScores] = useState([{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
   const [err, setErr] = useState(""), [success, setSuccess] = useState("");
-  const isReady = sessionIds.every(id=>id!=="") && new Set(sessionIds).size===4;
+  
+  // Dynamic Duplicate Check
+  const filledIds = sessionIds.filter(Boolean);
+  const hasDupes = new Set(filledIds).size < filledIds.length;
+  const isReady = filledIds.length === 4 && !hasDupes;
+
   const rawOpts = players.map(p=>({value:p.id,label:p.name}));
   const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
   const getName = id => players.find(p=>p.id===id)?.name??"?";
   const matchups = [{ id: 1, t1: [0, 1], t2: [2, 3] }, { id: 2, t1: [0, 2], t2: [1, 3] }, { id: 3, t1: [0, 3], t2: [1, 2] }];
+  
   function upP(idx,val){const n=[...sessionIds];n[idx]=val;setSessionIds(n);}
   function updScore(rIdx, team, val){
      const cleanVal = val.replace(/-/g, '');
      setRoundScores(rs => rs.map((r, i) => i === rIdx ? {...r, [team]: cleanVal} : r));
   }
+  
   const kotcLeaderboard = sessionIds.map((id, pIdx) => {
-      let wins = 0;
-      let pointsFor = 0;
-      let pointsAgainst = 0;
+      let wins = 0; let pointsFor = 0; let pointsAgainst = 0;
       if (id) {
           matchups.forEach((matchup, rIdx) => {
               const s1 = parseInt(roundScores[rIdx].t1);
@@ -288,6 +326,9 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin }) {
 
   function submitTournament(){
     setErr(""); setSuccess("");
+    if(sessionIds.some(id => !id)) return setErr(t("err_select_players"));
+    if(new Set(sessionIds).size !== 4) return setErr(t("err_duplicate"));
+
     const matchesToLog = [];
     for(let i=0; i<3; i++) {
         const s1 = parseInt(roundScores[i].t1);
@@ -311,11 +352,46 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin }) {
   return (
     <div style={S.view}>
       <MatchesSubNav active="kotc" nav={nav} theme={theme} />
+      {success && <div style={{background:"rgba(80,200,120,0.15)", color:"#50c878", padding:10*z, borderRadius:8*z, marginBottom:12*z, fontSize:13*z, fontWeight:"bold"}}>{success}</div>}
+      
       <Sec title={t("kotc")} theme={theme}>
-        {/* Simplified display for brevity */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z}}>
+        <div style={{fontSize:12*z, color:theme.sub, marginBottom:12*z}}>{t("kotc_desc")}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z, marginBottom:16*z}}>
           {[0,1,2,3].map(i=><Sel key={i} opts={opts} value={sessionIds[i]} onChange={v=>upP(i,v)} placeholder={`Player ${i+1}`} theme={theme}/>)}
         </div>
+
+        {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
+
+        {isReady && (
+          <div style={{display:"flex", flexDirection:"column", gap:16*z}}>
+            <div style={{display:"flex", gap:12*z}}>
+              <div style={{flex:1}}>
+                <label style={S.label}>{t("win_to_lbl")}</label>
+                <input style={S.input} type="number" min="1" value={winTo} onChange={e=>setWinTo(parseInt(e.target.value)||1)} />
+              </div>
+              <div style={{flex:1}}>
+                <label style={S.label}>{t("win_by_lbl")}</label>
+                <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
+              </div>
+            </div>
+
+            {matchups.map((m, i) => (
+              <div key={i} style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
+                <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("round")} {i+1}</div>
+                <div style={S.gameRow}>
+                  <span style={{flex:1, fontSize:13*z, color:theme.text}}>{getName(sessionIds[m.t1[0]])}/{getName(sessionIds[m.t1[1]])}</span>
+                  <input style={S.scoreInput} type="number" placeholder="T1" value={roundScores[i].t1} onChange={e=>updScore(i, "t1", e.target.value)}/>
+                  <span style={{color:theme.sub}}>–</span>
+                  <input style={S.scoreInput} type="number" placeholder="T2" value={roundScores[i].t2} onChange={e=>updScore(i, "t2", e.target.value)}/>
+                  <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(sessionIds[m.t2[0]])}/{getName(sessionIds[m.t2[1]])}</span>
+                </div>
+              </div>
+            ))}
+            
+            {err && <Err msg={err} theme={theme}/>}
+            <button style={S.btnBig} onClick={submitTournament}>{t("log_match_btn")}</button>
+          </div>
+        )}
       </Sec>
     </div>
   );
@@ -325,7 +401,6 @@ export function TournamentMode({ players, state, set, nav, theme }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
   
-  // 0: Setup, 1: Playing
   const [step, setStep] = useState(0); 
   const [teams, setTeams] = useState([["",""], ["",""], ["",""], ["",""]]);
   const [winTo, setWinTo] = useState(11);
@@ -333,6 +408,10 @@ export function TournamentMode({ players, state, set, nav, theme }) {
   const [scores, setScores] = useState({ sf1a:"", sf1b:"", sf2a:"", sf2b:"", fina:"", finb:"" });
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Dynamic Duplicate Check
+  const filledTeams = teams.flat().filter(Boolean);
+  const hasDupes = new Set(filledTeams).size < filledTeams.length;
 
   const rawOpts = players.map(p => ({ value: p.id, label: p.name }));
   const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
@@ -343,6 +422,7 @@ export function TournamentMode({ players, state, set, nav, theme }) {
     n[tIdx] = [...n[tIdx]];
     n[tIdx][pIdx] = val;
     setTeams(n);
+    setErr(""); // Auto-clears the submit error when user tries to fix it
   }
 
   function upS(key, val) {
@@ -351,9 +431,9 @@ export function TournamentMode({ players, state, set, nav, theme }) {
 
   function start() {
     setErr("");
+    if(hasDupes) return setErr(t("err_duplicate"));
     const ids = teams.flat();
     if(ids.some(id => !id)) return setErr(t("err_select_players"));
-    if(new Set(ids).size !== 8) return setErr(t("err_duplicate"));
     setStep(1);
   }
 
@@ -382,7 +462,6 @@ export function TournamentMode({ players, state, set, nav, theme }) {
     const m2 = { id: genId(), type: "doubles", date: dateStr, teams: [t3, t4], winnerTeam: r_sf2.winner, games: [{a:s_sf2a, b:s_sf2b, winner: r_sf2.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_sf2.winner===0?1:0, team2Wins: r_sf2.winner===1?1:0, venue: "Tournament SF2" };
     const m3 = { id: genId(), type: "doubles", date: dateStr, teams: [win_sf1, win_sf2], winnerTeam: r_fin.winner, games: [{a:s_fina, b:s_finb, winner: r_fin.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_fin.winner===0?1:0, team2Wins: r_fin.winner===1?1:0, venue: "Tournament Final" };
 
-    // Push standard match objects to state; engine.js will handle stringifying for Firebase!
     set(s => ({...s, matches: [...(s.matches||[]), m1, m2, m3]}));
     
     setSuccess("✅ Tournament Logged! Champions: " + getName(win_sf1 === r_fin.winner ? win_sf1[0] : win_sf2[0]) + " & " + getName(win_sf1 === r_fin.winner ? win_sf1[1] : win_sf2[1]));
@@ -420,16 +499,22 @@ export function TournamentMode({ players, state, set, nav, theme }) {
               </div>
             ))}
           </div>
-          {err && <Err msg={err} theme={theme}/>}
-          <button style={{...S.btnPrimary, marginTop:16*z, width:"100%"}} onClick={start}>{t("start_tournament")}</button>
+          
+          {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
+          {err && !hasDupes && <Err msg={err} theme={theme}/>}
+          
+          <button 
+            style={{...S.btnPrimary, marginTop:16*z, width:"100%", opacity: hasDupes ? 0.5 : 1, cursor: hasDupes ? "not-allowed" : "pointer"}} 
+            disabled={hasDupes} 
+            onClick={start}>
+            {t("start_tournament")}
+          </button>
         </Sec>
       )}
 
       {step === 1 && (
         <Sec title={t("tournament")} theme={theme}>
           <div style={{display:"flex", flexDirection:"column", gap:16*z}}>
-            
-            {/* Semifinal 1 */}
             <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
               <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("sf")} 1</div>
               <div style={S.gameRow}>
@@ -440,8 +525,6 @@ export function TournamentMode({ players, state, set, nav, theme }) {
                 <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(teams[1][0])}/{getName(teams[1][1])}</span>
               </div>
             </div>
-
-            {/* Semifinal 2 */}
             <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
               <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("sf")} 2</div>
               <div style={S.gameRow}>
@@ -452,8 +535,6 @@ export function TournamentMode({ players, state, set, nav, theme }) {
                 <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(teams[3][0])}/{getName(teams[3][1])}</span>
               </div>
             </div>
-
-            {/* Final */}
             <div style={{background:theme.card, border:`2px solid ${theme.accent}`, borderRadius:12*z, padding:12*z}}>
               <div style={{fontSize:14*z, fontWeight:800, color:theme.accent, marginBottom:8*z}}>🏆 {t("final")}</div>
               <div style={S.gameRow}>
@@ -464,11 +545,10 @@ export function TournamentMode({ players, state, set, nav, theme }) {
                 <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{t("winner")} SF2</span>
               </div>
             </div>
-
           </div>
           {err && <Err msg={err} theme={theme}/>}
           <div style={{display:"flex", gap:10*z, marginTop:16*z}}>
-            <button style={{...S.btnBig, flex:1}} onClick={logTournament}>{t("log_tournament")}</button>
+            <button style={{...S.btnBig, flex:1}} onClick={logTournament}>{t("log_match_btn")}</button>
             <button style={{...S.btnSecondary, marginTop:0}} onClick={() => setStep(0)}>{t("cancel")}</button>
           </div>
         </Sec>

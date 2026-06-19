@@ -176,7 +176,7 @@ export default function Players({players,state,set,nav,theme,isAdmin}) {
                   <div style={S.lbInfo}>
                     <div style={{display:"flex",alignItems:"center",gap:6*z}}>
                       <span style={S.lbName}>{p.name}</span>
-                      {p.duprImported&&<span style={{fontSize:9*z,background:"rgba(80,144,192,0.15)",color:"#5090c0",borderRadius:4,padding:"1px 5px",fontWeight:700}}>DUPR</span>}
+                      {p.duprImported&&<span style={{fontSize:9*z,background:"rgba(80,144,192,0.15)",color:"#5090c0",borderRadius:4,padding:"1px 5px",fontWeight:700}}>D</span>}
                     </div>
                     <div style={{fontSize:11*z,color:theme.sub}}>{p.gamesPlayed||0}G · {p.wins||0}W {p.losses||0}L</div>
                   </div>

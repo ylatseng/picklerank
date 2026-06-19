@@ -40,6 +40,6 @@ export function makeS(t) {
     successBox: { background:t.card, border:`1px solid ${t.accent}44`, borderRadius:f(14), padding:f(16), marginBottom:f(12) },
     matchCard:  { background:t.bg, border:`1px solid ${t.border}`, borderRadius:f(14), padding:f(12), marginBottom:f(10) },
     typePill:   { fontSize:f(10), background:"rgba(80,144,192,0.15)", color:"#5090c0", borderRadius:f(6), padding:`${f(2)}px ${f(7)}px`, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.5px" },
-    gamePill:   { background:t.card, borderRadius:f(8), padding:`${f(4)}px ${f(9)}px`, fontSize:f(13), display:"flex", gap:f(5), alignItems:"center", border:`1px solid ${t.border}` }
+    gamePill:   { background:t.card, borderRadius:f(8), padding:`${f(4)}px ${f(9)}px`, fontSize:f(13), display:"flex", gap:f(5), alignItems:"center", border:`1px solid ${t.border}`,color: t.text, fontWeight: 700 }
   };
 }
