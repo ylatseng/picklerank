@@ -9,10 +9,29 @@ export const K_FACTOR = 0.08;
 export const STORAGE_KEY = "pkl_tracker_v4"; 
 
 // ─── Version & Changelog ──────────────────────────────────────────────────────
-export const APP_VERSION = "1.1.3";
+export const APP_VERSION = "1.1.5";
 export const APP_UPDATED = "2026-06-20";
 
 export const RELEASES = [
+  {
+    version: "1.1.5",
+    date: "2026-06-20",
+    title: "Event Invitations",
+    changes: [
+      "Added invitee selection using compact selection tags.",
+      "Event cards now display the list of invited players for quick reference."
+    ]
+  },
+  {
+    version: "1.1.4",
+    date: "2026-06-20",
+    title: "Event Security & Editing",
+    changes: [
+      "Added edit functionality for existing events.",
+      "Restricted event deletion to Admin users only.",
+      "Implemented a mandatory confirmation prompt before deleting events."
+    ]
+  },
   {
     version: "1.1.3",
     date: "2026-06-20",
