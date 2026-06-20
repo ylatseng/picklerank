@@ -1,3 +1,8 @@
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { ThemeCtx } from './context.js';
+import { makeS } from './styles.js';
+
+// Views
 import Dashboard from './views/Dashboard.jsx';
 import Players from './views/Players.jsx';
 import History from './views/History.jsx';
@@ -7,18 +12,18 @@ import Settings from './views/Settings.jsx';
 import Profile from './views/Profile.jsx';
 import Trash from './views/Trash.jsx';
 import Legends from './views/Legends.jsx';
-import Changelog from './views/Changelog'; 
-import { LogMatch, SessionMode, KingOfCourt, TournamentMode } from './views/MatchModes.jsx';
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { ThemeCtx } from './context.js';
+import Changelog from './views/Changelog.jsx'; 
 import Events from './views/Events.jsx';
+import { LogMatch, SessionMode, KingOfCourt, TournamentMode } from './views/MatchModes.jsx';
+
+// Engine & Components
 import {
   DEFAULT_RATING, STORAGE_KEY, APP_MODES, APP_ACCENTS, APP_FONTS,
   t, setLang, replayAllMatches, computeStats, genId, ratingColor, ratingLabel,
   fmtDate, isoToDatetimeLocal, sortOptionsAlpha, processImage, 
   loadState, saveState, blankState, validatePickleballScore, calcExpected, initials, avatarColor, fmtDelta
 } from './engine.js';
-import { makeS } from './styles.js';
+
 import { Header, BottomNav, MatchesSubNav } from './components/Navigation.jsx';
 import { 
   Avatar, Sparkline, RadarChart, MatchCard, ConfirmInline, 
@@ -34,7 +39,6 @@ export default function App() {
   useEffect(() => {
     let isFetching = false;
 
-    // We pass "isInitialLoad" so the app knows whether to force the Rank page
     const fetchCloudData = async (isInitialLoad = false) => {
       if (isFetching) return;
       isFetching = true;
@@ -54,13 +58,10 @@ export default function App() {
           if (!s.trash) s.trash = [];
 
           if (isInitialLoad) {
-            // 👉 Cold Start: Force the app to always start on Rank
             s.activeView = "dashboard";
           } else if (prev.activeView) {
-            // 👉 Background Refresh: Preserve current tab so the screen doesn't jump
             s.activeView = prev.activeView;
           }
-
           return s;
         });
       } catch (error) {
@@ -71,20 +72,16 @@ export default function App() {
       }
     };
 
-    // Initial fetch on load
     fetchCloudData(true);
 
-    // Handlers for background wake-ups (passing false so it doesn't jump to dashboard)
     const doRefresh = () => fetchCloudData(false);
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') doRefresh();
     };
 
-    // Listeners for mobile/desktop wake-ups
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", doRefresh); 
 
-    // Cleanup listeners if component unmounts
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", doRefresh);
@@ -115,13 +112,11 @@ export default function App() {
     if (metaThemeColor) metaThemeColor.setAttribute("content", theme.bg);
   }, [theme.bg, theme.text, activeFont.css]);
 
-  // 3. Upload data to Cloud whenever you change something
   const set = useCallback((updater)=>{
     setState(prev=>{
       const next = typeof updater==="function" ? updater(prev) : {...prev,...updater};
-      
       if (!isLoading) {
-         saveState(next); 
+          saveState(next); 
       }
       return next;
     });
@@ -134,14 +129,11 @@ export default function App() {
     return [...stats].sort((a,b) => {
       const gamesA = leaderboardFormat === "singles" ? (a.singlesPlayed||0) : (a.doublesPlayed||0);
       const gamesB = leaderboardFormat === "singles" ? (b.singlesPlayed||0) : (b.doublesPlayed||0);
-      
       if (gamesA === 0 && gamesB > 0) return 1;
       if (gamesB === 0 && gamesA > 0) return -1;
-
       const rateA = leaderboardFormat === "singles" ? (a.ratingSingles||3) : (a.ratingDoubles||3);
       const rateB = leaderboardFormat === "singles" ? (b.ratingSingles||3) : (b.ratingDoubles||3);
       if (rateA !== rateB) return rateB - rateA;
-      
       return (b.gamesPlayed||0) - (a.gamesPlayed||0);
     });
   },[stats, leaderboardFormat]);
@@ -162,21 +154,21 @@ export default function App() {
       <div style={makeS(theme).app}>
         <Header activeView={activeView} nav={nav} profilePlayer={profilePlayer} theme={theme} isAdmin={isAdmin}/>
         <main style={makeS(theme).main}>
-          {activeView==="dashboard"  && <Dashboard players={leaderboard} matches={derivedMatches} nav={nav} theme={theme} set={set} format={leaderboardFormat}/>}
-          {activeView==="players"    && <Players players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="log"        && <LogMatch state={state} players={stats} set={set} nav={nav} theme={theme}/>}
-          {activeView==="session"    && <SessionMode players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="kotc"       && <KingOfCourt players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="tourney"    && <TournamentMode players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="compare"    && <Compare players={stats} matches={derivedMatches} compareIds={state.compareIds || []} set={set} nav={nav} theme={theme} state={state}/>}
-          {activeView==="history"    && <History matches={derivedMatches} players={stats} nav={nav} set={set} theme={theme} isAdmin={isAdmin} initialPlayerId={historyPlayerId} state={state}/>}
-          {activeView==="profile"    && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={set} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="stats"      && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme}/>}
-          {activeView==="settings"   && <Settings state={state} set={set} nav={nav} theme={theme}/>}
-          {activeView==="trash"      && <Trash state={state} set={set} theme={theme} />}
-          {activeView==="legends"    && <Legends theme={theme} />}
-          {activeView==="changelog"  && <Changelog theme={theme} />}
-          {activeView==="events" && <Events state={state} set={set} theme={theme} />}
+          {activeView==="dashboard" && <Dashboard players={leaderboard} matches={derivedMatches} nav={nav} theme={theme} set={set} format={leaderboardFormat}/>}
+          {activeView==="players"   && <Players players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
+          {activeView==="log"       && <LogMatch state={state} players={stats} set={set} nav={nav} theme={theme}/>}
+          {activeView==="session"   && <SessionMode players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
+          {activeView==="kotc"      && <KingOfCourt players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
+          {activeView==="tourney"   && <TournamentMode players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
+          {activeView==="compare"   && <Compare players={stats} matches={derivedMatches} compareIds={state.compareIds || []} set={set} nav={nav} theme={theme} state={state}/>}
+          {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={set} theme={theme} isAdmin={isAdmin} initialPlayerId={historyPlayerId} state={state}/>}
+          {activeView==="profile"   && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={set} theme={theme} isAdmin={isAdmin}/>}
+          {activeView==="stats"     && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme}/>}
+          {activeView==="settings"  && <Settings state={state} set={set} nav={nav} theme={theme}/>}
+          {activeView==="trash"     && <Trash state={state} set={set} theme={theme} />}
+          {activeView==="legends"   && <Legends theme={theme} />}
+          {activeView==="changelog" && <Changelog theme={theme} />}
+          {activeView==="events"    && <Events state={state} set={set} theme={theme} />}
         </main>
         
         <BottomNav active={activeView} nav={nav} theme={theme}/>
