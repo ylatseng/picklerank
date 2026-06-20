@@ -25,12 +25,7 @@ export default function Events({ state, set, theme }) {
 
   const startEdit = (ev) => {
     setEditingEvent(ev);
-    setNewEvent({ 
-      title: ev.title || "", 
-      date: ev.date || "", 
-      venue: ev.venue || "", 
-      invitees: ev.invitees || [] 
-    });
+    setNewEvent({ title: ev.title, date: ev.date, venue: ev.venue, invitees: ev.invitees || [] });
   };
 
   const deleteEvent = (id) => {
@@ -49,63 +44,72 @@ export default function Events({ state, set, theme }) {
 
   return (
     <div style={S.view}>
-      <Sec title={editingEvent ? "EDIT EVENT" : "CREATE NEW EVENT"} theme={theme}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8*z }}>
+      <Sec title={editingEvent ? "EDIT SESSION" : "NEW SESSION"} theme={theme}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12*z }}>
           <input style={S.input} placeholder="Event Name" value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
-          <input style={S.input} type="datetime-local" value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
-          <input style={S.input} placeholder="Venue" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} />
-          
-          <div style={{ marginTop: 4*z }}>
-            <label style={{...S.label, fontSize: 10*z}}>Invite Players</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6*z, marginTop: 4*z }}>
-              {(state.players || []).map(p => {
-                const isInvited = newEvent.invitees.includes(p.id);
-                return (
-                  <button key={p.id} onClick={() => toggleInvitee(p.id)}
-                    style={{ padding: "4px 8px", borderRadius: 12, border: `1px solid ${isInvited ? theme.accent : theme.border}`, background: isInvited ? theme.accent : theme.card, color: isInvited ? theme.bg : theme.text, fontSize: 11*z, cursor: "pointer" }}>
-                    {p.name}
-                  </button>
-                );
-              })}
-            </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8*z }}>
+            <input style={S.input} type="datetime-local" value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
+            <input style={S.input} placeholder="Venue" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} />
           </div>
 
-          <div style={{ display: "flex", gap: 8*z, marginTop: 8*z }}>
-            <button style={S.btnPrimary} onClick={saveEvent}>{editingEvent ? "Update Event" : "Add Event"}</button>
-            {editingEvent && <button style={S.btnSecondary} onClick={() => { setEditingEvent(null); setNewEvent({ title: "", date: "", venue: "", invitees: [] }); }}>Cancel</button>}
+          <div style={{ position: "relative" }}>
+             <label style={{ fontSize: 10*z, color: theme.sub, marginBottom: 4*z, display: "block" }}>INVITE PLAYERS</label>
+             <select 
+               style={{...S.input, width: "100%", padding: "8px", background: theme.card}}
+               onChange={(e) => toggleInvitee(e.target.value)}
+               value=""
+             >
+               <option value="" disabled>Select players to invite...</option>
+               {[...(state.players || [])]
+                 .sort((a, b) => a.name.localeCompare(b.name))
+                 .map(p => (
+                   <option key={p.id} value={p.id}>
+                      {newEvent.invitees.includes(p.id) ? "✓ " : ""} {p.name}
+                   </option>
+                 ))
+               }
+             </select>
+             <div style={{ fontSize: 10*z, marginTop: 6*z, color: theme.accent }}>
+                Selected: {newEvent.invitees.map(id => state.players.find(p=>p.id===id)?.name).join(", ")}
+             </div>
           </div>
+
+          <button style={{...S.btnPrimary, padding: "12px", borderRadius: 8*z, fontWeight: 600}} onClick={saveEvent}>
+            {editingEvent ? "Save Changes" : "Create Session"}
+          </button>
+          {editingEvent && <button style={S.btnSecondary} onClick={() => { setEditingEvent(null); setNewEvent({ title: "", date: "", venue: "", invitees: [] }); }}>Cancel</button>}
         </div>
       </Sec>
 
       <Sec title="UPCOMING SESSIONS" theme={theme}>
         {(!state.events || state.events.length === 0) ? (
-          <div style={{ textAlign: "center", color: theme.sub, padding: 20*z }}>No upcoming events.</div>
+          <div style={{ textAlign: "center", color: theme.sub, padding: 20*z }}>No scheduled sessions.</div>
         ) : (
           [...state.events].sort((a,b) => new Date(a.date) - new Date(b.date)).map(ev => (
-            <div key={ev.id} style={{ padding: "10px 0", borderBottom: `1px solid ${theme.border}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: theme.text }}>{ev.title}</div>
-                  <div style={{ fontSize: 11*z, color: theme.accent }}>{new Date(ev.date).toLocaleString()} @ {ev.venue || "TBD"}</div>
-                  {ev.invitees?.length > 0 && (
-                    <div style={{ fontSize: 10*z, color: theme.sub, marginTop: 4*z }}>
-                      Invited: {(ev.invitees || []).map(id => state.players.find(p=>p.id===id)?.name).filter(Boolean).join(", ")}
-                    </div>
-                  )}
+            <div key={ev.id} style={{ padding: "12px 0", borderBottom: `1px solid ${theme.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14*z, color: theme.text }}>{ev.title}</div>
+                  <div style={{ fontSize: 11*z, color: theme.accent, marginTop: 2*z }}>{new Date(ev.date).toLocaleString()} @ {ev.venue || "TBD"}</div>
                 </div>
                 <div style={{ display: "flex", gap: 4*z }}>
-                  <button style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 16*z }} onClick={() => startEdit(ev)}>✏️</button>
-                  <button style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 18*z }} onClick={() => {
-                     const text = `🥒 Pickleball Session!\n📅 ${new Date(ev.date).toLocaleString()}\n📍 Venue: ${ev.venue || "TBD"}\n\nJoin us for: ${ev.title}`;
+                  <button style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4*z }} onClick={() => startEdit(ev)}>✏️</button>
+                  <button style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4*z }} onClick={() => {
+                     const text = `🥒 Pickleball: ${ev.title}\n📅 ${new Date(ev.date).toLocaleString()}\n📍 ${ev.venue}`;
                      if (navigator.share) navigator.share({ title: "Pickleball", text });
                      else { navigator.clipboard.writeText(text); alert("Copied!"); }
                   }}>📤</button>
                   {state.isAdmin && (
-                    <button style={{ background: "transparent", border: "none", color: "#e05050", cursor: "pointer", fontSize: 16*z }} onClick={() => setPendingDelete(ev.id)}>✕</button>
+                    <button style={{ background: "transparent", border: "none", color: "#e05050", cursor: "pointer", padding: 4*z }} onClick={() => setPendingDelete(ev.id)}>✕</button>
                   )}
                 </div>
               </div>
-              {pendingDelete === ev.id && <ConfirmInline msg="Delete this event?" onConfirm={() => deleteEvent(ev.id)} onCancel={() => setPendingDelete(null)} theme={theme} danger />}
+              {ev.invitees?.length > 0 && (
+                <div style={{ fontSize: 10*z, color: theme.sub, marginTop: 8*z, fontStyle: "italic" }}>
+                  Invited: {(ev.invitees || []).map(id => state.players.find(p=>p.id===id)?.name).filter(Boolean).join(", ")}
+                </div>
+              )}
+              {pendingDelete === ev.id && <ConfirmInline msg="Delete?" onConfirm={() => deleteEvent(ev.id)} onCancel={() => setPendingDelete(null)} theme={theme} danger />}
             </div>
           ))
         )}
