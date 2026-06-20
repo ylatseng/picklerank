@@ -7,7 +7,7 @@ import Settings from './views/Settings.jsx';
 import Profile from './views/Profile.jsx';
 import Trash from './views/Trash.jsx';
 import Legends from './views/Legends.jsx';
-import Changelog from './views/Changelog.jsx'; 
+import Changelog from './views/Changelog'; 
 import { LogMatch, SessionMode, KingOfCourt, TournamentMode } from './views/MatchModes.jsx';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { ThemeCtx } from './context.js';
