@@ -8,6 +8,10 @@ export const DEFAULT_RATING = 3.0;
 export const K_FACTOR = 0.08;
 export const STORAGE_KEY = "pkl_tracker_v4"; 
 
+// 👉 Add your version tracker here:
+export const APP_VERSION = "1.1.0";
+export const APP_UPDATED = "2026-06-19";
+
 // ─── Themes, Styles & Fonts ───────────────────────────────────────────────────
 export const APP_MODES = [
   { id: "dark", label: "Midnight Dark", bg: "#0d0d0f", card: "#141418", nav: "#0f0f14", border: "#22222c", text: "#e8e8e8", sub: "#888888", faint: "#444444", invert: false },
@@ -310,6 +314,7 @@ export function blankState() {
   return {
     players: [],
     matches: [],
+    trash: [], // Centralized storage: { id, type: 'match'|'player', data, deletedAt }
     activeView: "dashboard",
     modeId: "dark",
     accentId: "green",

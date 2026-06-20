@@ -5,6 +5,7 @@ import Compare from './views/Compare.jsx';
 import StatsView from './views/StatsView.jsx';
 import Settings from './views/Settings.jsx';
 import Profile from './views/Profile.jsx';
+import Trash from './views/Trash.jsx';
 import { LogMatch, SessionMode, KingOfCourt, TournamentMode } from './views/MatchModes.jsx';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { ThemeCtx } from './context.js';
@@ -39,6 +40,9 @@ export default function App() {
       if (!s.adminPass) s.adminPass = "1234";
       if (s.leaderboardFormat === undefined) s.leaderboardFormat = "doubles";
       if (!s.favoredPlayerIds) s.favoredPlayerIds = [];
+
+      // 👉 ADD THIS LINE TO PREVENT THE UNDEFINED ERROR
+      if (!s.trash) s.trash = [];
       
       setState(s);
       setIsLoading(false); // Turn off loading screen
@@ -132,10 +136,8 @@ export default function App() {
           {activeView==="profile"    && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={set} theme={theme} isAdmin={isAdmin}/>}
           {activeView==="stats"      && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme}/>}
           {activeView==="settings"   && <Settings state={state} set={set} nav={nav} theme={theme}/>}
+          {activeView==="trash"      && <Trash state={state} set={set} theme={theme} />}
         </main>
-        
-        {/* -- this is for footer note*/}
-        {/*<div style={{textAlign: 'center', fontSize: '10px', color: 'gray', paddingBottom: '80px'}}>v1.0.5 - Updated 2026-06-18</div>*/} 
         
         <BottomNav active={activeView} nav={nav} theme={theme}/>
       </div>

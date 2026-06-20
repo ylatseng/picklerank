@@ -29,9 +29,14 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
     return names.includes(q)||venue.includes(q)||teams.includes(q);
   }),[sorted,search,filter,playerFilter,players]);
 
-  function del(id){
-    set(s=>({...s, matches:(s.matches||[]).filter(m=>m.id!==id)}));
-    setTimeout(()=>setPendingDelete(null),0);
+  // Unified "Trash" move logic
+  function moveToTrash(match) {
+    set(s => ({
+      ...s,
+      trash: [...(s.trash || []), { id: match.id, type: 'match', data: match, deletedAt: Date.now() }],
+      matches: s.matches.filter(m => m.id !== match.id)
+    }));
+    setPendingDelete(null);
   }
 
   function saveEdit(updated){
@@ -70,15 +75,16 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
           ))}
         </div>
       </Sec>
+
       <Sec title={`${t("results_lbl")} (${filtered.length})`} theme={theme}>
         {filtered.length===0?<Empty text={t("no_matches")} theme={theme}/>
           :filtered.map(m=>(
             <React.Fragment key={m.id}>
               <MatchCard match={m} players={players} theme={theme} isAdmin={isAdmin} 
-                onEdit={setEditingMatch} onShare={share} onDelete={del} />
+                onEdit={setEditingMatch} onShare={share} onDelete={()=>setPendingDelete(m.id)} />
               {pendingDelete===m.id&&(
                 <ConfirmInline msg={t("delete_match_q")} note={t("ratings_recalculated")}
-                  onConfirm={()=>del(m.id)} onCancel={()=>setPendingDelete(null)} theme={theme}/>
+                  onConfirm={()=>moveToTrash(m)} onCancel={()=>setPendingDelete(null)} theme={theme}/>
               )}
             </React.Fragment>
           ))}

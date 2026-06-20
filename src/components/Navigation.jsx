@@ -8,9 +8,14 @@ export function Header({activeView,nav,profilePlayer,theme,isAdmin}) {
   
   let title = t(activeView) || t("dashboard");
   let sub = t(activeView + "_sub") || t("dashboard_sub");
+  
+  // Custom headers for specific views
   if (activeView === "profile") {
     title = profilePlayer?.name ?? t("profile");
     sub = t(ratingLabel(profilePlayer?.ratingDoubles ?? 3));
+  } else if (activeView === "trash") {
+    title = "🗑️ Trash Can";
+    sub = "Restore deleted items";
   } else if (activeView === "log" || activeView === "session" || activeView === "compare" || activeView === "kotc" || activeView === "tourney") {
     title = t("matches_tab");
     sub = t("log_sub");
@@ -35,7 +40,12 @@ export function Header({activeView,nav,profilePlayer,theme,isAdmin}) {
           <div style={S.appName}>{title}</div>
           <div style={{...S.appSub, color: theme.invert ? theme.accent : theme.accent+"99"}}>{sub}</div>
         </div>
-        {activeView==="dashboard"&&<button style={S.iconBtn} onClick={()=>nav("stats")}>📊</button>}
+        
+        {/* Contextual Header Buttons */}
+        <div style={{display: "flex", gap: 4*z}}>
+          {activeView==="history" && <button style={S.iconBtn} onClick={()=>nav("trash")} title="Trash">🗑️</button>}
+          {activeView==="dashboard" && <button style={S.iconBtn} onClick={()=>nav("stats")} title="Stats">📊</button>}
+        </div>
       </div>
     </header>
   );

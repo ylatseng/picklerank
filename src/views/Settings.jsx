@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { t, APP_MODES, APP_ACCENTS, APP_FONTS, blankState, processImage } from '../engine.js';
+import { t, APP_MODES, APP_ACCENTS, APP_FONTS, blankState, processImage, APP_VERSION, APP_UPDATED } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Err, ConfirmInline } from '../components/Shared.jsx';
 import { doc, setDoc } from "firebase/firestore";
@@ -249,9 +249,11 @@ export default function Settings({state,set,nav,theme}) {
         </Sec>
       )}
       <Sec title={t("about_sec")} theme={theme}>
-        <div style={{fontSize:13*z,color:theme.sub,lineHeight:1.6}}>
-          <div><strong style={{color:theme.text}}>PickleRank Modular v1.0.4</strong></div>
-          <div style={{marginTop:8*z}}>{t("about_desc")}</div>
+        <div style={{ fontSize: 13*z, lineHeight: 1.5, color: theme.text }}>
+          {t("about_desc")}
+        </div>
+        <div style={{ marginTop: 10*z, fontSize: 11*z, color: theme.sub, fontWeight: "bold" }}>
+          Version {APP_VERSION} (Last Update: {APP_UPDATED})
         </div>
       </Sec>
     </div>
