@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { t, DEFAULT_RATING, genId, ratingColor, ratingLabel, processImage } from '../engine.js';
+import { t, DEFAULT_RATING, genId, ratingColor, processImage } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, Err, Sel, Avatar, ConfirmInline } from '../components/Shared.jsx';
 
@@ -12,17 +12,26 @@ export default function Players({players,state,set,nav,theme,isAdmin}) {
   const [doublesRating, setDoublesRating] = useState("");
   
   const [err,setErr]=useState(""), [pendingRemove,setPendingRemove]=useState(null);
-  const [editingId,setEditingId]=useState(null), [editName,setEditName]=useState(""), [editErr,setEditErr]=useState("");
+  
+  // Edit State
+  const [editingId,setEditingId]=useState(null);
+  const [editName,setEditName]=useState("");
+  const [editErr,setEditErr]=useState("");
   const [editSR, setEditSR] = useState("");
   const [editDR, setEditDR] = useState("");
+  const [editAvatar, setEditAvatar] = useState(null);
+  
   const [avatarData, setAvatarData] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("rating");
   
   const fileInputRef = useRef(null);
+  const editFileInputRef = useRef(null); // Ref for the edit mode image upload
+  
   const favoredPlayerIds = state.favoredPlayerIds || [];
 
   function handleFileAdd(e) { if (e.target.files[0]) processImage(e.target.files[0], setAvatarData); }
+  function handleEditFileAdd(e) { if (e.target.files[0]) processImage(e.target.files[0], setEditAvatar); }
 
   function add(){
     const tName=name.trim();
@@ -51,15 +60,18 @@ export default function Players({players,state,set,nav,theme,isAdmin}) {
   }
 
   function startEdit(p){
-    setEditingId(p.id); setEditName(p.name); 
-    setEditSR((p.ratingSingles||3).toFixed(3)); setEditDR((p.ratingDoubles||3).toFixed(3));
+    setEditingId(p.id); 
+    setEditName(p.name); 
+    setEditSR((p.ratingSingles||3).toFixed(3)); 
+    setEditDR((p.ratingDoubles||3).toFixed(3));
+    setEditAvatar(p.avatar || null);
   }
 
   function saveEdit(id){
     const tName=editName.trim();
     if(!tName) return setEditErr(t("err_empty"));
     set(s=>({...s,players:(s.players||[]).map(p=>p.id===id?{
-        ...p, name:tName, ratingSingles: parseFloat(editSR)||3, ratingDoubles: parseFloat(editDR)||3
+        ...p, name:tName, ratingSingles: parseFloat(editSR)||3, ratingDoubles: parseFloat(editDR)||3, avatar: editAvatar
     }:p)}));
     setEditingId(null);
   }
@@ -109,10 +121,7 @@ export default function Players({players,state,set,nav,theme,isAdmin}) {
 
       <Sec title={`${t("roster_lbl")} (${players.length})`} theme={theme}>
         
-        {/* POLISHED SEARCH & SORT UI */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12*z, marginBottom: 16*z, paddingBottom: 16*z, borderBottom: `1px solid ${theme.border}`, alignItems: "center" }}>
-          
-          {/* Search Bar with Icon */}
           <div style={{ flex: "1 1 200px", position: "relative" }}>
             <span style={{ position: "absolute", left: 10*z, top: "50%", transform: "translateY(-50%)", opacity: 0.5, fontSize: 14*z }}>🔍</span>
             <input 
@@ -122,8 +131,6 @@ export default function Players({players,state,set,nav,theme,isAdmin}) {
               onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
-
-          {/* Sort Dropdown */}
           <div style={{ display: "flex", alignItems: "center", gap: 8*z, flex: "1 1 180px" }}>
             <span style={{ ...S.label, margin: 0, whiteSpace: "nowrap", color: theme.sub, fontSize: 13*z }}>
               {t("sort_by") || "Sort by:"}
@@ -142,21 +149,33 @@ export default function Players({players,state,set,nav,theme,isAdmin}) {
               />
             </div>
           </div>
-
         </div>
-        {/* END POLISHED UI */}
 
         {displayedPlayers.length === 0 ? <Empty text={t("no_players")} theme={theme} /> : 
           displayedPlayers.map(p=>(
             <div key={p.id}>
               {editingId===p.id ? (
                 <div style={{padding:"10px 0",borderBottom:`1px solid ${theme.border}`}}>
-                  <label style={S.label}>{t("name_lbl")}</label>
-                  <input style={{...S.input, marginBottom: 10*z}} value={editName} onChange={e=>setEditName(e.target.value)}/>
+                  
+                  {/* EDIT PROFILE PICTURE AND NAME */}
+                  <div style={{display:"flex", gap:12*z, marginBottom:10*z}}>
+                    <div style={{display:"flex", flexDirection:"column", alignItems:"center", gap:6*z, width: 60*z}}>
+                       {editAvatar ? <img src={editAvatar} style={{width:50*z, height:50*z, borderRadius:"50%", objectFit:"cover"}} /> : <div style={{width:50*z, height:50*z, borderRadius:"50%", background:theme.nav, border:`1px dashed ${theme.sub}`, display:"flex", alignItems:"center", justifyContent:"center", color:theme.sub}}>📷</div>}
+                       <button style={{...S.btnSecondary, padding:"2px 6px", fontSize:10*z, marginTop:0}} onClick={() => editFileInputRef.current.click()}>{t("change_photo") || "Change"}</button>
+                       <input type="file" accept="image/*" ref={editFileInputRef} className="file-input-hidden" onChange={handleEditFileAdd} />
+                    </div>
+                    <div style={{flex:1}}>
+                      <label style={S.label}>{t("name_lbl")}</label>
+                      <input style={{...S.input, marginBottom: 10*z}} value={editName} onChange={e=>setEditName(e.target.value)}/>
+                    </div>
+                  </div>
+
+                  {/* EDIT RATINGS */}
                   <div style={{display:"flex", gap:10*z}}>
                      <div style={{flex:1}}><label style={S.label}>{t("singles_rating")}</label><input style={S.input} type="number" value={editSR} onChange={e=>setEditSR(e.target.value)}/></div>
                      <div style={{flex:1}}><label style={S.label}>{t("doubles_rating")}</label><input style={S.input} type="number" value={editDR} onChange={e=>setEditDR(e.target.value)}/></div>
                   </div>
+
                   <div style={{display:"flex", gap:8*z, justifyContent:"flex-end", marginTop:10*z}}>
                     <button style={S.btnSecondary} onClick={()=>setEditingId(null)}>{t("cancel")}</button>
                     <button style={S.btnPrimary} onClick={()=>saveEdit(p.id)}>{t("save")}</button>

@@ -6,9 +6,12 @@ import StatsView from './views/StatsView.jsx';
 import Settings from './views/Settings.jsx';
 import Profile from './views/Profile.jsx';
 import Trash from './views/Trash.jsx';
+import Legends from './views/Legends.jsx';
+import Changelog from './views/Changelog.jsx'; 
 import { LogMatch, SessionMode, KingOfCourt, TournamentMode } from './views/MatchModes.jsx';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { ThemeCtx } from './context.js';
+import Events from './views/Events.jsx';
 import {
   DEFAULT_RATING, STORAGE_KEY, APP_MODES, APP_ACCENTS, APP_FONTS,
   t, setLang, replayAllMatches, computeStats, genId, ratingColor, ratingLabel,
@@ -24,32 +27,68 @@ import {
 
 // ─── Main App Router ──────────────────────────────────────
 export default function App() {
-  // FIX 1: Start with a blank state and a loading flag so React Hooks never break
   const [state, setState] = useState(() => blankState());
   const [isLoading, setIsLoading] = useState(true);
 
-  // 1. Download data from Cloud when the app opens
+  // 1. Download data from Cloud when the app opens OR wakes up
   useEffect(() => {
-    loadState().then(cloudData => {
-      let s = cloudData || blankState();
-      if (!s.langId) s.langId = "en";
-      if (!s.fontId) s.fontId = "sans";
-      if (!s.zoomLevel) s.zoomLevel = 1.0;
-      if (s.logoText === undefined) s.logoText = "LS";
-      if (s.isAdmin === undefined) s.isAdmin = false;
-      if (!s.adminPass) s.adminPass = "1234";
-      if (s.leaderboardFormat === undefined) s.leaderboardFormat = "doubles";
-      if (!s.favoredPlayerIds) s.favoredPlayerIds = [];
+    let isFetching = false;
 
-      // 👉 ADD THIS LINE TO PREVENT THE UNDEFINED ERROR
-      if (!s.trash) s.trash = [];
-      
-      setState(s);
-      setIsLoading(false); // Turn off loading screen
-    }).catch(error => {
-      console.error("Firebase Error:", error);
-      setIsLoading(false); // FIX 2: Safety net! Turn off loading screen even if Firebase fails
-    });
+    // We pass "isInitialLoad" so the app knows whether to force the Rank page
+    const fetchCloudData = async (isInitialLoad = false) => {
+      if (isFetching) return;
+      isFetching = true;
+      try {
+        const cloudData = await loadState();
+        
+        setState(prev => {
+          let s = cloudData || blankState();
+          if (!s.langId) s.langId = "en";
+          if (!s.fontId) s.fontId = "sans";
+          if (!s.zoomLevel) s.zoomLevel = 1.0;
+          if (s.logoText === undefined) s.logoText = "LS";
+          if (s.isAdmin === undefined) s.isAdmin = false;
+          if (!s.adminPass) s.adminPass = "1234";
+          if (s.leaderboardFormat === undefined) s.leaderboardFormat = "doubles";
+          if (!s.favoredPlayerIds) s.favoredPlayerIds = [];
+          if (!s.trash) s.trash = [];
+
+          if (isInitialLoad) {
+            // 👉 Cold Start: Force the app to always start on Rank
+            s.activeView = "dashboard";
+          } else if (prev.activeView) {
+            // 👉 Background Refresh: Preserve current tab so the screen doesn't jump
+            s.activeView = prev.activeView;
+          }
+
+          return s;
+        });
+      } catch (error) {
+        console.error("Firebase Error:", error);
+      } finally {
+        setIsLoading(false);
+        isFetching = false;
+      }
+    };
+
+    // Initial fetch on load
+    fetchCloudData(true);
+
+    // Handlers for background wake-ups (passing false so it doesn't jump to dashboard)
+    const doRefresh = () => fetchCloudData(false);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') doRefresh();
+    };
+
+    // Listeners for mobile/desktop wake-ups
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", doRefresh); 
+
+    // Cleanup listeners if component unmounts
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", doRefresh);
+    };
   }, []);
 
   // 2. Destructure state safely
@@ -81,7 +120,6 @@ export default function App() {
     setState(prev=>{
       const next = typeof updater==="function" ? updater(prev) : {...prev,...updater};
       
-      // FIX 3: Only save to cloud if we are completely done loading
       if (!isLoading) {
          saveState(next); 
       }
@@ -111,7 +149,6 @@ export default function App() {
   const profilePlayer = profileId ? stats.find(p=>p.id===profileId) : null;
   const nav = (view,extra={}) => set(s=>({...s,activeView:view,...extra}));
 
-  // FIX 4: The loading screen now sits safely AFTER all the hooks!
   if (isLoading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#121212", color: "#50c878", fontSize: "20px", fontWeight: "bold" }}>
@@ -137,6 +174,9 @@ export default function App() {
           {activeView==="stats"      && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme}/>}
           {activeView==="settings"   && <Settings state={state} set={set} nav={nav} theme={theme}/>}
           {activeView==="trash"      && <Trash state={state} set={set} theme={theme} />}
+          {activeView==="legends"    && <Legends theme={theme} />}
+          {activeView==="changelog"  && <Changelog theme={theme} />}
+          {activeView==="events" && <Events state={state} set={set} theme={theme} />}
         </main>
         
         <BottomNav active={activeView} nav={nav} theme={theme}/>

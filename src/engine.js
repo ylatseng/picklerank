@@ -8,9 +8,78 @@ export const DEFAULT_RATING = 3.0;
 export const K_FACTOR = 0.08;
 export const STORAGE_KEY = "pkl_tracker_v4"; 
 
-// 👉 Add your version tracker here:
-export const APP_VERSION = "1.1.0";
-export const APP_UPDATED = "2026-06-19";
+// ─── Version & Changelog ──────────────────────────────────────────────────────
+export const APP_VERSION = "1.1.3";
+export const APP_UPDATED = "2026-06-20";
+
+export const RELEASES = [
+  {
+    version: "1.1.3",
+    date: "2026-06-20",
+    title: "Event Scheduling",
+    changes: [
+      "Added the 'Events' tab to plan upcoming pickleball sessions.",
+      "Enabled event creation, date/time scheduling, and session management."
+    ]
+  },
+  {
+    version: "1.1.2",
+    date: "2026-06-20",
+    title: "Settings Minimization",
+    changes: [
+      "Streamlined 'Branding' into a single compact row (tap logo to upload).",
+      "Collapsed 'Backup & Restore' into a quick-action button grid, removing wasted text space.",
+      "Consolidated all design and language options into a sleek 'Appearance' menu with dropdowns.",
+      "Added the official Changelog tracking system."
+    ]
+  },
+  {
+    version: "1.1.1",
+    date: "2026-06-20",
+    title: "UI & Settings Polish",
+    changes: [
+      "Streamlined the Settings page into a sleek, compact 'Appearance' menu with dropdowns.",
+      "Added the official Changelog tracking system."
+    ]
+  },
+  {
+    version: "1.1.0",
+    date: "2026-06-20",
+    title: "The Competitive Update",
+    changes: [
+      "Separated Singles and Doubles ELO ratings for highly accurate tracking.",
+      "Redesigned match cards with a sleek, side-by-side vertical scoreboard layout.",
+      "Introduced the visual 'Legends' glossary for icons and stats.",
+      "Brought back Fun Stats: Best Partner, Nemesis, and Pigeon directly in Profiles.",
+      "Added milestone badges (Centurion, Ironman, On Fire, Sharpshooter, Giant Slayer).",
+      "Added the Trash system to safely delete and selectively restore players and matches.",
+      "Players can now edit their profile pictures.",
+      "Added auto-refresh so the app updates instantly when reopened from the background.",
+      "App now automatically opens to the Rank tab on a fresh start."
+    ]
+  },
+  {
+    version: "1.0.5",
+    date: "2026-06-18",
+    title: "The Modes Update",
+    changes: [
+      "Added structured match modes: Session Tracker, King of the Court, and Tournament.",
+      "Introduced dynamic Radar Charts to visualize player performance profiles.",
+      "Cloud syncing and cross-device functionality fully implemented via Firebase.",
+      "Added CSV and JSON data export capabilities."
+    ]
+  },
+  {
+    version: "1.0.0",
+    date: "2026-06-01",
+    title: "Initial Launch",
+    changes: [
+      "Core ELO tracking math and engine built.",
+      "Dashboard, Roster, Match History, and Settings foundations established.",
+      "Customizable theme engine added (Dark/Light modes, Accents, Fonts, Display Sizes)."
+    ]
+  }
+];
 
 // ─── Themes, Styles & Fonts ───────────────────────────────────────────────────
 export const APP_MODES = [
@@ -308,7 +377,6 @@ export function processImage(file, callback, maxDim = 120) {
 }
 
 const DB_DOC_ID = "main_group"; // A single document for you and your friends to share
-
 
 export function blankState() {
   return {

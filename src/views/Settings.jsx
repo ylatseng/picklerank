@@ -1,9 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { t, APP_MODES, APP_ACCENTS, APP_FONTS, blankState, processImage, APP_VERSION, APP_UPDATED } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, Err, ConfirmInline } from '../components/Shared.jsx';
+import { Sec, Err, ConfirmInline, Sel } from '../components/Shared.jsx';
 import { doc, setDoc } from "firebase/firestore";
-// Ensure you import your db from wherever you initialized it, probably engine.js or firebase.js:
 import { db } from "../engine";
 
 export default function Settings({state,set,nav,theme}) {
@@ -53,13 +52,11 @@ export default function Settings({state,set,nav,theme}) {
     
     const reader = new FileReader();
     
-    // 1. Make the reader function async so we can await Firebase
     reader.onload = async (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
         if (!Array.isArray(data.players) || !Array.isArray(data.matches)) throw new Error("Invalid format.");
         
-        // 2. Update local UI state (Your original code)
         set(s => ({
           ...s, 
           players: data.players, 
@@ -74,11 +71,10 @@ export default function Settings({state,set,nav,theme}) {
           isAdmin: false
         }));
 
-        // 3. THE FIX: Push the uploaded data directly to Firebase
         const groupRef = doc(db, "picklerank", "main_group");
         await setDoc(groupRef, {
           players: data.players,
-          matches: JSON.stringify(data.matches), // <-- THE FIX for failed data import from mobile.
+          matches: JSON.stringify(data.matches), 
           savedGroups: data.savedGroups || [],
           langId: data.langId || "en",
           logoText: data.logoText || "LS",
@@ -91,7 +87,7 @@ export default function Settings({state,set,nav,theme}) {
         setImportOk(true);
       } catch (err) {
         setImportErr("Import failed: " + err.message);
-        console.error("Firebase Sync Error:", err); // Helpful if it fails
+        console.error("Firebase Sync Error:", err); 
       }
     };
     reader.readAsText(file);
@@ -128,113 +124,110 @@ export default function Settings({state,set,nav,theme}) {
         )}
         {adminErr && <div style={{color: adminErr === t("pass_updated") ? "#50c878" : "#e05050", fontSize: 12*z, marginTop: 8*z}}>{adminErr}</div>}
       </Sec>
-      <Sec title={t("branding_sec")} theme={theme}>
-        <div style={{display:"flex", gap:16*z, alignItems:"center"}}>
-          <div style={{flex: 1}}>
-            <label style={S.label}>{t("logo_text")}</label>
-            <input style={{...S.input, marginBottom:10*z}} maxLength="4" placeholder="e.g. PR or 🥒" value={state.logoText} onChange={e=>set({logoText: e.target.value})}/>
-            <button style={{...S.btnSecondary, width:"100%"}} onClick={() => logoRef.current.click()}>{t("upload_logo")}</button>
-            <input type="file" accept="image/*" ref={logoRef} className="file-input-hidden" onChange={handleLogoUpload} />
-            {state.logoData && <button style={{...S.btnDanger, width:"100%", marginTop:8*z}} onClick={()=>set({logoData:null})}>✕ Remove Image</button>}
+
+      <Sec title={t("appearance_sec") || "Appearance"} theme={theme}>
+        <div style={{display:"flex", flexDirection:"column", gap: 14*z}}>
+          
+          <div style={{display:"flex", alignItems:"center", gap:10*z}}>
+            <label style={{...S.label, margin:0, flex:1}}>{t("lang_sec")}</label>
+            <div style={{flex:2}}>
+              <Sel value={state.langId || "en"} onChange={v=>set({langId: v})} opts={[
+                { value: "en", label: "English" }, 
+                { value: "zh_tw", label: "繁體中文" }, 
+                { value: "zh_cn", label: "简体中文" }
+              ]} theme={theme} />
+            </div>
           </div>
-          <div style={{width: 80*z, height: 80*z, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center"}}>
+
+          <div style={{display:"flex", alignItems:"center", gap:10*z}}>
+            <label style={{...S.label, margin:0, flex:1}}>{t("bg_mode_sec")}</label>
+            <div style={{flex:2}}>
+              <Sel value={state.modeId || "dark"} onChange={v=>set({modeId: v})} opts={APP_MODES.map(m=>({value:m.id, label:m.label}))} theme={theme} />
+            </div>
+          </div>
+
+          <div style={{display:"flex", alignItems:"center", gap:10*z}}>
+            <label style={{...S.label, margin:0, flex:1}}>{t("typography_sec")}</label>
+            <div style={{flex:2}}>
+              <Sel value={state.fontId || "sans"} onChange={v=>set({fontId: v})} opts={APP_FONTS.map(f=>({value:f.id, label:f.label}))} theme={theme} />
+            </div>
+          </div>
+
+          <div style={{display:"flex", alignItems:"center", gap:10*z}}>
+            <label style={{...S.label, margin:0, flex:1}}>{t("display_size_sec")}</label>
+            <div style={{flex:2}}>
+              <Sel value={state.zoomLevel || 1.0} onChange={v=>set({zoomLevel: parseFloat(v)})} opts={[
+                { value: 0.85, label: t("size_compact") }, 
+                { value: 1.0, label: t("size_standard") }, 
+                { value: 1.15, label: t("size_large") }
+              ]} theme={theme} />
+            </div>
+          </div>
+
+          <div>
+            <label style={{...S.label, marginBottom:8*z}}>{t("accent_style_sec")}</label>
+            <div style={{display:"flex", flexWrap:"wrap", gap:12*z, marginTop: 4*z}}>
+              {APP_ACCENTS.map(a=>{
+                const active = (state.accentId || "green") === a.id;
+                return (
+                  <button key={a.id} onClick={()=>set({accentId:a.id})} title={a.label}
+                    style={{
+                      width: 28*z, height: 28*z, borderRadius: "50%", background: a.hex, padding: 0, cursor: "pointer",
+                      border: active ? `2px solid ${theme.bg}` : "none", 
+                      outline: active ? `2px solid ${a.hex}` : "none", 
+                      boxShadow: active ? `0 0 8px ${a.hex}66` : "none"
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+        </div>
+      </Sec>
+
+      {/* COMPACT BRANDING SECTION */}
+      <Sec title={t("branding_sec")} theme={theme}>
+        <div style={{display: "flex", alignItems: "center", gap: 12*z}}>
+          <div 
+            style={{width: 48*z, height: 48*z, borderRadius: 10*z, cursor: "pointer", position: "relative", flexShrink: 0, background: theme.card, border: `1px dashed ${theme.border}`, display:"flex", alignItems:"center", justifyContent:"center", overflow:"visible"}}
+            onClick={() => logoRef.current.click()}
+            title="Click to change logo"
+          >
             {state.logoData ? (
-              <img src={state.logoData} style={{width: "100%", height: "100%", borderRadius: 16*z, objectFit:"cover"}} alt="Logo" />
+              <>
+                <img src={state.logoData} style={{width: "100%", height: "100%", borderRadius: 10*z, objectFit:"cover"}} alt="Logo" />
+                <button 
+                  style={{position: "absolute", top: -6*z, right: -6*z, background: theme.card, border: `1px solid ${theme.border}`, color: "#e05050", borderRadius: "50%", width: 20*z, height: 20*z, fontSize: 10*z, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0}}
+                  onClick={(e) => { e.stopPropagation(); set({logoData: null}); }}
+                >✕</button>
+              </>
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" style={{width: "100%", height: "100%"}}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" style={{width: "100%", height: "100%", borderRadius:10*z}}>
                 <rect width="192" height="192" rx="40" fill={theme.card} stroke={theme.border} strokeWidth="4"/>
                 <circle cx="96" cy="96" r="60" stroke={theme.accent} strokeWidth="12" fill="none"/>
-                <text x="50%" y="50%" fontFamily="inherit" fontSize="64" fontWeight="900" fill={theme.accent} textAnchor="middle" dy=".35em">{state.logoText}</text>
+                <text x="50%" y="50%" fontFamily="inherit" fontSize="64" fontWeight="900" fill={theme.accent} textAnchor="middle" dy=".35em">{state.logoText || "LS"}</text>
               </svg>
             )}
           </div>
+          <div style={{flex: 1}}>
+            <input style={{...S.input, margin: 0, padding: "8px 12px", fontSize: 14*z}} maxLength="4" placeholder="App Initials (e.g. PR)" value={state.logoText} onChange={e=>set({logoText: e.target.value})} />
+          </div>
         </div>
+        <input type="file" accept="image/*" ref={logoRef} style={{display:"none"}} onChange={handleLogoUpload} />
       </Sec>
-      <Sec title={t("display_size_sec")} theme={theme}>
-        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10*z}}>
-          {[ { id: 0.85, label: t("size_compact") }, { id: 1.0, label: t("size_standard") }, { id: 1.15, label: t("size_large") } ].map(l => {
-            const active = (state.zoomLevel || 1.0) === l.id;
-            return (
-              <button key={l.id} onClick={()=>set({zoomLevel: l.id})}
-                style={{background:theme.card, border:`2px solid ${active?theme.accent:theme.border}`, borderRadius:12*z, padding:"12px 8px", cursor:"pointer", color:theme.text}}>
-                <div style={{fontSize:12*z, fontWeight:active?800:600, color:active?theme.accent:theme.sub}}>{l.label}</div>
-              </button>
-            )
-          })}
-        </div>
-      </Sec>
-      <Sec title={t("lang_sec")} theme={theme}>
-        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10*z}}>
-          {[ { id: "en", label: "English" }, { id: "zh_tw", label: "繁體中文" }, { id: "zh_cn", label: "简体中文" } ].map(l => {
-            const active = (state.langId || "en") === l.id;
-            return (
-              <button key={l.id} onClick={()=>set({langId: l.id})}
-                style={{background:theme.card, border:`2px solid ${active?theme.accent:theme.border}`, borderRadius:12*z, padding:"12px 8px", cursor:"pointer", color:theme.text}}>
-                <div style={{fontSize:12*z, fontWeight:active?800:600, color:active?theme.accent:theme.sub}}>{l.label}</div>
-              </button>
-            )
-          })}
-        </div>
-      </Sec>
-      <Sec title={t("typography_sec")} theme={theme}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z}}>
-          {APP_FONTS.map(f=>{
-            const active = (state.fontId || "sans") === f.id;
-            return (
-              <button key={f.id} onClick={()=>set({fontId:f.id})}
-                style={{background:theme.bg,border:`2px solid ${active?theme.accent:theme.border}`,borderRadius:12*z,
-                  padding:"12px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6*z,
-                  outline:"none",transition:"border-color 0.15s", fontFamily: f.css}}>
-                <div style={{fontSize:18*z,fontWeight:active?800:600,color:active?theme.accent:theme.text}}>Aa</div>
-                <div style={{fontSize:11*z,color:theme.sub}}>{f.label}</div>
-              </button>
-            );
-          })}
-        </div>
-      </Sec>
-      <Sec title={t("bg_mode_sec")} theme={theme}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z}}>
-          {APP_MODES.map(m=>{
-            const active = (state.modeId || "dark") === m.id;
-            return (
-              <button key={m.id} onClick={()=>set(s=>({...s,modeId:m.id}))}
-                style={{background:m.bg,border:`2px solid ${active?theme.accent:m.border}`,borderRadius:12*z,
-                  padding:"12px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6*z,
-                  outline:"none",transition:"border-color 0.15s"}}>
-                <div style={{fontSize:12*z,fontWeight:active?800:600,color:active?theme.accent:m.text}}>{m.label}</div>
-              </button>
-            );
-          })}
-        </div>
-      </Sec>
-      <Sec title={t("accent_style_sec")} theme={theme}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(60px, 1fr))",gap:10*z}}>
-          {APP_ACCENTS.map(a=>{
-            const active = (state.accentId || "green") === a.id;
-            return (
-              <button key={a.id} onClick={()=>set(s=>({...s,accentId:a.id}))}
-                style={{background:theme.card,border:`2px solid ${active?a.hex:theme.border}`,borderRadius:12*z,
-                  padding:"10px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6*z,
-                  outline:"none",transition:"border-color 0.15s"}}>
-                <div style={{width:24*z,height:24*z,borderRadius:"50%",background:a.hex,boxShadow:active?`0 0 8px ${a.hex}`:""}}/>
-                <div style={{fontSize:10*z,fontWeight:active?800:600,color:active?a.hex:theme.sub}}>{a.label}</div>
-              </button>
-            );
-          })}
-        </div>
-      </Sec>
+      
+      {/* COMPACT BACKUP & RESTORE SECTION */}
       <Sec title={t("backup_restore_sec")} theme={theme}>
-        <p style={{fontSize:13*z,color:theme.sub,marginBottom:14*z}}>{t("backup_desc")}</p>
-        <div style={{display:"flex", flexWrap:"wrap", gap:10*z}}>
-          <button style={{...S.btnPrimary, flex:"1 1 120px"}} onClick={exportData}>{t("json_backup_btn")}</button>
-          <button style={{...S.btnPrimary, flex:"1 1 120px", background:theme.card, color:theme.accent, border:`1px solid ${theme.accent}`}} onClick={exportCSV}>{t("csv_export_btn")}</button>
+        <div style={{display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8*z}}>
+          <button style={{...S.btnPrimary, margin: 0, padding: "10px 4px", fontSize: 12*z}} onClick={exportData}>💾 JSON</button>
+          <button style={{...S.btnPrimary, margin: 0, padding: "10px 4px", fontSize: 12*z, background:theme.card, color:theme.accent, border:`1px solid ${theme.accent}`}} onClick={exportCSV}>📊 CSV</button>
+          <button style={{...S.btnSecondary, margin: 0, padding: "10px 4px", fontSize: 12*z}} onClick={()=>fileRef.current.click()}>📥 Import</button>
         </div>
-        <div style={{marginTop:12*z}}>
-          <button style={{...S.btnSecondary, width:"100%"}} onClick={()=>fileRef.current.click()}>{t("import_json_btn")}</button>
-          <input ref={fileRef} type="file" accept=".json" style={{display:"none"}} onChange={importData}/>
-        </div>
+        <input ref={fileRef} type="file" accept=".json" style={{display:"none"}} onChange={importData}/>
         {importErr&&<Err msg={importErr} theme={theme}/>}
       </Sec>
+      
       {state.isAdmin && (
         <Sec title={t("danger_zone_sec")} theme={theme}>
           <p style={{fontSize:12*z,color:theme.sub,marginBottom:10*z}}>{t("danger_desc")}</p>
@@ -248,12 +241,18 @@ export default function Settings({state,set,nav,theme}) {
           )}
         </Sec>
       )}
+
       <Sec title={t("about_sec")} theme={theme}>
         <div style={{ fontSize: 13*z, lineHeight: 1.5, color: theme.text }}>
           {t("about_desc")}
         </div>
-        <div style={{ marginTop: 10*z, fontSize: 11*z, color: theme.sub, fontWeight: "bold" }}>
-          Version {APP_VERSION} (Last Update: {APP_UPDATED})
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12*z }}>
+          <div style={{ fontSize: 11*z, color: theme.sub, fontWeight: "bold" }}>
+            Version {APP_VERSION} ({APP_UPDATED})
+          </div>
+          <button style={{...S.btnSecondary, margin: 0, padding: "6px 12px", fontSize: 11*z}} onClick={()=>nav("changelog")}>
+            View Changelog
+          </button>
         </div>
       </Sec>
     </div>

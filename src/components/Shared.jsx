@@ -121,7 +121,7 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
 
   return (
     <div style={S.matchCard}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:6*z}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12*z}}>
         <div style={{display:"flex",gap:6*z,alignItems:"center"}}>
           <span style={S.typePill}>{m.type}</span>
           {m.venue&&<span style={{fontSize:11*z,color:theme.sub}}>📍{m.venue}</span>}
@@ -129,24 +129,40 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
         <span style={{fontSize:12*z,color:theme.sub}}>{fmtDate(m.date)}</span>
       </div>
 
-      <div style={{display:"flex",alignItems:"center",gap:6*z,marginBottom:8*z}}>
-        <div style={{flex:1,fontSize:13*z,fontWeight:m.winnerTeam===0?700:400,color:m.winnerTeam===0?"#50c878":theme.sub,textAlign:"center"}}>{t1}</div>
-        <div style={{fontSize:11*z,color:theme.faint,fontWeight:700}}>vs</div>
-        <div style={{flex:1,fontSize:13*z,fontWeight:m.winnerTeam===1?700:400,color:m.winnerTeam===1?"#50c878":theme.sub,textAlign:"center"}}>{t2}</div>
-      </div>
-
-      <div style={{display:"flex",gap:8*z,flexWrap:"wrap",marginBottom:8*z}}>
-        {(m.games||[]).map((g,i)=>(
-          <div key={i} style={S.gamePill}>
-            {/* FIX: Changed theme.sub to theme.text and boosted font weight */}
-            <span style={{color:g.winner===0?"#50c878":theme.text, fontWeight:g.winner===0?800:600}}>{g.a}</span>
-            <span style={{color:theme.text}}>–</span>
-            <span style={{color:g.winner===1?"#50c878":theme.text, fontWeight:g.winner===1?800:600}}>{g.b}</span>
+      {/* Modern Horizontal Scoreboard Layout */}
+      <div style={{display: "flex", flexDirection: "column", gap: 10*z, marginBottom: 12*z, background: theme.bg, padding: 12*z, borderRadius: 8*z, border: `1px solid ${theme.border}`}}>
+        
+        {/* Team 1 Row */}
+        <div style={{display: "flex", alignItems: "center", justifyContent: "space-between"}}>
+          <div style={{flex: 1, fontSize: 14*z, fontWeight: m.winnerTeam===0 ? 800 : 600, color: m.winnerTeam===0 ? "#50c878" : theme.text, paddingRight: 10*z, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
+            {t1}
           </div>
-        ))}
+          <div style={{display: "flex", gap: 14*z}}>
+            {(m.games||[]).map((g, i) => (
+              <div key={`t1-g${i}`} style={{width: 20*z, textAlign: "right", fontSize: 15*z, fontWeight: g.winner===0 ? 800 : 500, color: g.winner===0 ? "#50c878" : theme.sub}}>
+                {g.a}
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Team 2 Row */}
+        <div style={{display: "flex", alignItems: "center", justifyContent: "space-between"}}>
+          <div style={{flex: 1, fontSize: 14*z, fontWeight: m.winnerTeam===1 ? 800 : 600, color: m.winnerTeam===1 ? "#50c878" : theme.text, paddingRight: 10*z, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
+            {t2}
+          </div>
+          <div style={{display: "flex", gap: 14*z}}>
+            {(m.games||[]).map((g, i) => (
+              <div key={`t2-g${i}`} style={{width: 20*z, textAlign: "right", fontSize: 15*z, fontWeight: g.winner===1 ? 800 : 500, color: g.winner===1 ? "#50c878" : theme.sub}}>
+                {g.b}
+              </div>
+            ))}
+          </div>
+        </div>
+        
       </div>
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", marginTop: 8*z}}>
         <div style={{display:"flex", alignItems:"center", gap: 8*z}}>
            <span style={{fontSize:12*z,color:"#50c878",fontWeight:600}}>🏆 {m.winnerTeam===0?t1:t2}</span>
            {pSnap != null && (
@@ -175,14 +191,37 @@ export function MiniMatchCard({match:m,players,theme}){
   const getName=id=>players.find(p=>p.id===id)?.name??"?"; 
   const t1=m.teamNames?.t1||m.teams?.[0]?.map(getName).join(" & ")||"TBD"; 
   const t2=m.teamNames?.t2||m.teams?.[1]?.map(getName).join(" & ")||"TBD"; 
+  
   return (
     <div style={{background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:10*z,padding:"10px 12px",marginBottom:8*z}}>
-      <div style={{fontSize:11*z,color:theme.sub,marginBottom:4*z}}>{fmtDate(m.date)} · {m.type}{m.venue?` · 📍${m.venue}`:""}</div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:13*z,fontWeight:m.winnerTeam===0?700:400,color:m.winnerTeam===0?"#50c878":theme.sub}}>{t1}</span>
-        {/* FIX: Replaced faint color with bright text and bold weight */}
-        <span style={{fontSize:13*z,fontWeight:700,color:theme.text}}>{(m.games||[]).map(g=>`${g.a}-${g.b}`).join(", ")}</span>
-        <span style={{fontSize:13*z,fontWeight:m.winnerTeam===1?700:400,color:m.winnerTeam===1?"#50c878":theme.sub}}>{t2}</span>
+      <div style={{fontSize:11*z,color:theme.sub,marginBottom:10*z}}>{fmtDate(m.date)} · {m.type}{m.venue?` · 📍${m.venue}`:""}</div>
+      
+      {/* Modern Bracket-Style Vertical Layout with Fixed Width Columns */}
+      <div style={{display:"flex", flexDirection:"column", gap:8*z}}>
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+          <span style={{flex:1, fontSize:13*z,fontWeight:m.winnerTeam===0?700:500,color:m.winnerTeam===0?"#50c878":theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: 8*z}}>
+            {t1}
+          </span>
+          <div style={{display: "flex", gap: 12*z}}>
+            {(m.games||[]).map((g, i) => (
+              <span key={`mini-t1-${i}`} style={{width: 16*z, textAlign: "right", fontSize:13*z,fontWeight:g.winner===0?800:500,color:g.winner===0?"#50c878":theme.sub}}>
+                {g.a}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+          <span style={{flex:1, fontSize:13*z,fontWeight:m.winnerTeam===1?700:500,color:m.winnerTeam===1?"#50c878":theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: 8*z}}>
+            {t2}
+          </span>
+          <div style={{display: "flex", gap: 12*z}}>
+            {(m.games||[]).map((g, i) => (
+              <span key={`mini-t2-${i}`} style={{width: 16*z, textAlign: "right", fontSize:13*z,fontWeight:g.winner===1?800:500,color:g.winner===1?"#50c878":theme.sub}}>
+                {g.b}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   ); 

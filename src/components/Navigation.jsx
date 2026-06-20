@@ -16,10 +16,21 @@ export function Header({activeView,nav,profilePlayer,theme,isAdmin}) {
   } else if (activeView === "trash") {
     title = "🗑️ Trash Can";
     sub = "Restore deleted items";
+  } else if (activeView === "legends") {
+    title = "📖 Legends";
+    sub = "Glossary & Achievements";
+  } else if (activeView === "changelog") {
+    title = "📜 Changelog";
+    sub = "App Updates & History";
   } else if (activeView === "log" || activeView === "session" || activeView === "compare" || activeView === "kotc" || activeView === "tourney") {
     title = t("matches_tab");
     sub = t("log_sub");
-  }
+ } else if (activeView === "events") {
+    title = "📅 Events";
+    sub = "Upcoming sessions";
+ } 
+  
+
   
   return (
     <header style={S.header}>
@@ -44,7 +55,12 @@ export function Header({activeView,nav,profilePlayer,theme,isAdmin}) {
         {/* Contextual Header Buttons */}
         <div style={{display: "flex", gap: 4*z}}>
           {activeView==="history" && <button style={S.iconBtn} onClick={()=>nav("trash")} title="Trash">🗑️</button>}
-          {activeView==="dashboard" && <button style={S.iconBtn} onClick={()=>nav("stats")} title="Stats">📊</button>}
+          {activeView==="dashboard" && (
+            <>
+              <button style={S.iconBtn} onClick={()=>nav("legends")} title="Legends">ℹ️</button>
+              <button style={S.iconBtn} onClick={()=>nav("stats")} title="Stats">📊</button>
+            </>
+          )}
         </div>
       </div>
     </header>
@@ -58,6 +74,7 @@ export function BottomNav({active,nav,theme}) {
     {id:"players",icon:"👤",label:t("roster")},
     {id:"matches",icon:"🏓",label:t("matches_tab")},
     {id:"history",icon:"📋",label:t("history")},
+    {id:"events",icon:"📅",label:"Events"},
     {id:"settings",icon:"⚙️",label:t("settings")}
   ];
   return (

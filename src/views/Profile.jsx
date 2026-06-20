@@ -40,15 +40,65 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin}
   const bestWinDelta = p.bestWinDelta || 0;
 
   const ALL_BADGES = [
-    { id: 'centurion', icon:"🎖️", label:t("badge_centurion"), earned: gamesPlayed >= 100, progress: `${gamesPlayed}/100` },
-    { id: 'ironman', icon:"🛡️", label:t("badge_ironman"), earned: gamesPlayed >= 50, progress: `${gamesPlayed}/50` },
-    { id: 'streaker', icon:"🌋", label:t("badge_streaker"), earned: longestWinStreak >= 5, progress: `${longestWinStreak}/5` },
-    { id: 'sharp', icon:"🎯", label:t("badge_sharp"), earned: winPct >= 60 && gamesPlayed >= 10, progress: gamesPlayed < 10 ? `${gamesPlayed}/10` : `${winPct}%` },
-    { id: 'slayer', icon:"🗡️", label:t("badge_slayer"), earned: bestWinDelta >= 0.3, progress: `+${bestWinDelta.toFixed(2)}/0.30` }
+    { id: 'centurion', icon:"🎖️", label:t("badge_centurion") || "Centurion", earned: gamesPlayed >= 100, progress: `${gamesPlayed}/100` },
+    { id: 'ironman', icon:"🛡️", label:t("badge_ironman") || "Ironman", earned: gamesPlayed >= 50, progress: `${gamesPlayed}/50` },
+    { id: 'streaker', icon:"🌋", label:t("badge_streaker") || "On Fire", earned: longestWinStreak >= 5, progress: `${longestWinStreak}/5` },
+    { id: 'sharp', icon:"🎯", label:t("badge_sharp") || "Sharpshooter", earned: winPct >= 60 && gamesPlayed >= 10, progress: gamesPlayed < 10 ? `${gamesPlayed}/10` : `${winPct}%` },
+    { id: 'slayer', icon:"🗡️", label:t("badge_slayer") || "Giant Slayer", earned: bestWinDelta >= 0.3, progress: `+${bestWinDelta.toFixed(2)}/0.30` }
   ];
 
   const provS = ((p.ratingHistorySingles?.length || 1) - 1) < 5;
   const provD = ((p.ratingHistoryDoubles?.length || 1) - 1) < 5;
+
+  // ─── Fun Stats Calculator ───────────────────────────────────────────────────
+  const funStats = useMemo(() => {
+    const partners = {};
+    const opponents = {};
+
+    myMatches.forEach(m => {
+      const myTeamIdx = m.teams?.[0]?.includes(p.id) ? 0 : (m.teams?.[1]?.includes(p.id) ? 1 : -1);
+      if (myTeamIdx === -1) return;
+      const oppTeamIdx = myTeamIdx === 0 ? 1 : 0;
+      const won = m.winnerTeam === myTeamIdx;
+
+      // Partners
+      m.teams[myTeamIdx].forEach(pid => {
+        if (pid !== p.id) {
+          if (!partners[pid]) partners[pid] = { w: 0, l: 0 };
+          if (won) partners[pid].w++; else partners[pid].l++;
+        }
+      });
+
+      // Opponents
+      m.teams[oppTeamIdx].forEach(pid => {
+        if (!opponents[pid]) opponents[pid] = { w: 0, l: 0 };
+        if (won) opponents[pid].w++; else opponents[pid].l++;
+      });
+    });
+
+    let bestPartner = null, maxP = -1;
+    Object.entries(partners).forEach(([pid, s]) => {
+      const t = s.w + s.l;
+      if (t >= 2) { // Min 2 matches to be considered a Best Partner
+        const wr = s.w / t;
+        if (wr > maxP || (wr === maxP && s.w > (partners[bestPartner?.pid]?.w || 0))) {
+          maxP = wr; bestPartner = { pid, pct: wr, record: `${s.w}W - ${s.l}L` };
+        }
+      }
+    });
+
+    let nemesis = null, maxL = 0;
+    Object.entries(opponents).forEach(([pid, s]) => {
+      if (s.l > maxL) { maxL = s.l; nemesis = { pid, pct: s.l / (s.w + s.l), record: `${s.w}W - ${s.l}L` }; }
+    });
+
+    let pigeon = null, maxW = 0;
+    Object.entries(opponents).forEach(([pid, s]) => {
+      if (s.w > maxW) { maxW = s.w; pigeon = { pid, pct: s.w / (s.w + s.l), record: `${s.w}W - ${s.l}L` }; }
+    });
+
+    return { bestPartner, nemesis, pigeon };
+  }, [myMatches, p.id]);
 
   return (
     <div style={S.view}>
@@ -87,6 +137,21 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin}
 
       <Sec title={t("performance_profile")} theme={theme}>
          <RadarChart player={p} theme={theme} />
+      </Sec>
+
+      {/* FUN STATS SECTION */}
+      <Sec title={t("fun_stats_sec") || "Fun Stats"} theme={theme}>
+        {!funStats.bestPartner && !funStats.nemesis && !funStats.pigeon ? (
+           <div style={{fontSize:12*z, color:theme.sub, textAlign:"center", padding:"10px 0"}}>
+             Play more matches to unlock Fun Stats! <br/><span style={{fontSize: 10*z}}>(Requires min. 2 games with a partner)</span>
+           </div>
+        ) : (
+           <div style={{display:"flex", flexDirection:"column", gap: 0}}>
+             {funStats.bestPartner && <SynergyRow icon="👯" title={t("best_partner") || "Best Partner"} pid={funStats.bestPartner.pid} pct={funStats.bestPartner.pct} color="#50c878" theme={theme} getName={getName} record={funStats.bestPartner.record} />}
+             {funStats.nemesis && <SynergyRow icon="👹" title={t("nemesis") || "Nemesis"} pid={funStats.nemesis.pid} pct={funStats.nemesis.pct} subText="Loss Rate" color="#e05050" theme={theme} getName={getName} record={funStats.nemesis.record} />}
+             {funStats.pigeon && <SynergyRow icon="🐦" title={t("pigeon") || "Pigeon"} pid={funStats.pigeon.pid} pct={funStats.pigeon.pct} color="#40a0e0" theme={theme} getName={getName} record={funStats.pigeon.record} />}
+           </div>
+        )}
       </Sec>
 
       <Sec title={t("badges_sec")} theme={theme}>
