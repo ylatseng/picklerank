@@ -1,8 +1,8 @@
 import React, { useState, useContext } from 'react';
 import { 
   t, ratingColor, ratingLabel, avatarColor, initials, fmtDate, fmtDelta,
-  isoToDatetimeLocal, K_FACTOR, calcExpected, calcScoreMargin, 
-  validatePickleballScore, DEFAULT_RATING
+  isoToDatetimeLocal, K_FACTOR, calcExpected, 
+  validatePickleballScore, DEFAULT_RATING, WIN_TO_OPTIONS
 } from '../engine.js';
 import { makeS } from '../styles.js';
 import { ThemeCtx } from '../context.js';
@@ -74,14 +74,15 @@ export function MatchEloBreakdown({match, players, theme}) {
      if (!teamIds) return null;
      const oppTeamIds = isT1 ? (match.teams?.[1] || []) : (match.teams?.[0] || []);
      const oppAvg = oppTeamIds.length ? oppTeamIds.reduce((s,id)=>s+(match.ratingSnaps[id]??3),0)/oppTeamIds.length : 3;
-     const margin = calcScoreMargin(match.team1Wins, match.team2Wins);
-     const kAdj = K_FACTOR * (1 + (margin - 0.5));
+     const margin = match.marginUsed ?? 0.5; // real point-based margin computed at replay time
 
      return teamIds.map(pid => {
        const myRating = match.ratingSnaps[pid];
        if(myRating == null) return null;
        const delta = match.ratingDeltas[pid] || 0;
        const exp = calcExpected(myRating, oppAvg);
+       const kF = match.kFactors?.[pid] ?? K_FACTOR; // each player can carry their own (provisional) K
+       const kAdj = kF * (1 + (margin - 0.5));
        return (
          <div key={pid} style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:8*z, padding:8*z, marginBottom:6*z, fontSize:10*z}}>
            <div style={{display:"flex", justifyContent:"space-between", fontWeight:700, marginBottom:4*z, fontSize:11*z}}>
@@ -307,7 +308,7 @@ export function MatchEditModal({match:m,players,onSave,onClose,theme}) {
         <div style={{display:"flex", gap:12*z, marginBottom:12*z}}>
           <div style={{flex:1}}>
             <label style={S.label}>{t("win_to_lbl")}</label>
-            <input style={S.input} type="number" min="1" value={winTo} onChange={e=>setWinTo(parseInt(e.target.value)||1)} />
+            <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
           </div>
           <div style={{flex:1}}>
             <label style={S.label}>{t("win_by_lbl")}</label>
@@ -317,14 +318,22 @@ export function MatchEditModal({match:m,players,onSave,onClose,theme}) {
 
         <label style={S.label}>{t("game_scores_sec")}</label>
         <div style={{fontSize:12*z,color:theme.sub,marginBottom:10*z}}>{t("score_win_by_2").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>
-        {games.map((g,i)=>(
-          <div key={i} style={{...S.gameRow,marginBottom:10*z}}>
-            <span style={{color:theme.sub,fontSize:12*z,minWidth:50*z}}>Game {i+1}</span>
-            <input style={S.scoreInput} type="number" min="0" max="30" value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
-            <span style={{color:theme.sub}}>–</span>
-            <input style={S.scoreInput} type="number" min="0" max="30" value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
+        {games.map((g,i)=>{
+          const ga=parseInt(g.a), gb=parseInt(g.b);
+          const bothFilled = g.a!=="" && g.b!=="" && !isNaN(ga) && !isNaN(gb);
+          const isIllegal = bothFilled && !validatePickleballScore(ga,gb,winTo,winBy);
+          return (
+          <div key={i}>
+            <div style={{...S.gameRow,marginBottom: isIllegal ? 2*z : 10*z}}>
+              <span style={{color:theme.sub,fontSize:12*z,minWidth:50*z}}>Game {i+1}</span>
+              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
+              <span style={{color:theme.sub}}>–</span>
+              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
+            </div>
+            {isIllegal && <div style={{fontSize:11*z,color:"#e05050",marginBottom:10*z}}>{t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>}
           </div>
-        ))}
+          );
+        })}
         {err&&<Err msg={err} theme={theme}/>}
         <div style={{display:"flex",gap:10*z,marginTop:16*z}}>
           <button style={{...S.btnPrimary,flex:1}} onClick={save}>{t("save")}</button>

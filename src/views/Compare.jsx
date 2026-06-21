@@ -3,7 +3,7 @@ import { t, calcExpected, ratingColor, ratingLabel, fmtDate, sortOptionsAlpha, i
 import { makeS } from '../styles.js';
 import { Sec, Sel, Avatar, Err } from '../components/Shared.jsx';
 import { MatchesSubNav } from '../components/Navigation.jsx';
-import { K_FACTOR } from '../engine.js';
+import { dynamicKFactor } from '../engine.js';
 
 export default function Compare({players,matches,compareIds,set,nav,theme,state}) {
   const S=makeS(theme);
@@ -78,6 +78,13 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
 
   // Trust the Pure Elo Predictor (Drop the historical blend, trust the overall ratings)
     const exp = calcExpected(r1, r2);
+    // Provisional (new) players move faster, so their predicted swing should reflect that too
+    const k1 = format === "singles"
+      ? dynamicKFactor(p1?.singlesPlayed || 0)
+      : (dynamicKFactor(p1?.doublesPlayed || 0) + dynamicKFactor(p3?.doublesPlayed || 0)) / 2;
+    const k2 = format === "singles"
+      ? dynamicKFactor(p2?.singlesPlayed || 0)
+      : (dynamicKFactor(p2?.doublesPlayed || 0) + dynamicKFactor(p4?.doublesPlayed || 0)) / 2;
 
   return (
     <div style={S.view}>
@@ -133,7 +140,7 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
                 <div style={{fontSize:18*z, color:"#50c878", fontWeight:800, marginTop:4*z}}>{(exp*100).toFixed(1)}%</div>
                 <div style={{fontSize:10*z, color:theme.sub}}>{t("prob_win")}</div>
                 <div style={{marginTop:12*z, fontSize:11*z, color:theme.sub}}>
-                   {t("if_wins").replace("{name}", t1Name)} <br/><span style={{color:"#50c878", fontWeight:700}}>+{(K_FACTOR * (1 - exp)).toFixed(3)}</span>
+                   {t("if_wins").replace("{name}", t1Name)} <br/><span style={{color:"#50c878", fontWeight:700}}>+{(k1 * (1 - exp)).toFixed(3)}</span>
                 </div>
               </div>
               <div style={{flex:1, background:theme.bg, padding:10*z, borderRadius:8*z, border:`1px solid ${theme.border}`}}>
@@ -141,7 +148,7 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
                 <div style={{fontSize:18*z, color:"#40a0e0", fontWeight:800, marginTop:4*z}}>{((1-exp)*100).toFixed(1)}%</div>
                 <div style={{fontSize:10*z, color:theme.sub}}>{t("prob_win")}</div>
                 <div style={{marginTop:12*z, fontSize:11*z, color:theme.sub}}>
-                   {t("if_wins").replace("{name}", t2Name)} <br/><span style={{color:"#40a0e0", fontWeight:700}}>+{(K_FACTOR * (1 - (1-exp))).toFixed(3)}</span>
+                   {t("if_wins").replace("{name}", t2Name)} <br/><span style={{color:"#40a0e0", fontWeight:700}}>+{(k2 * (1 - (1-exp))).toFixed(3)}</span>
                 </div>
               </div>
             </div>

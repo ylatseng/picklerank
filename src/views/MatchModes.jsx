@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches } from '../engine.js';
+import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, Err, Sel, MatchEloBreakdown, ConfirmInline, MatchEditModal, MatchCard } from '../components/Shared.jsx';
 import { MatchesSubNav } from '../components/Navigation.jsx';
@@ -94,7 +94,7 @@ export function LogMatch({state,players,set,nav,theme,user}) {
         <div style={{display:"flex", gap:12*z, marginTop:12*z}}>
           <div style={{flex:1}}>
             <label style={S.label}>{t("win_to_lbl")}</label>
-            <input style={S.input} type="number" min="1" value={winTo} onChange={e=>setWinTo(parseInt(e.target.value)||1)} />
+            <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
           </div>
           <div style={{flex:1}}>
             <label style={S.label}>{t("win_by_lbl")}</label>
@@ -132,15 +132,23 @@ export function LogMatch({state,players,set,nav,theme,user}) {
 
       <Sec title={t("game_scores_sec")} theme={theme}>
         <div style={{fontSize:12*z,color:theme.sub,marginBottom:10*z}}>{t("score_win_by_2").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>
-        {games.map((g,i)=>(
-          <div key={i} style={S.gameRow}>
-            <span style={{color:theme.sub,fontSize:12*z,minWidth:50*z}}>Game {i+1}</span>
-            <input style={S.scoreInput} type="number" min="0" max="30" placeholder="T1" value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
-            <span style={{color:theme.sub}}>–</span>
-            <input style={S.scoreInput} type="number" min="0" max="30" placeholder="T2" value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
-            {games.length>1&&<button style={S.btnDanger} onClick={()=>rmGame(i)}>✕</button>}
+        {games.map((g,i)=>{
+          const ga=parseInt(g.a), gb=parseInt(g.b);
+          const bothFilled = g.a!=="" && g.b!=="" && !isNaN(ga) && !isNaN(gb);
+          const isIllegal = bothFilled && !validatePickleballScore(ga,gb,winTo,winBy);
+          return (
+          <div key={i}>
+            <div style={S.gameRow}>
+              <span style={{color:theme.sub,fontSize:12*z,minWidth:50*z}}>Game {i+1}</span>
+              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder="T1" value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
+              <span style={{color:theme.sub}}>–</span>
+              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder="T2" value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
+              {games.length>1&&<button style={S.btnDanger} onClick={()=>rmGame(i)}>✕</button>}
+            </div>
+            {isIllegal && <div style={{fontSize:11*z,color:"#e05050",marginTop:-4*z,marginBottom:8*z}}>{t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>}
           </div>
-        ))}
+          );
+        })}
         <button style={S.btnSecondary} onClick={addGame}>{t("add_game_btn")}</button>
       </Sec>
       
@@ -261,7 +269,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
             <div style={{display:"flex", gap:12*z, marginBottom:12*z}}>
               <div style={{flex:1}}>
                 <label style={S.label}>{t("win_to_lbl")}</label>
-                <input style={S.input} type="number" min="1" value={winTo} onChange={e=>setWinTo(parseInt(e.target.value)||1)} />
+                <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
               </div>
               <div style={{flex:1}}>
                 <label style={S.label}>{t("win_by_lbl")}</label>
@@ -398,7 +406,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
             <div style={{display:"flex", gap:12*z}}>
               <div style={{flex:1}}>
                 <label style={S.label}>{t("win_to_lbl")}</label>
-                <input style={S.input} type="number" min="1" value={winTo} onChange={e=>setWinTo(parseInt(e.target.value)||1)} />
+                <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
               </div>
               <div style={{flex:1}}>
                 <label style={S.label}>{t("win_by_lbl")}</label>
@@ -518,7 +526,7 @@ export function TournamentMode({ players, state, set, nav, theme, user }) {
           <div style={{display:"flex", gap:12*z, marginBottom:16*z}}>
             <div style={{flex:1}}>
               <label style={S.label}>{t("win_to_lbl")}</label>
-              <input style={S.input} type="number" min="1" value={winTo} onChange={e=>setWinTo(parseInt(e.target.value)||1)} />
+              <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
             </div>
             <div style={{flex:1}}>
               <label style={S.label}>{t("win_by_lbl")}</label>

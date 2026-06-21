@@ -5,6 +5,11 @@ export { db };
 // ─── Constants ────────────────────────────────────────────────────────────────
 export const DEFAULT_RATING = 3.0;
 export const K_FACTOR = 0.08;
+// Matches below this threshold (per discipline) are "provisional" — same cutoff
+// already shown to users in Profile/Legends. Their ratings move faster so they
+// converge toward their true skill level quickly, then taper to the normal K_FACTOR.
+export const PROVISIONAL_MATCH_THRESHOLD = 5;
+export const PROVISIONAL_K_MULTIPLIER = 2; // provisional players move up to 2x faster
 export const STORAGE_KEY = "pkl_tracker_v4"; 
 
 // ─── Version & Changelog ──────────────────────────────────────────────────────
@@ -172,18 +177,60 @@ export function t(key) { return TRANSLATIONS[currentLang]?.[key] || TRANSLATIONS
 
 // ─── Rating Engine ────────────────────────────────────────────────────────────
 export function calcExpected(rA, rB) { return 1 / (1 + Math.pow(10, (rB - rA) / 0.4)); }
-export function calcScoreMargin(w, l) { const t = w + l; return t === 0 ? 0.5 : w / t; }
-export function updateRating(current, expected, actual, margin) {
-  const kAdj = K_FACTOR * (1 + (margin - 0.5));
+
+// FIXED: was calcScoreMargin(gamesWonByTeam, gamesWonByOtherTeam) — for a typical
+// single-game match that's always 1 vs 0, so margin was ALWAYS 1.0 no matter if the
+// score was 11-9 or 11-0. Now computes margin from real points scored across every
+// game in the match, relative to the team that won the match overall, so a nail-biter
+// and a blowout actually produce different K-adjustments.
+export function calcScoreMargin(games = [], winnerTeam = 0) {
+  let winPts = 0, lossPts = 0;
+  (games || []).forEach(g => {
+    if (!g || isNaN(g.a) || isNaN(g.b)) return;
+    if (winnerTeam === 0) { winPts += g.a; lossPts += g.b; }
+    else { winPts += g.b; lossPts += g.a; }
+  });
+  const total = winPts + lossPts;
+  return total === 0 ? 0.5 : winPts / total;
+}
+
+// NEW: ramps K_FACTOR up to PROVISIONAL_K_MULTIPLIER× for a player's first
+// PROVISIONAL_MATCH_THRESHOLD matches (per discipline), then tapers linearly back
+// down to the normal K_FACTOR. This is what the "Provisional" badge in the UI was
+// always supposed to mean — previously every player moved at the same fixed rate
+// regardless of how many matches they'd played.
+export function dynamicKFactor(matchesPlayed = 0) {
+  const played = Math.max(0, matchesPlayed);
+  if (played >= PROVISIONAL_MATCH_THRESHOLD) return K_FACTOR;
+  const t = played / PROVISIONAL_MATCH_THRESHOLD;
+  return K_FACTOR * (PROVISIONAL_K_MULTIPLIER - t * (PROVISIONAL_K_MULTIPLIER - 1));
+}
+
+export function updateRating(current, expected, actual, margin, kFactor = K_FACTOR) {
+  const kAdj = kFactor * (1 + (margin - 0.5));
   return Math.max(1.5, Math.min(6.5, current + kAdj * (actual - expected)));
 }
 
+// WIN_TO_OPTIONS: the standard point targets used in real pickleball play.
+// 11 = standard rec/league game, 15 & 21 = common single-game/tournament formats.
+export const WIN_TO_OPTIONS = [11, 15, 21];
+
+// FIXED: the old version checked `high >= winTo && (high - low) >= winBy` — both
+// conditions independently. That meant 25-2 passed (25>=11 true, 23>=2 true), even
+// though the game would have legally ended the moment the score hit 11-2. A score
+// is only legal if it's the EXACT point the game would have stopped:
+//   - high === winTo and the lead is at least winBy (won outright, no deuce needed), or
+//   - high > winTo and the lead is exactly winBy (deuce situation — the instant the
+//     lead reaches winBy is when play stops, so a bigger lead at a higher score is impossible)
 export function validatePickleballScore(s1, s2, winTo = 11, winBy = 2) {
   if (s1 == null || s2 == null || isNaN(s1) || isNaN(s2)) return null;
   const high = Math.max(s1, s2);
   const low = Math.min(s1, s2);
-  
-  if (high >= winTo && (high - low) >= winBy) {
+  if (high === low) return null;
+  const diff = high - low;
+
+  const legal = (high === winTo && diff >= winBy) || (high > winTo && diff === winBy);
+  if (legal) {
     return { winner: s1 > s2 ? 0 : 1 };
   }
   return null; 
@@ -217,17 +264,20 @@ export function replayAllMatches(players = [], matches = []) {
     const rA = avg(t1ids), rB = avg(t2ids);
     const exp0 = calcExpected(rA, rB);
     const act0 = match.winnerTeam === 0 ? 1 : 0;
-    const margin = calcScoreMargin(match.team1Wins, match.team2Wins);
+    const margin = calcScoreMargin(match.games, match.winnerTeam);
     
-    const deltas = {};
+    const deltas = {}, kFactors = {};
     allIds.forEach(id => {
       const isT1 = t1ids.includes(id);
       const exp = isT1 ? exp0 : 1 - exp0;
       const act = isT1 ? act0 : 1 - act0;
       const old = currentPool[id] ?? DEFAULT_RATING;
-      const nr = updateRating(old, exp, act, margin);
+      const matchesSoFar = (historyPool[id]?.length || 1) - 1; // matches in THIS discipline before this one
+      const kF = dynamicKFactor(matchesSoFar);
+      const nr = updateRating(old, exp, act, margin, kF);
       
       deltas[id] = nr - old;
+      kFactors[id] = kF;
       currentPool[id] = nr;
       
       if (!historyPool[id]) historyPool[id] = [];
@@ -235,6 +285,8 @@ export function replayAllMatches(players = [], matches = []) {
     });
     
     match.ratingDeltas = deltas;
+    match.kFactors = kFactors;
+    match.marginUsed = margin;
   });
   
   const derivedPlayers = players.map(p => ({
