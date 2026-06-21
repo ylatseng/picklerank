@@ -17,7 +17,7 @@ export default function Trash({state, set, theme}) {
   }
 
   function emptyTrash() {
-    if (confirm("Permanently empty the trash? This cannot be undone.")) {
+    if (window.confirm(t("empty_trash_confirm"))) {
       set(s => ({ ...s, trash: [] }));
     }
   }
@@ -26,22 +26,24 @@ export default function Trash({state, set, theme}) {
 
   return (
     <div style={S.view}>
-      <Sec title="🗑️ Trash Can" theme={theme}>
+      <Sec title={`🗑️ ${t("trash")}`} theme={theme}>
         {trashItems.length === 0 ? (
-          <Empty text="Trash is empty." theme={theme} />
+          <Empty text={t("trash_empty")} theme={theme} />
         ) : (
           <>
             {trashItems.map(item => (
               <div key={item.id} style={{padding: '12px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                 <div>
-                  <div style={{fontWeight: 600}}>{item.type === 'player' ? item.data.name : `Match (${item.data.type})`}</div>
-                  <small style={{color: theme.sub}}>Deleted: {new Date(item.deletedAt).toLocaleDateString()}</small>
+                  <div style={{fontWeight: 600}}>
+                    {item.type === 'player' ? item.data.name : `${t("match_label")} (${t(item.data.type === 'singles' ? 'match_type_singles' : item.data.type === 'doubles' ? 'match_type_doubles' : item.data.type)})`}
+                  </div>
+                  <small style={{color: theme.sub}}>{t("deleted_lbl")} {new Date(item.deletedAt).toLocaleDateString()}</small>
                 </div>
-                <button style={S.btnPrimary} onClick={() => restore(item)}>Restore</button>
+                <button style={S.btnPrimary} onClick={() => restore(item)}>{t("restore_btn")}</button>
               </div>
             ))}
             <button style={{...S.btnDanger, marginTop: '20px', width: '100%'}} onClick={emptyTrash}>
-              Empty Trash Can
+              {t("empty_trash_btn")}
             </button>
           </>
         )}

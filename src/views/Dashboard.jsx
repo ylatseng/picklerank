@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { t, ratingColor, fmtDelta, patchPlayerRatings } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, Empty, MiniMatchCard, Avatar } from '../components/Shared.jsx';
+import { Sec, Empty, Avatar } from '../components/Shared.jsx';
+import Players from './Players.jsx'; // Bring in the heavy lifting!
 
-export function LeaderboardRow({player:p,rank,onClick,theme,format}) {
+function LeaderboardRow({player:p,rank,onClick,theme,format}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   const medal=rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":null;
@@ -42,7 +43,11 @@ export function LeaderboardRow({player:p,rank,onClick,theme,format}) {
   );
 }
 
-export default function Dashboard({players,matches,nav,theme,set,format}) {
+export default function Dashboard({players, rawStats, state, matches, nav, theme, set, format, user, setUser}) {
+  const [view, setView] = useState("rank");
+  const S = makeS(theme);
+  const z = theme.zoom || 1.0;
+
   // Migration hook to split old baseRating into singles/doubles ratings
   useEffect(() => {
     if (players.length > 0 && players[0].ratingSingles === undefined) {
@@ -51,54 +56,33 @@ export default function Dashboard({players,matches,nav,theme,set,format}) {
     }
   }, [players]);
 
-  const S=makeS(theme);
-  const z = theme.zoom || 1.0;
-  const recent=[...matches].reverse().slice(0,5);
-
-  function copyAIPrompt() {
-    if (!recent.length) return alert(t("no_matches"));
-    let prompt = `Act as a hilarious, slightly snarky sports commentator. Write a short recap of our latest pickleball session based on these recent matches. Call out big upsets, winning streaks, and point differentials. Here is the raw data:\n\n`;
-    recent.forEach(m => {
-       const t1 = m.teamNames?.t1 || m.teams?.[0]?.map(id => players.find(p=>p.id===id)?.name || "Unknown").join(" & ") || "TBD";
-       const t2 = m.teamNames?.t2 || m.teams?.[1]?.map(id => players.find(p=>p.id===id)?.name || "Unknown").join(" & ") || "TBD";
-       const winner = m.winnerTeam === 0 ? t1 : t2;
-       const score = (m.games||[]).map(g => `${g.a}-${g.b}`).join(', ');
-       prompt += `- Date: ${new Date(m.date).toLocaleDateString()}\n  Format: ${m.type}\n  Matchup: ${t1} vs ${t2}\n  Winner: ${winner}\n  Score: ${score}\n\n`;
-    });
-    prompt += `Give me a 2-paragraph summary I can drop into our group chat!`;
-    navigator.clipboard.writeText(prompt);
-    alert(t("ai_prompt_copied"));
-  }
-
   return (
     <div style={S.view}>
-      <div style={{display:"flex", gap:8*z, marginBottom:12*z}}>
-        <button style={{...S.btnSecondary, flex:1, marginTop:0, ...(format==="doubles"?S.toggleOn:{})}} onClick={() => set({leaderboardFormat:"doubles"})}>{t("overview_doubles")}</button>
-        <button style={{...S.btnSecondary, flex:1, marginTop:0, ...(format==="singles"?S.toggleOn:{})}} onClick={() => set({leaderboardFormat:"singles"})}>{t("overview_singles")}</button>
+      {/* Unified Hub Toggle */}
+      <div style={{display:"flex", gap:8*z, marginBottom:16*z}}>
+        <button style={{...S.btnSecondary, flex:1, marginTop:0, ...(view==="rank"?S.toggleOn:{})}} onClick={() => setView("rank")}>🏆 {t("rankings")}</button>
+        <button style={{...S.btnSecondary, flex:1, marginTop:0, ...(view==="roster"?S.toggleOn:{})}} onClick={() => setView("roster")}>👤 {t("roster")}</button>
       </div>
-      <Sec title={format === "singles" ? t("singles_title") : t("doubles_title")} theme={theme}>
-        {players.length===0
-          ? <Empty text={t("no_players")} onAction={()=>nav("players")} label={t("add_players_btn")} theme={theme}/>
-          : players.map((p,i)=><LeaderboardRow key={p.id} player={p} rank={i+1} onClick={()=>nav("profile",{profileId:p.id})} theme={theme} format={format}/>)}
-      </Sec>
-      <Sec title={t("recent_matches")} theme={theme}>
-        {recent.length===0
-          ? <Empty text={t("no_matches")} onAction={()=>nav("log")} label={t("log_first_match")} theme={theme}/>
-          : (
-            <>
-              {recent.map(m=><MiniMatchCard key={m.id} match={m} players={players} theme={theme}/>)}
-              
-              <div style={{display:"flex", gap:8*z, marginTop:12*z}}>
-                <button style={{...S.btnSecondary, flex:1, marginTop:0}} onClick={()=>nav("history", {historyPlayerId: null})}>
-                  {t("view_all_matches")} ({matches.length}) →
-                </button>
-                <button style={{...S.btnSecondary, flex:1, marginTop:0, borderColor:theme.accent, color:theme.accent}} onClick={copyAIPrompt}>
-                  {t("copy_ai_prompt")}
-                </button>
-              </div>
-            </>
-          )}
-      </Sec>
+
+      {view === "rank" ? (
+        <>
+          <div style={{display:"flex", gap:8*z, marginBottom:12*z}}>
+            <button style={{...S.btnSecondary, flex:1, marginTop:0, ...(format==="doubles"?S.toggleOn:{})}} onClick={() => set({leaderboardFormat:"doubles"})}>{t("overview_doubles")}</button>
+            <button style={{...S.btnSecondary, flex:1, marginTop:0, ...(format==="singles"?S.toggleOn:{})}} onClick={() => set({leaderboardFormat:"singles"})}>{t("overview_singles")}</button>
+          </div>
+          
+          <Sec title={format === "singles" ? t("singles_title") : t("doubles_title")} theme={theme}>
+            {players.length===0
+              ? <Empty text={t("no_players")} onAction={()=>setView("roster")} label={t("add_players_btn")} theme={theme}/>
+              : players.map((p,i)=><LeaderboardRow key={p.id} player={p} rank={i+1} onClick={()=>nav("profile",{profileId:p.id})} theme={theme} format={format}/>)}
+          </Sec>
+        </>
+      ) : (
+        // Embed the fully functional Players view directly. The negative margin offsets the double-padding.
+        <div style={{margin: `-${16*z}px`}}>
+           <Players players={rawStats || players} state={state || {}} set={set} nav={nav} theme={theme} isAdmin={user?.isAdmin} user={user} setUser={setUser} />
+        </div>
+      )}
     </div>
   );
 }

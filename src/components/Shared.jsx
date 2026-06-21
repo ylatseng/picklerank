@@ -15,11 +15,11 @@ export function RadarChart({player, theme}) {
   const rMax = 70;
   
   const metrics = [
-    { label: "Win %", val: player.winPct ? player.winPct / 100 : 0 },
-    { label: "Power (S)", val: Math.min(1, Math.max(0, ((player.ratingSingles||3) - 1.5) / 5)) || 0 },
-    { label: "Synergy (D)", val: Math.min(1, Math.max(0, ((player.ratingDoubles||3) - 1.5) / 5)) || 0 },
-    { label: "Upset Factor", val: Math.min(1, (player.bestWinDelta||0) / 0.6) || 0 },
-    { label: "Form", val: player.streakType === "W" ? Math.min(1, (player.streak||0) / 6) : 0.1 }
+    { label: t("legend_win_pct"), val: player.winPct ? player.winPct / 100 : 0 },
+    { label: t("legend_power"), val: Math.min(1, Math.max(0, ((player.ratingSingles||3) - 1.5) / 5)) || 0 },
+    { label: t("legend_synergy"), val: Math.min(1, Math.max(0, ((player.ratingDoubles||3) - 1.5) / 5)) || 0 },
+    { label: t("legend_upset"), val: Math.min(1, (player.bestWinDelta||0) / 0.6) || 0 },
+    { label: t("legend_form"), val: player.streakType === "W" ? Math.min(1, (player.streak||0) / 6) : 0.1 }
   ];
 
   const points = metrics.map((m, i) => {
@@ -88,10 +88,10 @@ export function MatchEloBreakdown({match, players, theme}) {
              <span style={{color:theme.text}}>{initials(getName(pid))}</span>
              <span style={{color: delta>=0 ? "#50c878" : "#e05050"}}>{delta>=0?"+":""}{delta.toFixed(3)}</span>
            </div>
-           <div style={{display:"flex", justifyContent:"space-between", color:theme.sub}}><span>Base:</span> <span>{myRating.toFixed(3)}</span></div>
-           <div style={{display:"flex", justifyContent:"space-between", color:theme.sub}}><span>Opp Avg:</span> <span>{oppAvg.toFixed(3)}</span></div>
-           <div style={{display:"flex", justifyContent:"space-between", color:theme.sub}}><span>Prob:</span> <span style={{color: exp > 0.5 ? "#50c878" : "#e05050"}}>{(exp*100).toFixed(0)}%</span></div>
-           <div style={{display:"flex", justifyContent:"space-between", color:theme.sub}}><span>K-Adj:</span> <span>x{kAdj.toFixed(2)}</span></div>
+           <div style={{display:"flex", justifyContent:"space-between", color:theme.sub}}><span>{t("base_lbl")}</span> <span>{myRating.toFixed(3)}</span></div>
+           <div style={{display:"flex", justifyContent:"space-between", color:theme.sub}}><span>{t("opp_avg_lbl")}</span> <span>{oppAvg.toFixed(3)}</span></div>
+           <div style={{display:"flex", justifyContent:"space-between", color:theme.sub}}><span>{t("prob_lbl")}</span> <span style={{color: exp > 0.5 ? "#50c878" : "#e05050"}}>{(exp*100).toFixed(0)}%</span></div>
+           <div style={{display:"flex", justifyContent:"space-between", color:theme.sub}}><span>{t("k_adj_lbl")}</span> <span>x{kAdj.toFixed(2)}</span></div>
          </div>
        )
      });
@@ -119,11 +119,14 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
   const t2=m.teamNames?.t2||m.teams?.[1]?.map(getName).join(" & ")||"TBD";
   const pSnap = highlightPlayerId ? m.ratingDeltas?.[highlightPlayerId] : null;
 
+  // Render translations for the "singles" or "doubles" match type tags
+  const typeTag = m.type === "singles" ? t("match_type_singles") : m.type === "doubles" ? t("match_type_doubles") : m.type;
+
   return (
     <div style={S.matchCard}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12*z}}>
         <div style={{display:"flex",gap:6*z,alignItems:"center"}}>
-          <span style={S.typePill}>{m.type}</span>
+          <span style={S.typePill}>{typeTag}</span>
           {m.venue&&<span style={{fontSize:11*z,color:theme.sub}}>📍{m.venue}</span>}
         </div>
         <span style={{fontSize:12*z,color:theme.sub}}>{fmtDate(m.date)}</span>
@@ -162,7 +165,13 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
         
       </div>
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", marginTop: 8*z}}>
+      {m.notes && (
+        <div style={{fontSize: 12*z, color: theme.sub, marginBottom: 12*z, display: 'flex', alignItems: 'flex-start', gap: 6*z, background: theme.bg, padding: "8px 10px", borderRadius: 6*z, border: `1px solid ${theme.border}`}}>
+          <span>📝</span> <span style={{fontStyle: 'italic', lineHeight: 1.4}}>{m.notes}</span>
+        </div>
+      )}
+
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{display:"flex", alignItems:"center", gap: 8*z}}>
            <span style={{fontSize:12*z,color:"#50c878",fontWeight:600}}>🏆 {m.winnerTeam===0?t1:t2}</span>
            {pSnap != null && (
@@ -192,9 +201,11 @@ export function MiniMatchCard({match:m,players,theme}){
   const t1=m.teamNames?.t1||m.teams?.[0]?.map(getName).join(" & ")||"TBD"; 
   const t2=m.teamNames?.t2||m.teams?.[1]?.map(getName).join(" & ")||"TBD"; 
   
+  const typeTag = m.type === "singles" ? t("match_type_singles") : m.type === "doubles" ? t("match_type_doubles") : m.type;
+
   return (
     <div style={{background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:10*z,padding:"10px 12px",marginBottom:8*z}}>
-      <div style={{fontSize:11*z,color:theme.sub,marginBottom:10*z}}>{fmtDate(m.date)} · {m.type}{m.venue?` · 📍${m.venue}`:""}</div>
+      <div style={{fontSize:11*z,color:theme.sub,marginBottom:10*z}}>{fmtDate(m.date)} · {typeTag}{m.venue?` · 📍${m.venue}`:""}</div>
       
       {/* Modern Bracket-Style Vertical Layout with Fixed Width Columns */}
       <div style={{display:"flex", flexDirection:"column", gap:8*z}}>
@@ -223,6 +234,13 @@ export function MiniMatchCard({match:m,players,theme}){
           </div>
         </div>
       </div>
+
+      {m.notes && (
+        <div style={{fontSize: 10*z, color: theme.sub, marginTop: 8*z, borderTop: `1px dashed ${theme.border}`, paddingTop: 6*z, display: "flex", gap: 4*z}}>
+          <span>📝</span> <span style={{fontStyle: 'italic', whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{m.notes}</span>
+        </div>
+      )}
+
     </div>
   ); 
 }
@@ -234,6 +252,7 @@ export function MatchEditModal({match:m,players,onSave,onClose,theme}) {
   const getName=id=>players.find(p=>p.id===id)?.name??"?";
   const [date,setDate]=useState(isoToDatetimeLocal(m.date));
   const [venue,setVenue]=useState(m.venue||"");
+  const [notes,setNotes]=useState(m.notes||""); 
   const [winTo,setWinTo]=useState(m.winTo||11);
   const [winBy,setWinBy]=useState(m.winBy||2);
   const [games,setGames]=useState((m.games||[]).map(g=>({a:String(g.a),b:String(g.b)})));
@@ -258,7 +277,8 @@ export function MatchEditModal({match:m,players,onSave,onClose,theme}) {
     if(t1w===t2w) return setErr(t("err_clear_winner"));
     const winnerTeam=t1w>t2w?0:1;
     const newDate=date?new Date(date).toISOString():m.date;
-    onSave({...m,date:newDate,venue:venue.trim()||null,games:parsedGames,winnerTeam,team1Wins:t1w,team2Wins:t2w,winTo,winBy});
+    
+    onSave({...m,date:newDate,venue:venue.trim()||null,notes:notes.trim()||null,games:parsedGames,winnerTeam,team1Wins:t1w,team2Wins:t2w,winTo,winBy});
   }
 
   const t1=m.teamNames?.t1||m.teams?.[0]?.map(getName).join(" & ")||"TBD";
@@ -280,6 +300,9 @@ export function MatchEditModal({match:m,players,onSave,onClose,theme}) {
 
         <label style={S.label}>{t("venue_opt")}</label>
         <input style={{...S.input,marginBottom:12*z}} placeholder="e.g. Riverside Courts" value={venue} onChange={e=>setVenue(e.target.value)}/>
+
+        <label style={S.label}>{t("notes_lbl")}</label>
+        <input style={{...S.input,marginBottom:12*z}} placeholder="e.g. Crazy wind, paddle testing..." value={notes} onChange={e=>setNotes(e.target.value)}/>
 
         <div style={{display:"flex", gap:12*z, marginBottom:12*z}}>
           <div style={{flex:1}}>
@@ -435,10 +458,12 @@ export function ConfirmInline({msg,note,onConfirm,onCancel,danger=false,theme}) 
       <div style={{display:"flex",gap:8*z}}>
         <button style={{flex:1,background:danger?"#5a2020":"#1e3d24",border:"none",borderRadius:8*z,
           color:danger?"#e05050":"#50c878",cursor:"pointer",fontSize:13*z,fontWeight:700,padding:8*z}} onClick={onConfirm}>
-          Confirm
+          {t("confirm")}
         </button>
         <button style={{flex:1,background:theme.card,border:`1px solid ${theme.border}`,borderRadius:8*z,
-          color:theme.sub,cursor:"pointer",fontSize:13*z,fontWeight:600,padding:8*z}} onClick={onCancel}>Cancel</button>
+          color:theme.sub,cursor:"pointer",fontSize:13*z,fontWeight:600,padding:8*z}} onClick={onCancel}>
+          {t("cancel")}
+        </button>
       </div>
     </div>
   );

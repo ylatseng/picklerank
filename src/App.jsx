@@ -15,53 +15,223 @@ import Legends from './views/Legends.jsx';
 import Changelog from './views/Changelog.jsx'; 
 import Events from './views/Events.jsx';
 import { LogMatch, SessionMode, KingOfCourt, TournamentMode } from './views/MatchModes.jsx';
+import { Sel, Err } from './components/Shared.jsx';
 
 // Engine & Components
 import {
-  DEFAULT_RATING, STORAGE_KEY, APP_MODES, APP_ACCENTS, APP_FONTS,
-  t, setLang, replayAllMatches, computeStats, genId, ratingColor, ratingLabel,
-  fmtDate, isoToDatetimeLocal, sortOptionsAlpha, processImage, 
-  loadState, saveState, blankState, validatePickleballScore, calcExpected, initials, avatarColor, fmtDelta
+  APP_MODES, APP_ACCENTS, APP_FONTS, setLang, t, replayAllMatches, computeStats, 
+  loadState, saveState, blankState, pingPresence, genId, DEFAULT_RATING
 } from './engine.js';
 
-import { Header, BottomNav, MatchesSubNav } from './components/Navigation.jsx';
-import { 
-  Avatar, Sparkline, RadarChart, MatchCard, ConfirmInline, 
-  Sec, Empty, Err, Sel, MiniMatchCard, MatchEloBreakdown, MatchEditModal
-} from './components/Shared.jsx';
+import { Header, BottomNav } from './components/Navigation.jsx';
 
-// ─── Main App Router ──────────────────────────────────────
+const ADMIN_PASSCODE = "1234";
+
+// --- PIN VERIFICATION GATE ---
+function PinVerification({ player, onVerify, theme }) {
+  const S = makeS(theme);
+  const z = theme.zoom || 1.0;
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState(false);
+  
+  if (!player) {
+    return <div style={{position:"fixed", inset:0, background:theme.bg, zIndex:9999}} />; 
+  }
+
+  return (
+    <div style={{position:"fixed", inset:0, background:theme.bg, zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:20*z}}>
+      <div style={{background:theme.card, border:`1px solid ${theme.border}`, padding:24*z, borderRadius:16*z, width:"100%", maxWidth:320*z, textAlign:"center"}}>
+        <h2 style={{color:theme.text, marginTop:0}}>{t("verify_identity")}</h2>
+        <p style={{color:theme.sub, fontSize:14*z}}>{t("verify_desc").replace("{name}", player.name)}</p>
+        <input 
+          style={{...S.input, textAlign:"center", fontSize:24*z, letterSpacing:"8px", marginBottom:20*z}} 
+          type="password" 
+          maxLength="4" 
+          autoFocus 
+          value={pin}
+          onChange={e => {setPin(e.target.value.replace(/\D/g,'')); setError(false);}}
+        />
+        {error && <Err msg={t("incorrect_pin")} theme={theme} />}
+        <button 
+          style={{...S.btnPrimary, width:"100%", padding:"12px 0", marginTop:10*z}} 
+          disabled={pin.length !== 4}
+          onClick={() => { 
+            if (pin === player.pin) {
+              onVerify(pin);
+            } else {
+              setError(true); 
+            }
+          }}>
+          {t("unlock")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- ONE-TIME WELCOME MODAL ---
+function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, setUser }) {
+  const S = makeS(theme);
+  const z = theme.zoom || 1.0;
+  const [mode, setMode] = useState("select"); 
+  const [selectedId, setSelectedId] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState(false);
+
+  const sortedPlayers = [...players].sort((a,b) => a.name.localeCompare(b.name));
+
+  return (
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:20*z}}>
+      <div style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:16*z, padding:24*z, width:"100%", maxWidth:400*z, boxShadow:"0 10px 30px rgba(0,0,0,0.5)", position: "relative"}}>
+        
+        {/* Language Toggle in Top Right */}
+        <div style={{position:"absolute", top: 16*z, right: 16*z}}>
+          <select 
+            style={{background:"transparent", border:"none", color:theme.sub, fontSize:13*z, cursor:"pointer", outline:"none"}}
+            value={user.langId || "en"}
+            onChange={e => setUser({langId: e.target.value})}
+          >
+            <option value="en">English</option>
+            <option value="zh_tw">繁體中文</option>
+            <option value="zh_cn">简体中文</option>
+          </select>
+        </div>
+
+        <div style={{textAlign:"center", marginBottom:20*z, marginTop: 12*z}}>
+          <div style={{fontSize:40*z, marginBottom:10*z}}>👋</div>
+          <h2 style={{margin:0, fontSize:22*z, color:theme.text}}>{t("welcome_title")}</h2>
+          <p style={{fontSize:14*z, color:theme.sub, marginTop:8*z}}>
+            {mode === "admin" ? t("welcome_desc_admin") : t("welcome_desc_user")}
+          </p>
+        </div>
+
+        {mode !== "admin" && (
+          <div style={{display:"flex", background:theme.bg, borderRadius:8*z, padding:4*z, marginBottom:16*z}}>
+            <button style={{flex:1, padding:"8px 0", borderRadius:6*z, border:"none", background: mode==="select"?theme.card:"transparent", color: mode==="select"?theme.text:theme.sub, fontWeight: mode==="select"?700:500, cursor:"pointer"}} onClick={()=>{setMode("select"); setError(false); setPin("");}}>{t("on_roster_btn")}</button>
+            <button style={{flex:1, padding:"8px 0", borderRadius:6*z, border:"none", background: mode==="create"?theme.card:"transparent", color: mode==="create"?theme.text:theme.sub, fontWeight: mode==="create"?700:500, cursor:"pointer"}} onClick={()=>{setMode("create"); setError(false); setPin("");}}>{t("new_player_btn")}</button>
+          </div>
+        )}
+
+        {mode === "select" ? (
+          <div style={{marginBottom: 20*z}}>
+            <Sel 
+              value={selectedId} 
+              onChange={(val) => { setSelectedId(val); setError(false); }} 
+              opts={sortedPlayers.map(p => ({ value: p.id, label: p.name }))} 
+              placeholder={t("select_name_placeholder")} 
+              theme={theme} 
+            />
+            <input 
+              style={{...S.input, marginTop:10*z}} 
+              type="password" 
+              maxLength="4" 
+              placeholder={t("pin_placeholder")} 
+              value={pin}
+              onChange={e=>{setPin(e.target.value.replace(/\D/g,'')); setError(false);}}
+            />
+            {error && <div style={{marginTop: 10*z}}><Err msg={t("invalid_pin_msg")} theme={theme} /></div>}
+          </div>
+        ) : mode === "admin" ? (
+          <div style={{marginBottom: 20*z}}>
+            <input 
+              style={{...S.input, textAlign: "center", letterSpacing: "4px"}} 
+              type="password" 
+              placeholder={t("admin_pass_placeholder")} 
+              value={pin}
+              onChange={e=>{setPin(e.target.value); setError(false);}}
+            />
+            {error && <div style={{marginTop: 10*z}}><Err msg={t("incorrect_pass_msg")} theme={theme} /></div>}
+          </div>
+        ) : (
+          <div style={{marginBottom: 20*z, textAlign: "center", color: theme.sub, fontSize: 13*z, lineHeight: 1.5}}>
+            {t("setup_awesome_msg")}
+          </div>
+        )}
+
+        <button 
+          style={{...S.btnPrimary, width:"100%", padding:"12px 0", fontSize:15*z}} 
+          disabled={(mode==="select" && (!selectedId || pin.length !== 4)) || (mode==="admin" && !pin)}
+          onClick={() => {
+            if (mode === "select") {
+              const p = players.find(x => x.id === selectedId);
+              if (p && p.pin && p.pin === pin) {
+                onSelect(selectedId, pin);
+              } else {
+                setError(true);
+              }
+            } else if (mode === "admin") {
+              if (pin === ADMIN_PASSCODE) {
+                onAdminLogin();
+              } else {
+                setError(true);
+              }
+            } else {
+              onCreate();
+            }
+          }}
+        >
+          {mode === "select" ? t("save_enter_app") : mode === "admin" ? t("enter_as_admin") : t("go_to_setup")}
+        </button>
+
+        <div style={{textAlign:"center", marginTop:16*z}}>
+          {mode !== "admin" ? (
+            <button style={{background:"transparent", border:"none", color:theme.sub, fontSize:13*z, cursor:"pointer", textDecoration:"underline"}} onClick={() => {setMode("admin"); setPin(""); setError(false);}}>
+              {t("admin_login")}
+            </button>
+          ) : (
+            <button style={{background:"transparent", border:"none", color:theme.sub, fontSize:13*z, cursor:"pointer", textDecoration:"underline"}} onClick={() => {setMode("select"); setPin(""); setError(false);}}>
+              {t("return_player_login")}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState(() => blankState());
   const [isLoading, setIsLoading] = useState(true);
 
-  // 1. Download data from Cloud when the app opens OR wakes up
+  // 1. Local User Settings (Isolated to browser)
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem("user_settings");
+    let parsed = saved ? JSON.parse(saved) : {
+      langId: "en",
+      isAdmin: false,
+      modeId: "dark",
+      accentId: "green",
+      fontId: "sans",
+      zoomLevel: 1.0,
+      myPlayerId: "", 
+      pendingAutoLink: false,
+      verifiedHash: "",
+      pinAuthV1: true 
+    };
+    if (!parsed.pinAuthV1) {
+      parsed.myPlayerId = "";
+      parsed.verifiedHash = "";
+      parsed.isAdmin = false;
+      parsed.pendingAutoLink = false;
+      parsed.pinAuthV1 = true;
+      localStorage.setItem("user_settings", JSON.stringify(parsed));
+    }
+    return parsed;
+  });
+
+  const hashPin = (id, pin) => btoa(id + "-" + pin);
+
   useEffect(() => {
     let isFetching = false;
-
     const fetchCloudData = async (isInitialLoad = false) => {
       if (isFetching) return;
       isFetching = true;
       try {
         const cloudData = await loadState();
-        
         setState(prev => {
-          let s = cloudData || blankState();
-          if (!s.langId) s.langId = "en";
-          if (!s.fontId) s.fontId = "sans";
-          if (!s.zoomLevel) s.zoomLevel = 1.0;
-          if (s.logoText === undefined) s.logoText = "LS";
-          if (s.isAdmin === undefined) s.isAdmin = false;
-          if (!s.adminPass) s.adminPass = "1234";
-          if (s.leaderboardFormat === undefined) s.leaderboardFormat = "doubles";
-          if (!s.favoredPlayerIds) s.favoredPlayerIds = [];
-          if (!s.trash) s.trash = [];
-
-          if (isInitialLoad) {
-            s.activeView = "dashboard";
-          } else if (prev.activeView) {
-            s.activeView = prev.activeView;
-          }
+          let s = { ...prev, ...(cloudData || blankState()) };
+          if (isInitialLoad) s.activeView = "dashboard";
+          else if (prev.activeView) s.activeView = prev.activeView;
           return s;
         });
       } catch (error) {
@@ -71,37 +241,54 @@ export default function App() {
         isFetching = false;
       }
     };
-
     fetchCloudData(true);
-
     const doRefresh = () => fetchCloudData(false);
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') doRefresh();
-    };
-
+    const handleVisibilityChange = () => { if (document.visibilityState === 'visible') doRefresh(); };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", doRefresh); 
-
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", doRefresh);
     };
   }, []);
 
-  // 2. Destructure state safely
-  const {
-      players = [], matches = [], activeView = "dashboard", profileId, historyPlayerId, 
-      modeId = "dark", accentId = "green", fontId = "sans", langId = "en", zoomLevel = 1.0, 
-      logoText = "LS", logoData = null, isAdmin = false, leaderboardFormat = "doubles", 
-      favoredPlayerIds = []
-  } = state;
+  const isCurrentlyVerified = useMemo(() => {
+    if (!user.myPlayerId) return false;
+    const player = state.players?.find(p => p.id === user.myPlayerId);
+    if (!player) return false;
+    if (!player.pin) return false;
+    return user.verifiedHash === hashPin(user.myPlayerId, player.pin);
+  }, [user, state.players]);
+
+  const setShared = useCallback((updater) => {
+    setState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
+      if (!isLoading) saveState(next); 
+      return next;
+    });
+  }, [isLoading]);
+
+  const setUserSettings = useCallback((updater) => {
+    setUser(prev => {
+      const next = typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
+      localStorage.setItem("user_settings", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!user.myPlayerId) return; 
+    pingPresence(user.myPlayerId); 
+    const interval = setInterval(() => pingPresence(user.myPlayerId), 60000); 
+    return () => clearInterval(interval);
+  }, [user.myPlayerId]);
+
+  setLang(user.langId); 
   
-  setLang(langId); 
-  
-  const activeMode = APP_MODES.find(m => m.id === modeId) || APP_MODES[0];
-  const activeAccent = APP_ACCENTS.find(a => a.id === accentId) || APP_ACCENTS[0];
-  const activeFont = APP_FONTS.find(f => f.id === fontId) || APP_FONTS[0];
-  const theme = { ...activeMode, accent: activeAccent.hex, zoom: zoomLevel, logoText, logoData, format: leaderboardFormat };
+  const activeMode = APP_MODES.find(m => m.id === user.modeId) || APP_MODES[0];
+  const activeAccent = APP_ACCENTS.find(a => a.id === user.accentId) || APP_ACCENTS[0];
+  const activeFont = APP_FONTS.find(f => f.id === user.fontId) || APP_FONTS[0];
+  const theme = { ...activeMode, accent: activeAccent.hex, zoom: user.zoomLevel, logoText: state.logoText, logoData: state.logoData, format: state.leaderboardFormat };
 
   useEffect(() => { 
     document.documentElement.style.background = theme.bg;
@@ -112,34 +299,25 @@ export default function App() {
     if (metaThemeColor) metaThemeColor.setAttribute("content", theme.bg);
   }, [theme.bg, theme.text, activeFont.css]);
 
-  const set = useCallback((updater)=>{
-    setState(prev=>{
-      const next = typeof updater==="function" ? updater(prev) : {...prev,...updater};
-      if (!isLoading) {
-          saveState(next); 
-      }
-      return next;
-    });
-  },[isLoading]);
-
+  const { players = [], matches = [], activeView = "dashboard", profileId, historyPlayerId } = state;
   const { derivedPlayers, derivedMatches } = useMemo(() => replayAllMatches(players, matches), [players, matches]);
   const stats = useMemo(() => computeStats(derivedPlayers, derivedMatches),[derivedPlayers, derivedMatches]);
   
   const leaderboard = useMemo(()=>{
     return [...stats].sort((a,b) => {
-      const gamesA = leaderboardFormat === "singles" ? (a.singlesPlayed||0) : (a.doublesPlayed||0);
-      const gamesB = leaderboardFormat === "singles" ? (b.singlesPlayed||0) : (b.doublesPlayed||0);
+      const gamesA = state.leaderboardFormat === "singles" ? (a.singlesPlayed||0) : (a.doublesPlayed||0);
+      const gamesB = state.leaderboardFormat === "singles" ? (b.singlesPlayed||0) : (b.doublesPlayed||0);
       if (gamesA === 0 && gamesB > 0) return 1;
       if (gamesB === 0 && gamesA > 0) return -1;
-      const rateA = leaderboardFormat === "singles" ? (a.ratingSingles||3) : (a.ratingDoubles||3);
-      const rateB = leaderboardFormat === "singles" ? (b.ratingSingles||3) : (b.ratingDoubles||3);
+      const rateA = state.leaderboardFormat === "singles" ? (a.ratingSingles||3) : (a.ratingDoubles||3);
+      const rateB = state.leaderboardFormat === "singles" ? (b.ratingSingles||3) : (b.ratingDoubles||3);
       if (rateA !== rateB) return rateB - rateA;
       return (b.gamesPlayed||0) - (a.gamesPlayed||0);
     });
-  },[stats, leaderboardFormat]);
+  },[stats, state.leaderboardFormat]);
 
   const profilePlayer = profileId ? stats.find(p=>p.id===profileId) : null;
-  const nav = (view,extra={}) => set(s=>({...s,activeView:view,...extra}));
+  const nav = (view,extra={}) => setShared(s=>({...s,activeView:view,...extra}));
 
   if (isLoading) {
     return (
@@ -152,26 +330,66 @@ export default function App() {
   return (
     <ThemeCtx.Provider value={theme}>
       <div style={makeS(theme).app}>
-        <Header activeView={activeView} nav={nav} profilePlayer={profilePlayer} theme={theme} isAdmin={isAdmin}/>
-        <main style={makeS(theme).main}>
-          {activeView==="dashboard" && <Dashboard players={leaderboard} matches={derivedMatches} nav={nav} theme={theme} set={set} format={leaderboardFormat}/>}
-          {activeView==="players"   && <Players players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="log"       && <LogMatch state={state} players={stats} set={set} nav={nav} theme={theme}/>}
-          {activeView==="session"   && <SessionMode players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="kotc"      && <KingOfCourt players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="tourney"   && <TournamentMode players={stats} state={state} set={set} nav={nav} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="compare"   && <Compare players={stats} matches={derivedMatches} compareIds={state.compareIds || []} set={set} nav={nav} theme={theme} state={state}/>}
-          {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={set} theme={theme} isAdmin={isAdmin} initialPlayerId={historyPlayerId} state={state}/>}
-          {activeView==="profile"   && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={set} theme={theme} isAdmin={isAdmin}/>}
-          {activeView==="stats"     && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme}/>}
-          {activeView==="settings"  && <Settings state={state} set={set} nav={nav} theme={theme}/>}
-          {activeView==="trash"     && <Trash state={state} set={set} theme={theme} />}
-          {activeView==="legends"   && <Legends theme={theme} />}
-          {activeView==="changelog" && <Changelog theme={theme} />}
-          {activeView==="events"    && <Events state={state} set={set} theme={theme} />}
-        </main>
         
-        <BottomNav active={activeView} nav={nav} theme={theme}/>
+        {/* 1. WELCOME MODAL */}
+        {(!user.isAdmin && !user.myPlayerId && !user.pendingAutoLink) && (
+          <WelcomeModal 
+             players={stats} 
+             onSelect={(id, pin) => setUserSettings({myPlayerId: id, verifiedHash: hashPin(id, pin)})}
+             onCreate={() => setUserSettings({pendingAutoLink: true})}
+             onAdminLogin={() => setUserSettings({isAdmin: true, pendingAutoLink: false, myPlayerId: "", verifiedHash: ""})}
+             theme={theme}
+             user={user}
+             setUser={setUserSettings}
+          />
+        )}
+        
+        {/* 2. PIN VERIFICATION */}
+        {(!user.isAdmin && user.myPlayerId && !isCurrentlyVerified) && (
+           <PinVerification 
+             player={stats.find(p => p.id === user.myPlayerId)} 
+             onVerify={(pin) => setUserSettings({ verifiedHash: hashPin(user.myPlayerId, pin) })} 
+             theme={theme} 
+           />
+        )}
+
+        {/* 3. FORCED SETUP MODE */}
+        {(!user.isAdmin && user.pendingAutoLink && !user.myPlayerId) && (
+          <div style={{display: "flex", flexDirection: "column", height: "100vh", background: theme.bg}}>
+            <div style={{padding: 20, background: theme.nav, display: "flex", alignItems: "center", borderBottom: `1px solid ${theme.border}`}}>
+              <button onClick={() => setUserSettings({pendingAutoLink: false})} style={{background: "transparent", border: "none", color: theme.sub, fontSize: 16, cursor: "pointer"}}>← {t("cancel")}</button>
+              <div style={{flex: 1, textAlign: "center", color: theme.text, fontWeight: "bold", fontSize: 18}}>{t("create_profile")}</div>
+              <div style={{width: 60}}></div>
+            </div>
+            <main style={{flex: 1, overflowY: "auto"}}>
+              <Players players={stats} state={state} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} setUser={setUserSettings}/>
+            </main>
+          </div>
+        )}
+
+        {/* 4. MAIN FULL APP */}
+        {(user.isAdmin || (user.myPlayerId && isCurrentlyVerified)) && (
+          <>
+            <Header activeView={activeView} nav={nav} profilePlayer={profilePlayer} theme={theme} isAdmin={user.isAdmin}/>
+            <main style={makeS(theme).main}>
+              {activeView==="dashboard" && <Dashboard players={leaderboard} rawStats={stats} state={state} matches={derivedMatches} nav={nav} theme={theme} set={setShared} format={state.leaderboardFormat} user={user} setUser={setUserSettings}/>}
+              {activeView==="log"       && <LogMatch state={state} players={stats} set={setShared} nav={nav} theme={theme} user={user} />}
+              {activeView==="session"   && <SessionMode players={stats} state={state} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
+              {activeView==="kotc"      && <KingOfCourt players={stats} state={state} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
+              {activeView==="tourney"   && <TournamentMode players={stats} state={state} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
+              {activeView==="compare"   && <Compare players={stats} matches={derivedMatches} compareIds={state.compareIds || []} set={setShared} nav={nav} theme={theme} state={state} user={user}/>}
+              {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} initialPlayerId={historyPlayerId} state={state} user={user}/>}
+              {activeView==="profile"   && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user}/>}
+              {activeView==="stats"     && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme} user={user}/>}
+              {activeView==="settings"  && <Settings state={state} user={user} setShared={setShared} setUser={setUserSettings} nav={nav} theme={theme}/>}
+              {activeView==="trash"     && <Trash state={state} set={setShared} theme={theme} />}
+              {activeView==="legends"   && <Legends theme={theme} />}
+              {activeView==="changelog" && <Changelog theme={theme} />}
+              {activeView==="events"    && <Events state={state} set={setShared} theme={theme} />}
+            </main>
+            <BottomNav active={activeView} nav={nav} theme={theme}/>
+          </>
+        )}
       </div>
     </ThemeCtx.Provider>
   );

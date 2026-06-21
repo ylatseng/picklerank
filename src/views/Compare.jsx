@@ -56,7 +56,7 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
   const opts = sortOptionsAlpha(players.map(p=>({value:p.id,label:p.name})), state.favoredPlayerIds);
   const getName = id => players.find(p=>p.id===id)?.name??"?";
 
-  let r1 = 3, r2 = 3, t1Name = "Team 1", t2Name = "Team 2";
+  let r1 = 3, r2 = 3, t1Name = `${t("team")} 1`, t2Name = `${t("team")} 2`;
     if (isReady) {
         if (format === "singles") {
             // FIX: Explicitly check if they have played Singles. If not, steal their Doubles rating!
@@ -85,9 +85,12 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
       
       <Sec title={t("compare_sub")} theme={theme}>
         <div style={S.toggle}>
-          {["singles","doubles"].map(tType=>(
-            <button key={tType} style={{...S.toggleBtn,...(format===tType?{...S.toggleOn,background:theme.card,borderColor:theme.accent,color:theme.accent}:{})}} onClick={()=>{setFormat(tType);}}>
-              {tType.charAt(0).toUpperCase()+tType.slice(1)}
+          {[
+            { id: "singles", label: t("overview_singles") },
+            { id: "doubles", label: t("overview_doubles") }
+          ].map(tType=>(
+            <button key={tType.id} style={{...S.toggleBtn,...(format===tType.id?{...S.toggleOn,background:theme.card,borderColor:theme.accent,color:theme.accent}:{})}} onClick={()=>{setFormat(tType.id);}}>
+              {tType.label}
             </button>
           ))}
         </div>
@@ -101,7 +104,7 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
         ) : (
           <div style={{display:"flex", flexDirection:"column", gap:12*z, marginTop:16*z}}>
             <div style={{background:theme.bg, border:`1px solid ${theme.border}`, padding:10*z, borderRadius:10*z}}>
-              <label style={{...S.label, color:"#50c878", fontWeight:700}}>Team 1</label>
+              <label style={{...S.label, color:"#50c878", fontWeight:700}}>{t("team")} 1</label>
               <div style={{display:"flex", gap:8*z}}>
                 <div style={{flex:1}}><Sel opts={opts} value={t1p1} onChange={v=>setT1p1(v)} placeholder={t("player_a")} theme={theme}/></div>
                 <div style={{flex:1}}><Sel opts={opts} value={t1p2} onChange={v=>setT1p2(v)} placeholder={t("player_b")} theme={theme}/></div>
@@ -109,7 +112,7 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
             </div>
             <div style={{textAlign:"center", fontSize:18*z, color:theme.sub}}>⚔️</div>
             <div style={{background:theme.bg, border:`1px solid ${theme.border}`, padding:10*z, borderRadius:10*z}}>
-              <label style={{...S.label, color:"#40a0e0", fontWeight:700}}>Team 2</label>
+              <label style={{...S.label, color:"#40a0e0", fontWeight:700}}>{t("team")} 2</label>
               <div style={{display:"flex", gap:8*z}}>
                 <div style={{flex:1}}><Sel opts={opts} value={t2p1} onChange={v=>setT2p1(v)} placeholder={t("player_a")} theme={theme}/></div>
                 <div style={{flex:1}}><Sel opts={opts} value={t2p2} onChange={v=>setT2p2(v)} placeholder={t("player_b")} theme={theme}/></div>
@@ -162,13 +165,13 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
                   </div>
                 </div>
                 {h2h.matches.slice(0,8).map(m=>{
-                  const m_t1n=m.teamNames?.t1||m.teams?.[0]?.map(getName).join(" & ")||"TBD";
-                  const m_t2n=m.teamNames?.t2||m.teams?.[1]?.map(getName).join(" & ")||"TBD";
+                  const m_t1n=m.teamNames?.t1||m.teams?.[0]?.map(getName).join(" & ")||t("tbd");
+                  const m_t2n=m.teamNames?.t2||m.teams?.[1]?.map(getName).join(" & ")||t("tbd");
                   return (
                     <div key={m.id} style={{...S.lbRow,cursor:"default"}}>
                       <div style={{fontSize:20*z}}>{m.t1won?"✅":"❌"}</div>
                       <div style={S.lbInfo}>
-                        <div style={{fontSize:12*z,fontWeight:600}}>{m_t1n} vs {m_t2n}</div>
+                        <div style={{fontSize:12*z,fontWeight:600}}>{m_t1n} <span style={{color:theme.sub, fontSize:10*z, fontWeight:400}}>vs</span> {m_t2n}</div>
                         <div style={{fontSize:11*z,color:theme.sub}}>{fmtDate(m.date)} · {(m.games||[]).map(g=>`${g.a}-${g.b}`).join(", ")}</div>
                       </div>
                       <div style={{fontSize:12*z,color:m.t1won?"#50c878":"#40a0e0",fontWeight:700}}>{m.t1won?t1Name:t2Name}</div>

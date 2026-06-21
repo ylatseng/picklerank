@@ -6,7 +6,7 @@ import {
   EditBaseRating, SynergyRow, Sparkline, MatchEditModal, Empty 
 } from '../components/Shared.jsx';
 
-export default function Profile({player:p,matches,players,nav,set,theme,isAdmin}) {
+export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,user}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   const myMatches=useMemo(()=>[...matches].filter(m=>m.teams?.flat().includes(p.id)).reverse(),[matches,p.id]);
@@ -140,10 +140,10 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin}
       </Sec>
 
       {/* FUN STATS SECTION */}
-      <Sec title={t("fun_stats_sec") || "Fun Stats"} theme={theme}>
+      <Sec title={t("fun_stats_sec")} theme={theme}>
         {!funStats.bestPartner && !funStats.nemesis && !funStats.pigeon ? (
            <div style={{fontSize:12*z, color:theme.sub, textAlign:"center", padding:"10px 0"}}>
-             Play more matches to unlock Fun Stats! <br/><span style={{fontSize: 10*z}}>(Requires min. 2 games with a partner)</span>
+             {t("unlock_fun_stats")} <br/><span style={{fontSize: 10*z}}>{t("requires_min_games")}</span>
            </div>
         ) : (
            <div style={{display:"flex", flexDirection:"column", gap: 0}}>
@@ -175,19 +175,28 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin}
         <Sparkline history={p.ratingHistorySingles} width={320} height={60} theme={theme}/>
       </Sec>
 
-      <EditBaseRating player={p} set={set} theme={theme}/>
+      {/* SECURITY FIX: Only the owner or an Admin can edit the starting rating */}
+      {(isAdmin || user?.myPlayerId === p.id) && (
+        <EditBaseRating player={p} set={set} theme={theme}/>
+      )}
 
       <Sec title={`${t("recent_matches")} (${Math.min(myMatches.length, 5)})`} theme={theme}>
-        {myMatches.slice(0,5).map(m=>(
-          <React.Fragment key={m.id}>
-            <MatchCard match={m} players={players} theme={theme} isAdmin={isAdmin} highlightPlayerId={p.id}
-              onEdit={setEditingMatch} onShare={share} onDelete={delMatch} />
-            {pendingDeleteMatch===m.id&&(
-              <ConfirmInline msg={t("delete_match_q")} note={t("ratings_recalculated")}
-                onConfirm={()=>delMatch(m.id)} onCancel={()=>setPendingDeleteMatch(null)} theme={theme}/>
-            )}
-          </React.Fragment>
-        ))}
+        {myMatches.slice(0,5).map(m => {
+          // SECURITY FIX: Only Admin or actual participants can edit/delete this specific match
+          const isParticipant = user?.myPlayerId && m.teams?.flat()?.includes(user?.myPlayerId);
+          const canEditMatch = isAdmin || isParticipant;
+
+          return (
+            <React.Fragment key={m.id}>
+              <MatchCard match={m} players={players} theme={theme} isAdmin={canEditMatch} highlightPlayerId={p.id}
+                onEdit={canEditMatch ? setEditingMatch : undefined} onShare={share} onDelete={canEditMatch ? () => setPendingDeleteMatch(m.id) : undefined} />
+              {pendingDeleteMatch===m.id&&(
+                <ConfirmInline msg={t("delete_match_q")} note={t("ratings_recalculated")}
+                  onConfirm={()=>delMatch(m.id)} onCancel={()=>setPendingDeleteMatch(null)} theme={theme}/>
+              )}
+            </React.Fragment>
+          );
+        })}
         {myMatches.length===0&&<Empty text={t("no_matches")} theme={theme}/>}
       </Sec>
     </div>

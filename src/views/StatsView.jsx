@@ -63,7 +63,7 @@ export default function StatsView({players,matches,nav,theme}) {
               <div key={v} style={{...S.lbRow,cursor:"default"}}>
                 <div style={{fontSize:18*z}}>📍</div>
                 <div style={S.lbInfo}><div style={{fontSize:13*z}}>{v}</div></div>
-                <div style={{fontSize:12*z,color:theme.sub}}>{count} match{count!==1?"es":""}</div>
+                <div style={{fontSize:12*z,color:theme.sub}}>{count} {t("matches_tab").toLowerCase()}{count!==1?"s":""}</div>
               </div>
             );
           })}

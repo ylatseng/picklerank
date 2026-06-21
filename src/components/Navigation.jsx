@@ -14,23 +14,21 @@ export function Header({activeView,nav,profilePlayer,theme,isAdmin}) {
     title = profilePlayer?.name ?? t("profile");
     sub = t(ratingLabel(profilePlayer?.ratingDoubles ?? 3));
   } else if (activeView === "trash") {
-    title = "🗑️ Trash Can";
-    sub = "Restore deleted items";
+    title = "🗑️ " + t("trash");
+    sub = t("trash_sub");
   } else if (activeView === "legends") {
-    title = "📖 Legends";
-    sub = "Glossary & Achievements";
+    title = "📖 " + t("legends");
+    sub = t("legends_sub");
   } else if (activeView === "changelog") {
-    title = "📜 Changelog";
-    sub = "App Updates & History";
+    title = "📜 " + t("changelog");
+    sub = t("changelog_sub");
   } else if (activeView === "log" || activeView === "session" || activeView === "compare" || activeView === "kotc" || activeView === "tourney") {
     title = t("matches_tab");
     sub = t("log_sub");
- } else if (activeView === "events") {
-    title = "📅 Events";
-    sub = "Upcoming sessions";
- } 
-  
-
+  } else if (activeView === "events") {
+    title = "📅 " + t("events");
+    sub = t("events_sub");
+  } 
   
   return (
     <header style={S.header}>
@@ -71,16 +69,17 @@ export function BottomNav({active,nav,theme}) {
   const S = makeS(theme);
   const tabs=[
     {id:"dashboard",icon:"🏆",label:t("rank")},
-    {id:"players",icon:"👤",label:t("roster")},
     {id:"matches",icon:"🏓",label:t("matches_tab")},
     {id:"history",icon:"📋",label:t("history")},
-    {id:"events",icon:"📅",label:"Events"},
+    {id:"events",icon:"📅",label:t("events")},
     {id:"settings",icon:"⚙️",label:t("settings")}
   ];
   return (
     <nav style={S.bottomNav}>
       {tabs.map(tab=>{
-        const isActive = tab.id === active || (tab.id === "matches" && ["log", "session", "compare", "kotc", "tourney"].includes(active));
+        const isMatchView = ["log", "session", "compare", "kotc", "tourney"].includes(active);
+        const isActive = tab.id === active || (tab.id === "matches" && isMatchView);
+        
         return (
           <button key={tab.id} onClick={()=>nav(tab.id === "matches" ? "log" : tab.id, tab.id === "history" ? {historyPlayerId: null} : {})} style={{...S.navBtn,...(isActive?{color:theme.accent}:{})}}>
             <span style={{fontSize:20*(theme.zoom||1.0)}}>{tab.icon}</span>
