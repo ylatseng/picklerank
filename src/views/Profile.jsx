@@ -86,7 +86,7 @@ function GoalSection({ player: p, user, setUser, theme }) {
   );
 }
 
-export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,user}) {
+export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,user, setUser}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   const myMatches=useMemo(()=>[...matches].filter(m=>m.teams?.flat().includes(p.id)).reverse(),[matches,p.id]);
