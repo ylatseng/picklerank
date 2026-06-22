@@ -20,7 +20,7 @@ import { Sel, Err } from './components/Shared.jsx';
 // Engine & Components
 import {
   APP_MODES, APP_ACCENTS, APP_FONTS, setLang, t, replayAllMatches, computeStats, 
-  loadState, saveState, blankState, pingPresence, genId, DEFAULT_RATING
+  loadState, saveState, blankState, pingPresence, clearPresence, genId, DEFAULT_RATING
 } from './engine.js';
 
 import { Header, BottomNav } from './components/Navigation.jsx';
@@ -277,9 +277,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user.myPlayerId) return; 
-    pingPresence(user.myPlayerId); 
-    const interval = setInterval(() => pingPresence(user.myPlayerId), 60000); 
+    if (!user.myPlayerId) return;
+    const pid = user.myPlayerId;
+    // Clear this player's dot from local state AND Firebase when they log out
+    // or the device switches to someone else.
+    return () => {
+      clearPresence(pid);
+      setState(prev => ({ ...prev, presence: { ...(prev.presence || {}), [pid]: 0 } }));
+    };
+  }, [user.myPlayerId]);
+
+  useEffect(() => {
+    if (!user.myPlayerId) return;
+    const pid = user.myPlayerId;
+    // Ping Firebase AND update local state immediately so the dot appears
+    // without needing a full page reload (loadState is one-time, not realtime).
+    const ping = () => {
+      pingPresence(pid);
+      setState(prev => ({ ...prev, presence: { ...(prev.presence || {}), [pid]: Date.now() } }));
+    };
+    ping();
+    const interval = setInterval(ping, 60000);
     return () => clearInterval(interval);
   }, [user.myPlayerId]);
 
@@ -302,6 +320,15 @@ export default function App() {
   const { players = [], matches = [], activeView = "dashboard", profileId, historyPlayerId } = state;
   const { derivedPlayers, derivedMatches } = useMemo(() => replayAllMatches(players, matches), [players, matches]);
   const stats = useMemo(() => computeStats(derivedPlayers, derivedMatches),[derivedPlayers, derivedMatches]);
+
+  // ── Per-user overrides injected into shared state ────────────────────────
+  // Stars are keyed by the logged-in player's ID so each person on the same
+  // device gets their own private star list.
+  const starKey = user.isAdmin ? '__admin__' : (user.myPlayerId || '__guest__');
+  const appState = useMemo(() => ({
+    ...state,
+    favoredPlayerIds: (user.starredPlayers || {})[starKey] || []
+  }), [state, user.starredPlayers, starKey]);
   
   const leaderboard = useMemo(()=>{
     return [...stats].sort((a,b) => {
@@ -362,7 +389,7 @@ export default function App() {
               <div style={{width: 60}}></div>
             </div>
             <main style={{flex: 1, overflowY: "auto"}}>
-              <Players players={stats} state={state} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} setUser={setUserSettings}/>
+              <Players players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} setUser={setUserSettings}/>
             </main>
           </div>
         )}
@@ -372,20 +399,20 @@ export default function App() {
           <>
             <Header activeView={activeView} nav={nav} profilePlayer={profilePlayer} theme={theme} isAdmin={user.isAdmin}/>
             <main style={makeS(theme).main}>
-              {activeView==="dashboard" && <Dashboard players={leaderboard} rawStats={stats} state={state} matches={derivedMatches} nav={nav} theme={theme} set={setShared} format={state.leaderboardFormat} user={user} setUser={setUserSettings}/>}
-              {activeView==="log"       && <LogMatch state={state} players={stats} set={setShared} nav={nav} theme={theme} user={user} />}
-              {activeView==="session"   && <SessionMode players={stats} state={state} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
-              {activeView==="kotc"      && <KingOfCourt players={stats} state={state} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
-              {activeView==="tourney"   && <TournamentMode players={stats} state={state} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
-              {activeView==="compare"   && <Compare players={stats} matches={derivedMatches} compareIds={state.compareIds || []} set={setShared} nav={nav} theme={theme} state={state} user={user}/>}
-              {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} initialPlayerId={historyPlayerId} state={state} user={user}/>}
-              {activeView==="profile"   && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user}/>}
+              {activeView==="dashboard" && <Dashboard players={leaderboard} rawStats={stats} state={appState} matches={derivedMatches} nav={nav} theme={theme} set={setShared} format={state.leaderboardFormat} user={user} setUser={setUserSettings}/>}
+              {activeView==="log"       && <LogMatch state={appState} players={stats} set={setShared} nav={nav} theme={theme} user={user} />}
+              {activeView==="session"   && <SessionMode players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
+              {activeView==="kotc"      && <KingOfCourt players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
+              {activeView==="tourney"   && <TournamentMode players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
+              {activeView==="compare"   && <Compare players={stats} matches={derivedMatches} compareIds={state.compareIds || []} set={setShared} nav={nav} theme={theme} state={appState} user={user}/>}
+              {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} initialPlayerId={historyPlayerId} state={appState} user={user}/>}
+              {activeView==="profile"   && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} setUser={setUserSettings}/>}
               {activeView==="stats"     && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme} user={user}/>}
-              {activeView==="settings"  && <Settings state={state} user={user} setShared={setShared} setUser={setUserSettings} nav={nav} theme={theme}/>}
-              {activeView==="trash"     && <Trash state={state} set={setShared} theme={theme} />}
+              {activeView==="settings"  && <Settings state={appState} user={user} setShared={setShared} setUser={setUserSettings} nav={nav} theme={theme}/>}
+              {activeView==="trash"     && <Trash state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} />}
               {activeView==="legends"   && <Legends theme={theme} />}
               {activeView==="changelog" && <Changelog theme={theme} />}
-              {activeView==="events"    && <Events state={state} set={setShared} theme={theme} />}
+              {activeView==="events"    && <Events state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} />}
             </main>
             <BottomNav active={activeView} nav={nav} theme={theme}/>
           </>

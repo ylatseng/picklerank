@@ -52,7 +52,8 @@ export function Header({activeView,nav,profilePlayer,theme,isAdmin}) {
         
         {/* Contextual Header Buttons */}
         <div style={{display: "flex", gap: 4*z}}>
-          {activeView==="history" && <button style={S.iconBtn} onClick={()=>nav("trash")} title="Trash">🗑️</button>}
+          {activeView==="history" && isAdmin && <button style={S.iconBtn} onClick={()=>nav("trash")} title="Trash">🗑️</button>}
+          {activeView==="events"  && isAdmin && <button style={S.iconBtn} onClick={()=>nav("trash")} title="Trash">🗑️</button>}
           {activeView==="dashboard" && (
             <>
               <button style={S.iconBtn} onClick={()=>nav("legends")} title="Legends">ℹ️</button>

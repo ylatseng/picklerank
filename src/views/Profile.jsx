@@ -1,10 +1,90 @@
 import React, { useMemo, useState } from 'react';
-import { t, fmtDate, ratingColor, ratingLabel, fmtDelta } from '../engine.js';
+import { t, fmtDate, ratingColor, ratingLabel, fmtDelta, ratingConfidence, computeVolatility, getPlayerGoal, setPlayerGoal, DEFAULT_RATING } from '../engine.js';
 import { makeS } from '../styles.js';
 import { 
   Avatar, Sec, RadarChart, MatchCard, ConfirmInline, 
   EditBaseRating, SynergyRow, Sparkline, MatchEditModal, Empty 
 } from '../components/Shared.jsx';
+
+// ── Personal Goal sub-component ───────────────────────────────────────────────
+// Must be a proper named component (not an IIFE) so React hook rules are satisfied.
+function GoalSection({ player: p, user, setUser, theme }) {
+  const S = makeS(theme);
+  const z = theme.zoom || 1.0;
+  const goal = getPlayerGoal(user, p.id);
+
+  const [showForm, setShowForm] = useState(false);
+  const [goalFormat, setGoalFormat] = useState(goal?.format || "doubles");
+  const [goalTarget, setGoalTarget] = useState(goal?.targetRating || "");
+
+  const currentRating = goalFormat === "singles" ? (p.ratingSingles || DEFAULT_RATING) : (p.ratingDoubles || DEFAULT_RATING);
+  const target = parseFloat(goalTarget);
+  const startRating = goal?.startRating || DEFAULT_RATING;
+  const progress = goal
+    ? Math.min(100, Math.max(0, ((currentRating - startRating) / ((goal.targetRating - startRating) || 1)) * 100))
+    : 0;
+  const reached = goal && currentRating >= goal.targetRating;
+  const away = goal ? Math.max(0, goal.targetRating - currentRating).toFixed(3) : null;
+
+  return (
+    <Sec title={t("goal_sec")} theme={theme}>
+      {goal && (
+        <div style={{marginBottom:12*z}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:11*z,marginBottom:4*z}}>
+            <span style={{color:theme.sub}}>{t("goal_progress")} ({goal.format}): <strong style={{color:theme.accent}}>{goal.targetRating.toFixed(3)}</strong></span>
+            {reached
+              ? <span style={{color:"#f0c040",fontWeight:700}}>{t("goal_reached")}</span>
+              : <span style={{color:theme.sub}}>{away} {t("goal_away")}</span>}
+          </div>
+          <div style={{height:8*z,background:theme.border,borderRadius:4*z,overflow:"hidden"}}>
+            <div style={{width:`${progress}%`,height:"100%",background:reached?"#f0c040":theme.accent,borderRadius:4*z,transition:"width 0.6s"}}/>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:9*z,color:theme.sub,marginTop:2*z}}>
+            <span>{startRating.toFixed(3)}</span>
+            <span>{Math.round(progress)}%</span>
+            <span>{goal.targetRating.toFixed(3)}</span>
+          </div>
+        </div>
+      )}
+      {!showForm && (
+        <div style={{display:"flex",gap:8*z}}>
+          <button style={{...S.btnSecondary,marginTop:0,flex:1,fontSize:11*z}} onClick={()=>setShowForm(true)}>
+            {goal ? t("goal_set_target") : `+ ${t("goal_set_target")}`}
+          </button>
+          {goal && <button style={{...S.btnDanger,marginTop:0,fontSize:11*z}} onClick={()=>setPlayerGoal(setUser,p.id,null)}>{t("goal_clear")}</button>}
+        </div>
+      )}
+      {showForm && (
+        <div style={{display:"flex",flexDirection:"column",gap:8*z}}>
+          <div style={{display:"flex",gap:8*z}}>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("goal_format_lbl")}</label>
+              <select style={S.input} value={goalFormat} onChange={e=>setGoalFormat(e.target.value)}>
+                <option value="doubles">{t("overview_doubles")}</option>
+                <option value="singles">{t("overview_singles")}</option>
+              </select>
+            </div>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("goal_target_lbl")} (1.5–6.5)</label>
+              <input style={S.input} type="number" step="0.1" min="1.5" max="6.5"
+                value={goalTarget} onChange={e=>setGoalTarget(e.target.value)}
+                placeholder="e.g. 4.000"/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8*z}}>
+            <button style={{...S.btnSecondary,marginTop:0}} onClick={()=>setShowForm(false)}>{t("cancel")}</button>
+            <button style={{...S.btnPrimary,marginTop:0,flex:1}} onClick={()=>{
+              if (!isNaN(target) && target >= 1.5 && target <= 6.5) {
+                setPlayerGoal(setUser, p.id, { targetRating: target, format: goalFormat, startRating: currentRating });
+                setShowForm(false);
+              }
+            }}>{t("goal_save")}</button>
+          </div>
+        </div>
+      )}
+    </Sec>
+  );
+}
 
 export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,user}) {
   const S=makeS(theme);
@@ -38,6 +118,12 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
   const winPct = p.winPct || 0;
   const longestWinStreak = p.longestWinStreak || 0;
   const bestWinDelta = p.bestWinDelta || 0;
+  const singlesConf = p.singlesConfidence ?? 0;
+  const doublesConf = p.doublesConfidence ?? 0;
+
+  // ─── Confidence colour helper ──────────────────────────────────────────────
+  const confColor = c => c >= 75 ? "#50c878" : c >= 45 ? "#f0a830" : "#e05050";
+  const confLabel = c => c >= 75 ? (t("conf_high") || "High") : c >= 45 ? (t("conf_medium") || "Medium") : (t("conf_low") || "Low");
 
   const ALL_BADGES = [
     { id: 'centurion', icon:"🎖️", label:t("badge_centurion") || "Centurion", earned: gamesPlayed >= 100, progress: `${gamesPlayed}/100` },
@@ -111,21 +197,42 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
           <Avatar name={p.name} url={p.avatar} size={60}/>
           <div style={{flex:1}}>
             <div style={{fontSize:22*z,fontWeight:800}}>{p.name}</div>
-            <div style={{display:"flex", gap:6*z, marginTop:4*z}}>
+
+            {/* Doubles rating + confidence */}
+            <div style={{display:"flex", gap:6*z, marginTop:6*z, alignItems:"center"}}>
               <span style={{fontSize:11*z, padding:"2px 6px", background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:6*z, fontWeight:600}}>
-                {t("overview_doubles")}: <strong style={{color:theme.accent}}>{(p.ratingDoubles||3).toFixed(3)}</strong> <span style={{fontSize:9*z, color:theme.sub}}>({provD ? t("provisional_status") : t("verified_status")})</span>
+                {t("overview_doubles")}: <strong style={{color:theme.accent}}>{(p.ratingDoubles||3).toFixed(3)}</strong>
+                <span style={{fontSize:9*z, color:theme.sub}}> ({provD ? t("provisional_status") : t("verified_status")})</span>
               </span>
             </div>
-            <div style={{display:"flex", gap:6*z, marginTop:4*z}}>
+            <div style={{display:"flex", alignItems:"center", gap:6*z, marginTop:3*z, marginLeft:2*z}}>
+              <div style={{flex:1, maxWidth:140*z, height:5*z, background:theme.border, borderRadius:3*z, overflow:"hidden"}}>
+                <div style={{width:`${doublesConf}%`, height:"100%", background:confColor(doublesConf), borderRadius:3*z, transition:"width 0.4s"}}/>
+              </div>
+              <span style={{fontSize:10*z, color:confColor(doublesConf), fontWeight:700}}>{doublesConf}%</span>
+              <span title="Rating Confidence" style={{fontSize:9*z, color:theme.sub}}>📊 · {confLabel(doublesConf)}</span>
+            </div>
+
+            {/* Singles rating + confidence */}
+            <div style={{display:"flex", gap:6*z, marginTop:6*z, alignItems:"center"}}>
               <span style={{fontSize:11*z, padding:"2px 6px", background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:6*z, fontWeight:600}}>
-                {t("overview_singles")}: <strong style={{color:theme.accent}}>{(p.ratingSingles||3).toFixed(3)}</strong> <span style={{fontSize:9*z, color:theme.sub}}>({provS ? t("provisional_status") : t("verified_status")})</span>
+                {t("overview_singles")}: <strong style={{color:theme.accent}}>{(p.ratingSingles||3).toFixed(3)}</strong>
+                <span style={{fontSize:9*z, color:theme.sub}}> ({provS ? t("provisional_status") : t("verified_status")})</span>
               </span>
+            </div>
+            <div style={{display:"flex", alignItems:"center", gap:6*z, marginTop:3*z, marginLeft:2*z}}>
+              <div style={{flex:1, maxWidth:140*z, height:5*z, background:theme.border, borderRadius:3*z, overflow:"hidden"}}>
+                <div style={{width:`${singlesConf}%`, height:"100%", background:confColor(singlesConf), borderRadius:3*z, transition:"width 0.4s"}}/>
+              </div>
+              <span style={{fontSize:10*z, color:confColor(singlesConf), fontWeight:700}}>{singlesConf}%</span>
+              <span title="Rating Confidence" style={{fontSize:9*z, color:theme.sub}}>📊 · {confLabel(singlesConf)}</span>
             </div>
           </div>
         </div>
         <div style={{display:"flex",gap:8*z,flexWrap:"wrap"}}>
           {[[t("stat_matches"),gamesPlayed],[t("stat_wins"),p.wins||0],[t("stat_losses"),p.losses||0],
             [t("stat_win_pct"),p.winPct!==null?`${p.winPct}%`:"—"],
+            [t("stat_pt_win_pct") || "🎯 Pt Win%", p.ptWinPct !== null ? `${p.ptWinPct}%` : "—"],
             [p.streakType==="W"?t("stat_w_streak"):t("stat_l_streak"),p.streak||0]].map(([label,val])=>(
             <div key={label} style={S.statPill}>
               <div style={{fontSize:10*z,color:theme.sub}}>{label}</div>
@@ -138,6 +245,30 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
       <Sec title={t("performance_profile")} theme={theme}>
          <RadarChart player={p} theme={theme} />
       </Sec>
+
+      {/* POINT WIN % BREAKDOWN */}
+      {(p.ptWinPct !== null) && (
+      <Sec title={t("pt_win_pct_sec") || "🎯 Point Win %"} theme={theme}>
+        <div style={{fontSize:11*z, color:theme.sub, marginBottom:10*z}}>{t("pt_win_pct_desc") || "Points won vs total points played. 50% = perfectly even; elite players typically hold 54–58%."}</div>
+        {[
+          { label: t("overview_total_matches") || "Overall", pct: p.ptWinPct, played: gamesPlayed },
+          { label: t("overview_doubles"), pct: p.doublesPtWinPct, played: p.doublesPlayed },
+          { label: t("overview_singles"), pct: p.singlesPtWinPct, played: p.singlesPlayed },
+        ].map(({ label, pct, played }) => pct === null ? null : (
+          <div key={label} style={{marginBottom:10*z}}>
+            <div style={{display:"flex", justifyContent:"space-between", fontSize:11*z, marginBottom:3*z}}>
+              <span style={{color:theme.text, fontWeight:600}}>{label}</span>
+              <span style={{color: pct >= 50 ? "#50c878" : "#e05050", fontWeight:700}}>{pct}% <span style={{color:theme.sub, fontWeight:400}}>({played} {t("stat_matches") || "matches"})</span></span>
+            </div>
+            <div style={{height:7*z, background:theme.border, borderRadius:4*z, overflow:"hidden", position:"relative"}}>
+              {/* 50% marker */}
+              <div style={{position:"absolute", left:"50%", top:0, width:1, height:"100%", background:theme.sub, opacity:0.5, zIndex:1}}/>
+              <div style={{width:`${Math.min(100,pct)}%`, height:"100%", background: pct >= 50 ? "#50c878" : "#e05050", borderRadius:4*z, transition:"width 0.4s"}}/>
+            </div>
+          </div>
+        ))}
+      </Sec>
+      )}
 
       {/* FUN STATS SECTION */}
       <Sec title={t("fun_stats_sec")} theme={theme}>
@@ -174,6 +305,38 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
       <Sec title={`${t("rating_history_sec")} (${t("overview_singles")})`} theme={theme}>
         <Sparkline history={p.ratingHistorySingles} width={320} height={60} theme={theme}/>
       </Sec>
+
+      {/* ── RATING VOLATILITY ──────────────────────────────────────────── */}
+      {(() => {
+        const dVol = computeVolatility(p.ratingHistoryDoubles);
+        const sVol = computeVolatility(p.ratingHistorySingles);
+        if (dVol === null && sVol === null) return null;
+        const volLabel = v => v < 0.02 ? t("volatility_low") : v < 0.05 ? t("volatility_med") : t("volatility_high");
+        const volColor = v => v < 0.02 ? "#50c878" : v < 0.05 ? "#f0a830" : "#e05050";
+        const VolBar = ({ vol, label }) => vol === null ? null : (
+          <div style={{marginBottom:8*z}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11*z,marginBottom:3*z}}>
+              <span style={{color:theme.sub}}>{label}</span>
+              <span style={{color:volColor(vol),fontWeight:700}}>{volLabel(vol)} ({vol.toFixed(3)})</span>
+            </div>
+            <div style={{height:6*z,background:theme.border,borderRadius:3*z,overflow:"hidden"}}>
+              <div style={{width:`${Math.min(100, vol / 0.08 * 100)}%`,height:"100%",background:volColor(vol),borderRadius:3*z,transition:"width 0.4s"}}/>
+            </div>
+          </div>
+        );
+        return (
+          <Sec title={t("volatility_sec")} theme={theme}>
+            <div style={{fontSize:11*z,color:theme.sub,marginBottom:10*z}}>{t("volatility_desc")}</div>
+            <VolBar vol={dVol} label={t("overview_doubles")} />
+            <VolBar vol={sVol} label={t("overview_singles")} />
+          </Sec>
+        );
+      })()}
+
+      {/* ── PERSONAL GOAL ──────────────────────────────────────────────── */}
+      {(isAdmin || user?.myPlayerId === p.id) && (
+        <GoalSection player={p} user={user} setUser={setUser} theme={theme} />
+      )}
 
       {/* SECURITY FIX: Only the owner or an Admin can edit the starting rating */}
       {(isAdmin || user?.myPlayerId === p.id) && (

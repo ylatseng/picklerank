@@ -34,10 +34,23 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
   const fileInputRef = useRef(null);
   const editFileInputRef = useRef(null); 
   
-  const favoredPlayerIds = state.favoredPlayerIds || [];
+  // ── Starred players: per-player, keyed by myPlayerId ─────────────────────
+  // Stars must be indexed by the logged-in player's ID (not just per-device),
+  // because multiple people share the same phone. If Allen logs in as Lily
+  // and Lily stars Michael, that should be stored under Lily's ID — not bleed
+  // into Allen's list when he switches back.
+  const starKey = user?.isAdmin ? '__admin__' : (user?.myPlayerId || '__guest__');
+  const favoredPlayerIds = (user?.starredPlayers || {})[starKey] || [];
 
-  function handleFileAdd(e) { if (e.target.files[0]) processImage(e.target.files[0], setAvatarData); }
-  function handleEditFileAdd(e) { if (e.target.files[0]) processImage(e.target.files[0], setEditAvatar); }
+  function toggleFavorited(id) {
+    const key = starKey;
+    const favs = (user?.starredPlayers || {})[key] || [];
+    const nextFavs = favs.includes(id) ? favs.filter(fId => fId !== id) : [...favs, id];
+    setUser(prev => ({
+      ...prev,
+      starredPlayers: { ...(prev.starredPlayers || {}), [key]: nextFavs }
+    }));
+  }
 
   const isOnline = (pid) => {
     const lastSeen = (state.presence || {})[pid];
@@ -77,11 +90,19 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
     set(s => ({
       ...s,
       trash: [...(s.trash || []), { id: player.id, type: 'player', data: player, deletedAt: Date.now() }],
-      players: s.players.filter(p => p.id !== player.id),
-      favoredPlayerIds: (s.favoredPlayerIds || []).filter(fid => fid !== player.id)
+      players: s.players.filter(p => p.id !== player.id)
     }));
+    // Remove from this user's private star list (keyed by player ID)
+    if (setUser) setUser(prev => {
+      const key = prev?.isAdmin ? '__admin__' : (prev?.myPlayerId || '__guest__');
+      const starred = prev?.starredPlayers || {};
+      return { ...prev, starredPlayers: { ...starred, [key]: (starred[key] || []).filter(fid => fid !== player.id) } };
+    });
     setPendingRemove(null);
   }
+
+  function handleFileAdd(e) { if (e.target.files[0]) processImage(e.target.files[0], setAvatarData); }
+  function handleEditFileAdd(e) { if (e.target.files[0]) processImage(e.target.files[0], setEditAvatar); }
 
   function startEdit(p){
     setEditingId(p.id); 
@@ -100,14 +121,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
         ...p, name:tName, ratingSingles: parseFloat(editSR)||3, ratingDoubles: parseFloat(editDR)||3, avatar: editAvatar, notes: editNotes.trim(), pin: editPIN
     }:p)}));
     setEditingId(null);
-  }
-
-  function toggleFavorited(id) {
-     set(s => {
-       const favs = s.favoredPlayerIds || [];
-       const nextFavs = favs.includes(id) ? favs.filter(fId => fId !== id) : [...favs, id];
-       return {...s, favoredPlayerIds: nextFavs};
-     });
   }
 
   let displayedPlayers = [...players];
@@ -263,7 +276,10 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                         {p.duprImported && <span style={{ background: "rgba(64, 160, 224, 0.15)", color: "#40a0e0", padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 800 }}>D</span>}
                         {p.pin && <span style={{fontSize: 10*z}} title="Secured Account">🔒</span>}
                       </div>
-
+                      {/* FIX 4: Show games played + W/L record directly on the roster card */}
+                      <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
+                        {(p.gamesPlayed||0)}G · {(p.wins||0)}W {(p.losses||0)}L
+                      </div>
                       {p.notes && (
                         <div style={{fontSize: 11*z, color: theme.sub, marginTop: 4*z, display: 'flex', alignItems: 'center', gap: 4*z}}>
                           <span>📝</span> <span style={{fontStyle: 'italic'}}>{p.notes}</span>

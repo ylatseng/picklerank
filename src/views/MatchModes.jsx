@@ -1,8 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS } from '../engine.js';
+import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS, suggestBalancedTeams, computeSessionSummary, getRecentForm } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, Err, Sel, MatchEloBreakdown, ConfirmInline, MatchEditModal, MatchCard } from '../components/Shared.jsx';
 import { MatchesSubNav } from '../components/Navigation.jsx';
+
+// Tiny inline form indicator: shows last 3 results as W/L badges
+function FormDots({ pid, matches, z = 1 }) {
+  const form = getRecentForm(pid, matches, 3);
+  if (!form.length) return null;
+  return (
+    <div style={{display:"flex", gap:3*z, marginTop:3*z, alignItems:"center"}}>
+      <span style={{fontSize:9*z, color:"#888", marginRight:2*z}}>{t("form_lbl") || "Form"}:</span>
+      {form.map((r, i) => (
+        <span key={i} style={{
+          fontSize:9*z, fontWeight:800, borderRadius:3*z, padding:`1px ${3*z}px`,
+          color: r==="W" ? "#50c878" : "#e05050",
+          background: r==="W" ? "rgba(80,200,120,0.15)" : "rgba(224,80,80,0.15)"
+        }}>{r}</span>
+      ))}
+    </div>
+  );
+}
 
 export function LogMatch({state,players,set,nav,theme,user}) {
   const S=makeS(theme);
@@ -107,8 +125,10 @@ export function LogMatch({state,players,set,nav,theme,user}) {
         <Sec title={t("players")} theme={theme}>
           <label style={S.label}>{t("player_1")}</label>
           <Sel opts={opts} value={sp.s1} onChange={v=>upSp("s1",v)} placeholder={t("select_prompt")} theme={theme}/>
+          {sp.s1 && <FormDots pid={sp.s1} matches={state.matches} z={z}/>}
           <label style={{...S.label,marginTop:10*z}}>{t("player_2")}</label>
           <Sel opts={opts} value={sp.s2} onChange={v=>upSp("s2",v)} placeholder={t("select_prompt")} theme={theme}/>
+          {sp.s2 && <FormDots pid={sp.s2} matches={state.matches} z={z}/>}
           {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
         </Sec>
       ):(
@@ -116,15 +136,15 @@ export function LogMatch({state,players,set,nav,theme,user}) {
           <label style={S.label}>{t("team_name_opt")}</label>
           <input style={S.input} value={tnames.t1} onChange={e=>upTn("t1",e.target.value)} placeholder="e.g. The Bangers"/>
           <div style={{display:"flex",gap:8*z,marginTop:8*z}}>
-            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><Sel opts={opts} value={sp.d1a} onChange={v=>upSp("d1a",v)} placeholder={t("select_prompt")} theme={theme}/></div>
-            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><Sel opts={opts} value={sp.d1b} onChange={v=>upSp("d1b",v)} placeholder={t("select_prompt")} theme={theme}/></div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><Sel opts={opts} value={sp.d1a} onChange={v=>upSp("d1a",v)} placeholder={t("select_prompt")} theme={theme}/>{sp.d1a&&<FormDots pid={sp.d1a} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><Sel opts={opts} value={sp.d1b} onChange={v=>upSp("d1b",v)} placeholder={t("select_prompt")} theme={theme}/>{sp.d1b&&<FormDots pid={sp.d1b} matches={state.matches} z={z}/>}</div>
           </div>
           <div style={{borderTop:`1px solid ${theme.border}`,margin:"14px 0"}}/>
           <label style={S.label}>{t("team_name_opt")}</label>
           <input style={S.input} value={tnames.t2} onChange={e=>upTn("t2",e.target.value)} placeholder="e.g. The Dinkers"/>
           <div style={{display:"flex",gap:8*z,marginTop:8*z}}>
-            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><Sel opts={opts} value={sp.d2a} onChange={v=>upSp("d2a",v)} placeholder={t("select_prompt")} theme={theme}/></div>
-            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><Sel opts={opts} value={sp.d2b} onChange={v=>upSp("d2b",v)} placeholder={t("select_prompt")} theme={theme}/></div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><Sel opts={opts} value={sp.d2a} onChange={v=>upSp("d2a",v)} placeholder={t("select_prompt")} theme={theme}/>{sp.d2a&&<FormDots pid={sp.d2a} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><Sel opts={opts} value={sp.d2b} onChange={v=>upSp("d2b",v)} placeholder={t("select_prompt")} theme={theme}/>{sp.d2b&&<FormDots pid={sp.d2b} matches={state.matches} z={z}/>}</div>
           </div>
           {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
         </Sec>
@@ -181,6 +201,8 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
   const [notes, setNotes] = useState(""); 
   const [err, setErr] = useState(""), [success, setSuccess] = useState("");
   const [groupName, setGroupName] = useState("");
+  const [sessionSummary, setSessionSummary] = useState(null);
+  const [chosenSplit, setChosenSplit] = useState(null); // team suggester selection
   const savedGroups = state.savedGroups || [];
   
   useEffect(() => {
@@ -232,18 +254,97 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
         const t2Ids = [sessionIds[matchups[i].t2[0]], sessionIds[matchups[i].t2[1]]];
         matchesToLog.push({id:genId(),type:"doubles",date:new Date().toISOString(),teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:"Session Play", notes:notes.trim()||null, loggedBy: user?.myPlayerId || "guest"});
     }
-    set(s => ({...s, matches: [...(s.matches||[]), ...matchesToLog]}));
-    setSuccess(`✅ 3 Session Matches Logged Successfully!`); 
+
+    // Compute rich summary before and after
+    const allMatchesAfter = [...(state.matches||[]), ...matchesToLog];
+    const { derivedPlayers: postPlayers } = replayAllMatches(state.players, allMatchesAfter);
+    const summary = computeSessionSummary(matchesToLog, players, postPlayers);
+    setSessionSummary(summary);
+
+    set(s => ({...s, matches: allMatchesAfter}));
     setRoundScores([{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
     setSessionIds(["","","",""]);
+    setChosenSplit(null);
     setNotes(""); 
   }
+
+  // Team Suggester: compute balanced pairings when 4 players are selected
+  const ratingMap = Object.fromEntries(players.map(p => [p.id, p.ratingDoubles || 3]));
+  const suggestions = isReady ? suggestBalancedTeams(sessionIds, ratingMap) : [];
+
+  // Share recap text
+  const shareRecap = (summary) => {
+    if (!summary) return;
+    const lines = [`🏓 ${t("session_summary_title")}`, ''];
+    summary.matchSummaries.forEach((m, i) => {
+      lines.push(`Game ${i+1}: ${m.t1} vs ${m.t2} → ${m.score} (${m.winnerLabel} wins)`);
+    });
+    lines.push('');
+    lines.push(`🏆 MVP: ${summary.mvp?.name} (${summary.mvp?.wins}W ${summary.mvp?.losses}L, ${summary.mvp?.delta >= 0 ? '+' : ''}${summary.mvp?.delta.toFixed(3)})`);
+    lines.push(`📈 Most Improved: ${summary.mostImproved?.name} (${summary.mostImproved?.delta >= 0 ? '+' : ''}${summary.mostImproved?.delta.toFixed(3)})`);
+    lines.push(`🎯 Total points: ${summary.totalPts}`);
+    const text = lines.join('\n');
+    if (navigator.share) navigator.share({ title: 'PickleRank Session', text });
+    else { navigator.clipboard.writeText(text); }
+  };
 
   return (
     <div style={S.view}>
       <MatchesSubNav active="session" nav={nav} theme={theme} />
-      {success&&<div style={{background:"rgba(80,200,120,0.15)",color:"#50c878",padding:10*z,borderRadius:8*z,marginBottom:12*z,fontSize:13*z,fontWeight:"bold"}}>{success}</div>}
-      
+
+      {/* ── SESSION SUMMARY MODAL ─────────────────────────────────────── */}
+      {sessionSummary && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16*z}}>
+          <div style={{background:theme.card,borderRadius:16*z,padding:20*z,width:"100%",maxWidth:420*z,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}}>
+            <div style={{textAlign:"center",fontSize:20*z,fontWeight:800,marginBottom:16*z,color:theme.accent}}>{t("session_summary_title")}</div>
+
+            {/* Player stats */}
+            <div style={{display:"flex",flexWrap:"wrap",gap:8*z,marginBottom:16*z}}>
+              {sessionSummary.playerStats.map(ps => (
+                <div key={ps.id} style={{flex:"1 1 45%",background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:10*z,padding:10*z}}>
+                  <div style={{fontWeight:700,fontSize:12*z,color:theme.text,marginBottom:3*z}}>{ps.name}</div>
+                  <div style={{fontSize:11*z,color:theme.sub}}>{ps.wins}W {ps.losses}L</div>
+                  <div style={{fontSize:12*z,fontWeight:700,color:ps.delta>=0?"#50c878":"#e05050",marginTop:2*z}}>
+                    {ps.delta>=0?"+":""}{ps.delta.toFixed(3)}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Highlights */}
+            <div style={{display:"flex",flexDirection:"column",gap:8*z,marginBottom:16*z}}>
+              <div style={{background:"rgba(80,200,120,0.1)",border:"1px solid #50c87844",borderRadius:10*z,padding:10*z}}>
+                <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>🏆 {t("session_summary_mvp")}</div>
+                <div style={{fontWeight:700,color:"#50c878"}}>{sessionSummary.mvp?.name} — {sessionSummary.mvp?.wins}W {sessionSummary.mvp?.losses}L</div>
+              </div>
+              <div style={{background:"rgba(64,160,224,0.1)",border:"1px solid #40a0e044",borderRadius:10*z,padding:10*z}}>
+                <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>📈 {t("session_summary_improved")}</div>
+                <div style={{fontWeight:700,color:"#40a0e0"}}>{sessionSummary.mostImproved?.name} {sessionSummary.mostImproved?.delta>=0?"+":""}{sessionSummary.mostImproved?.delta.toFixed(3)}</div>
+              </div>
+              <div style={{background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:10*z,padding:10*z}}>
+                <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>🎯 {t("session_summary_total_pts")}</div>
+                <div style={{fontWeight:700,color:theme.text}}>{sessionSummary.totalPts}</div>
+              </div>
+            </div>
+
+            {/* Match results */}
+            <div style={{fontSize:11*z,fontWeight:700,color:theme.sub,marginBottom:6*z}}>{t("session_summary_results")}</div>
+            {sessionSummary.matchSummaries.map((m, i) => (
+              <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11*z,padding:`${5*z}px 0`,borderBottom:`1px solid ${theme.border}`}}>
+                <span style={{color:theme.sub}}>Game {i+1}</span>
+                <span style={{color:theme.text}}>{m.t1} vs {m.t2}</span>
+                <span style={{fontWeight:700,color:"#50c878"}}>{m.score}</span>
+              </div>
+            ))}
+
+            <div style={{display:"flex",gap:8*z,marginTop:16*z}}>
+              <button style={{...S.btnSecondary,flex:1,marginTop:0}} onClick={() => shareRecap(sessionSummary)}>{t("session_summary_share")}</button>
+              <button style={{...S.btnPrimary,flex:1,marginTop:0}} onClick={() => setSessionSummary(null)}>{t("session_summary_close")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Sec title={t("select_foursome")} theme={theme}>
         {savedGroups.length > 0 && (
           <div style={{marginBottom: 16*z}}>
@@ -259,10 +360,61 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
           </div>
         )}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z}}>
-          {[0,1,2,3].map(i=><Sel key={i} opts={opts} value={sessionIds[i]} onChange={v=>upP(i,v)} placeholder={`Player ${i+1}`} theme={theme}/>)}
+          {[0,1,2,3].map(i => {
+            const pid = sessionIds[i];
+            const form = pid ? getRecentForm(pid, state.matches) : [];
+            return (
+              <div key={i}>
+                <Sel opts={opts} value={pid} onChange={v=>upP(i,v)} placeholder={`Player ${i+1}`} theme={theme}/>
+                {form.length > 0 && (
+                  <div style={{display:"flex",gap:3*z,marginTop:3*z,justifyContent:"center"}}>
+                    {form.map((r,j) => (
+                      <span key={j} style={{fontSize:9*z,fontWeight:800,color:r==="W"?"#50c878":"#e05050",
+                        background:r==="W"?"rgba(80,200,120,0.15)":"rgba(224,80,80,0.15)",
+                        borderRadius:3*z,padding:`1px ${3*z}px`}}>{r}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
         
         {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
+
+        {/* ── BALANCED TEAM SUGGESTER ─────────────────────────────────── */}
+        {isReady && suggestions.length > 0 && (
+          <div style={{marginTop:12*z, padding:12*z, background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:10*z}}>
+            <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:4*z}}>{t("team_suggester_sec")}</div>
+            <div style={{fontSize:10*z, color:theme.sub, marginBottom:10*z}}>{t("team_suggester_desc")}</div>
+            {suggestions.map((s, i) => {
+              const isChosen = chosenSplit === i;
+              const isBest = i === 0;
+              return (
+                <div key={i} onClick={() => setChosenSplit(i)} style={{
+                  padding:`${8*z}px ${10*z}px`, marginBottom:6*z, borderRadius:8*z, cursor:"pointer",
+                  border:`2px solid ${isChosen ? theme.accent : isBest ? "#50c87844" : theme.border}`,
+                  background: isChosen ? theme.accent+"18" : isBest ? "rgba(80,200,120,0.05)" : "transparent",
+                  transition:"all 0.15s"
+                }}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:11*z, fontWeight:700, color: isBest ? "#50c878" : theme.sub}}>
+                      {isBest ? `✅ ${t("team_fairest")}` : `Option ${i+1}`}
+                    </span>
+                    <span style={{fontSize:10*z, color:theme.sub}}>{t("team_balance_label")} {s.gap.toFixed(3)}</span>
+                  </div>
+                  <div style={{fontSize:12*z, marginTop:4*z, color:theme.text}}>
+                    <strong>{getName(s.t1[0])} & {getName(s.t1[1])}</strong>
+                    <span style={{color:theme.sub}}> ({s.avg1.toFixed(2)}) </span>
+                    vs
+                    <strong> {getName(s.t2[0])} & {getName(s.t2[1])}</strong>
+                    <span style={{color:theme.sub}}> ({s.avg2.toFixed(2)})</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {isReady && (
           <div style={{marginTop: 12*z}}>

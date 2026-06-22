@@ -30,7 +30,7 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
   };
 
   function exportData(){
-    const json = JSON.stringify({players:state.players, matches:state.matches, savedGroups:state.savedGroups, logoText:state.logoText, logoData:state.logoData, favoredPlayerIds:state.favoredPlayerIds, adminPass:state.adminPass}, null, 2);
+    const json = JSON.stringify({players:state.players, matches:state.matches, savedGroups:state.savedGroups, logoText:state.logoText, logoData:state.logoData, adminPass:state.adminPass}, null, 2);
     const blob = new Blob([json], {type:"application/json"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
@@ -75,7 +75,6 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
           savedGroups: data.savedGroups || [], 
           logoText: data.logoText || "LS", 
           logoData: data.logoData || null, 
-          favoredPlayerIds: data.favoredPlayerIds || [], 
           adminPass: data.adminPass || "1234"
         }));
 
@@ -86,7 +85,6 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
           savedGroups: data.savedGroups || [],
           logoText: data.logoText || "LS",
           logoData: data.logoData || null,
-          favoredPlayerIds: data.favoredPlayerIds || [],
           adminPass: data.adminPass || "1234"
         }, { merge: true });
 

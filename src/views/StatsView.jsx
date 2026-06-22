@@ -1,5 +1,5 @@
 import React from 'react';
-import { t, DEFAULT_RATING } from '../engine.js';
+import { t, DEFAULT_RATING, computePartnerMatrix } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, StatRow } from '../components/Shared.jsx';
 
@@ -69,6 +69,87 @@ export default function StatsView({players,matches,nav,theme}) {
           })}
         </Sec>
       )}
+
+      {/* ── DOUBLES PARTNER MATRIX ──────────────────────────────────────── */}
+      {(() => {
+        const matrix = computePartnerMatrix(matches);
+        const activePlayers = players.filter(p => (p.doublesPlayed || 0) > 0);
+        if (activePlayers.length < 2 || Object.keys(matrix).length === 0) return (
+          <Sec title={t("partner_matrix_sec")} theme={theme}>
+            <div style={{color:theme.sub, fontSize:12*z, textAlign:"center", padding:16*z}}>{t("partner_matrix_no_data")}</div>
+          </Sec>
+        );
+        const key = (a, b) => [a, b].sort().join('|');
+        const pctColor = pct => pct >= 60 ? "#50c878" : pct >= 45 ? "#f0a830" : "#e05050";
+        const cellSize = Math.min(52, Math.floor(300 / activePlayers.length));
+        return (
+          <Sec title={t("partner_matrix_sec")} theme={theme}>
+            <div style={{fontSize:10*z, color:theme.sub, marginBottom:10*z}}>{t("partner_matrix_desc")}</div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{borderCollapse:"separate", borderSpacing:0, fontSize:10*z, width:"100%"}}>
+                <thead>
+                  <tr>
+                    <th style={{
+                      position:"sticky", left:0, zIndex:2,
+                      background:theme.card, width:cellSize*z, padding:`${3*z}px`,
+                      boxShadow:`2px 0 4px ${theme.border}`
+                    }}></th>
+                    {activePlayers.map(p => (
+                      <th key={p.id} style={{width:cellSize*z, textAlign:"center", padding:`${3*z}px`, color:theme.sub, fontWeight:600, fontSize:9*z}}>
+                        {p.name.split(' ')[0]}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activePlayers.map(rowP => (
+                    <tr key={rowP.id}>
+                      <td style={{
+                        position:"sticky", left:0, zIndex:1,
+                        background:theme.card,
+                        padding:`${3*z}px`, color:theme.sub, fontSize:9*z, fontWeight:600, whiteSpace:"nowrap",
+                        boxShadow:`2px 0 4px ${theme.border}`
+                      }}>
+                        {rowP.name.split(' ')[0]}
+                      </td>
+                      {activePlayers.map(colP => {
+                        if (rowP.id === colP.id) return (
+                          <td key={colP.id} style={{background:theme.border, borderRadius:4*z, textAlign:"center", padding:`${4*z}px`}}>
+                            <span style={{color:theme.sub, fontSize:10*z}}>—</span>
+                          </td>
+                        );
+                        const k = key(rowP.id, colP.id);
+                        const stat = matrix[k];
+                        return (
+                          <td key={colP.id} style={{textAlign:"center", padding:`${2*z}px`}}>
+                            {stat ? (
+                              <div style={{
+                                background: pctColor(stat.pct) + "22",
+                                border: `1px solid ${pctColor(stat.pct)}44`,
+                                borderRadius:6*z, padding:`${3*z}px ${2*z}px`,
+                              }}>
+                                <div style={{fontWeight:800, color:pctColor(stat.pct), fontSize:11*z}}>{stat.pct}%</div>
+                                <div style={{color:theme.sub, fontSize:8*z}}>{stat.total}{t("partner_matrix_games")}</div>
+                              </div>
+                            ) : (
+                              <div style={{color:theme.border, fontSize:10*z}}>·</div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{display:"flex", gap:10*z, marginTop:10*z, fontSize:10*z, color:theme.sub}}>
+              {[["#50c878","≥60% Win rate"],["#f0a830","45–59%"],["#e05050","<45%"]].map(([c,l])=>(
+                <span key={l}><span style={{color:c,fontWeight:700}}>■</span> {l}</span>
+              ))}
+            </div>
+          </Sec>
+        );
+      })()}
     </div>
   );
 }

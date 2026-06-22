@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { t, fmtDate, sortOptionsAlpha } from '../engine.js';
+import { t, fmtDate, sortOptionsAlpha, detectRematches } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, ConfirmInline, Sel, MatchCard, MatchEditModal } from '../components/Shared.jsx';
 
@@ -89,6 +89,12 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
       current.matches.push(m);
     });
     return groups;
+  }, [finalViewMatches]);
+
+  // Rematch detection: separate memo so it doesn't break groupedMatches scope
+  const rematchIds = useMemo(() => {
+    const groups = detectRematches(finalViewMatches);
+    return new Set(groups.flatMap(g => g.map(m => m.id)));
   }, [finalViewMatches]);
 
   // Calendar Logic
@@ -243,11 +249,18 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
                 // SECURITY FIX: User is Admin OR User actually played in this specific match
                 const isParticipant = user?.myPlayerId && m.teams?.flat()?.includes(user?.myPlayerId);
                 const canEditMatch = isAdmin || isParticipant;
+                const canDeleteMatch = isAdmin; // FIX 5: only admin can delete match history
 
                 return (
                   <React.Fragment key={m.id}>
+                    {rematchIds.has(m.id) && (
+                      <div style={{fontSize:10*z, color:"#f0a830", fontWeight:700,
+                        padding:`${2*z}px ${8*z}px`, marginBottom:-4*z}}>
+                        {t("rematch_badge")}
+                      </div>
+                    )}
                     <MatchCard match={m} players={players} theme={theme} isAdmin={canEditMatch} 
-                      onEdit={canEditMatch ? setEditingMatch : undefined} onShare={share} onDelete={canEditMatch ? () => setPendingDelete(m.id) : undefined} />
+                      onEdit={canEditMatch ? setEditingMatch : undefined} onShare={share} onDelete={canDeleteMatch ? () => setPendingDelete(m.id) : undefined} />
                     {pendingDelete===m.id&&(
                       <ConfirmInline msg={t("delete_match_q")} note={t("ratings_recalculated")}
                         onConfirm={()=>moveToTrash(m)} onCancel={()=>setPendingDelete(null)} theme={theme}/>
