@@ -13,7 +13,7 @@ export const PROVISIONAL_K_MULTIPLIER = 2; // provisional players move up to 2x 
 export const STORAGE_KEY = "pkl_tracker_v4"; 
 
 // ─── Version & Changelog ──────────────────────────────────────────────────────
-export const APP_VERSION = "2.1.0";
+export const APP_VERSION = "2.1.0"; // new update
 export const APP_UPDATED = "2026-06-22";
 
 export const RELEASES = [
