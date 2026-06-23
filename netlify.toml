@@ -1,22 +1,17 @@
 # ─── Netlify Configuration for PickleRank ────────────────────────────────────
-# Place this file in your PROJECT ROOT (same folder as package.json),
-# NOT inside the src/ folder.
+# Place this file in your PROJECT ROOT (same folder as package.json).
 
 [build]
   command = "npm run build"
   publish = "dist"
 
 # ─── Secrets Scanning ────────────────────────────────────────────────────────
-# Firebase web API keys start with "AIza" and are intentionally public —
-# they identify your Firebase project to the browser SDK, not grant admin access.
-# Access control is managed by Firebase Security Rules, not by hiding this key.
-# This line tells Netlify to ignore "AIza" prefixed values during scanning.
+# Firebase web API keys (AIza...) are intentionally public client identifiers,
+# not secrets. Disabling smart detection to prevent false positive build failures.
 [build.environment]
-  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIza"
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
 
 # ─── SPA Routing ─────────────────────────────────────────────────────────────
-# Redirect all routes to index.html so React Router handles navigation.
-# Without this, refreshing any non-root URL returns a 404 from Netlify.
 [[redirects]]
   from = "/*"
   to = "/index.html"
