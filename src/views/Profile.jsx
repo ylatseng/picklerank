@@ -86,7 +86,7 @@ function GoalSection({ player: p, user, setUser, theme }) {
   );
 }
 
-export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,user, setUser}) {
+export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,user,setUser}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   const myMatches=useMemo(()=>[...matches].filter(m=>m.teams?.flat().includes(p.id)).reverse(),[matches,p.id]);
@@ -94,8 +94,13 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
   const [editingMatch,setEditingMatch]=useState(null);
   const [pendingDeleteMatch,setPendingDeleteMatch]=useState(null);
 
-  function delMatch(id){
-    set(s=>({...s, matches:(s.matches||[]).filter(m=>m.id!==id)}));
+  function delMatch(match){
+    // Move to trash (same pattern as History) — never hard-delete directly
+    set(s => ({
+      ...s,
+      trash: [...(s.trash||[]), { id: match.id, type:'match', data: match, deletedAt: Date.now() }],
+      matches: (s.matches||[]).filter(m => m.id !== match.id)
+    }));
     setTimeout(()=>setPendingDeleteMatch(null),0);
   }
 
@@ -345,17 +350,18 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
 
       <Sec title={`${t("recent_matches")} (${Math.min(myMatches.length, 5)})`} theme={theme}>
         {myMatches.slice(0,5).map(m => {
-          // SECURITY FIX: Only Admin or actual participants can edit/delete this specific match
+          // Regular users can edit matches they played in, but ONLY admin can delete
           const isParticipant = user?.myPlayerId && m.teams?.flat()?.includes(user?.myPlayerId);
           const canEditMatch = isAdmin || isParticipant;
+          const canDeleteMatch = isAdmin;
 
           return (
             <React.Fragment key={m.id}>
               <MatchCard match={m} players={players} theme={theme} isAdmin={canEditMatch} highlightPlayerId={p.id}
-                onEdit={canEditMatch ? setEditingMatch : undefined} onShare={share} onDelete={canEditMatch ? () => setPendingDeleteMatch(m.id) : undefined} />
+                onEdit={canEditMatch ? setEditingMatch : undefined} onShare={share} onDelete={canDeleteMatch ? () => setPendingDeleteMatch(m.id) : undefined} />
               {pendingDeleteMatch===m.id&&(
                 <ConfirmInline msg={t("delete_match_q")} note={t("ratings_recalculated")}
-                  onConfirm={()=>delMatch(m.id)} onCancel={()=>setPendingDeleteMatch(null)} theme={theme}/>
+                  onConfirm={()=>delMatch(m)} onCancel={()=>setPendingDeleteMatch(null)} theme={theme}/>
               )}
             </React.Fragment>
           );

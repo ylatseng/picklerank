@@ -278,7 +278,9 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12*z }}>
           <div style={{ fontSize: 11*z, color: theme.sub, fontWeight: "bold" }}>
-            {t("version_lbl")} {APP_VERSION} ({APP_UPDATED})
+            {t("version_lbl")}{" "}
+            <span style={{ color: theme.accent }}>{APP_VERSION}</span>
+            {" "}({APP_UPDATED})
           </div>
           <button style={{...S.btnSecondary, margin: 0, padding: "6px 12px", fontSize: 11*z}} onClick={()=>nav("changelog")}>
             {t("view_changelog_btn")}

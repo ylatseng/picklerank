@@ -388,37 +388,74 @@ export function LeaderboardRow({player:p,rank,onClick,theme,format}) {
 export function EditBaseRating({player:p,set,theme}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
-  const [editing,setEditing]=useState(false), [val,setVal]=useState(""), [err,setErr]=useState("");
-  const parsed=parseFloat(val), valid=!isNaN(parsed)&&parsed>=1.5&&parsed<=6.5;
-  
+  const [editing,setEditing]=useState(false);
+  const [valS,setValS]=useState(""), [valD,setValD]=useState(""), [err,setErr]=useState("");
+
+  const parsedS=parseFloat(valS), parsedD=parseFloat(valD);
+  const validS=!isNaN(parsedS)&&parsedS>=1.5&&parsedS<=6.5;
+  const validD=!isNaN(parsedD)&&parsedD>=1.5&&parsedD<=6.5;
+
   function save(){
-    if(!valid) return setErr(t("rating_range_hint"));
-    set(s => ({...s, players: (s.players||[]).map(pl=>pl.id!==p.id?pl:{...pl,baseRating:parsed,duprImported:true})}));
-    setEditing(false); setVal(""); setErr("");
+    if(!validS || !validD) return setErr(t("rating_range_hint"));
+    set(s => ({...s, players:(s.players||[]).map(pl=>pl.id!==p.id?pl:{
+      ...pl,
+      ratingSingles: parsedS,
+      ratingDoubles: parsedD,
+      baseRating: (parsedS + parsedD) / 2,
+      duprImported: true
+    })}));
+    setEditing(false); setValS(""); setValD(""); setErr("");
   }
-  const currentBase=p.baseRating??DEFAULT_RATING;
+
+  function startEdit(){
+    setValS((p.ratingSingles||DEFAULT_RATING).toFixed(3));
+    setValD((p.ratingDoubles||DEFAULT_RATING).toFixed(3));
+    setEditing(true);
+  }
+
   return (
     <Sec title={t("base_rating_sec")} theme={theme}>
       <div style={{fontSize:13*z,color:theme.sub,marginBottom:10*z,lineHeight:1.5}}>{t("base_rating_desc")}</div>
-      <div style={{display:"flex",alignItems:"center",gap:10*z,marginBottom:10*z}}>
-        <div style={{...S.badge,background:ratingColor(currentBase),fontSize:16*z,padding:"6px 14px"}}>{currentBase.toFixed(3)}</div>
-        <div><div style={{fontSize:12*z,fontWeight:700}}>{t(ratingLabel(currentBase))}</div><div style={{fontSize:10*z,color:theme.sub}}>{t("base_rating_lbl")}</div></div>
+      <div style={{display:"flex",gap:10*z,marginBottom:10*z}}>
+        {[
+          {label:t("overview_singles"), rating:p.ratingSingles||DEFAULT_RATING},
+          {label:t("overview_doubles"), rating:p.ratingDoubles||DEFAULT_RATING}
+        ].map(({label,rating})=>(
+          <div key={label} style={{flex:1,display:"flex",alignItems:"center",gap:8*z}}>
+            <div style={{...S.badge,background:ratingColor(rating),fontSize:14*z,padding:"4px 10px"}}>{rating.toFixed(3)}</div>
+            <div>
+              <div style={{fontSize:11*z,fontWeight:700}}>{label}</div>
+              <div style={{fontSize:10*z,color:theme.sub}}>{t(ratingLabel(rating))}</div>
+            </div>
+          </div>
+        ))}
       </div>
-      {editing?(
+      {editing ? (
         <div>
-          <label style={S.label}>{t("new_starting_rating")}</label>
-          <input style={{...S.input,borderColor:val&&!valid?"#5a2020":val&&valid?theme.accent:theme.border}}
-            type="number" min="1.5" max="6.5" step="0.001" placeholder="e.g. 4.125" value={val} autoFocus
-            onChange={e=>{setVal(e.target.value);setErr("");}}/>
-          {valid&&<div style={{fontSize:11*z,color:ratingColor(parsed),marginTop:4,fontWeight:600}}>{parsed.toFixed(3)} — {t(ratingLabel(parsed))}</div>}
+          <div style={{display:"flex",gap:10*z,marginBottom:8*z}}>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("singles_rating")} (1.5–6.5)</label>
+              <input style={{...S.input,borderColor:valS&&!validS?"#5a2020":valS&&validS?theme.accent:theme.border}}
+                type="number" min="1.5" max="6.5" step="0.001" placeholder={t("overview_singles")} value={valS} autoFocus
+                onChange={e=>{setValS(e.target.value);setErr("");}}/>
+              {validS&&<div style={{fontSize:10*z,color:ratingColor(parsedS),marginTop:3*z,fontWeight:600}}>{parsedS.toFixed(3)} — {t(ratingLabel(parsedS))}</div>}
+            </div>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("doubles_rating")} (1.5–6.5)</label>
+              <input style={{...S.input,borderColor:valD&&!validD?"#5a2020":valD&&validD?theme.accent:theme.border}}
+                type="number" min="1.5" max="6.5" step="0.001" placeholder={t("overview_doubles")} value={valD}
+                onChange={e=>{setValD(e.target.value);setErr("");}}/>
+              {validD&&<div style={{fontSize:10*z,color:ratingColor(parsedD),marginTop:3*z,fontWeight:600}}>{parsedD.toFixed(3)} — {t(ratingLabel(parsedD))}</div>}
+            </div>
+          </div>
           {err&&<Err msg={err} theme={theme}/>}
-          <div style={{display:"flex",gap:8*z, marginTop:8*z}}>
+          <div style={{display:"flex",gap:8*z,marginTop:8*z}}>
             <button style={{...S.btnPrimary,flex:1}} onClick={save}>{t("save_recalc")}</button>
-            <button style={{...S.btnSecondary,flex:1,marginTop:0}} onClick={()=>{setEditing(false);setVal("");setErr("");}}>{t("cancel")}</button>
+            <button style={{...S.btnSecondary,flex:1,marginTop:0}} onClick={()=>{setEditing(false);setValS("");setValD("");setErr("");}}>{t("cancel")}</button>
           </div>
         </div>
       ):(
-        <button style={S.btnSecondary} onClick={()=>{setEditing(true);setVal(currentBase.toFixed(3));}}>{t("edit_starting_rating")}</button>
+        <button style={S.btnSecondary} onClick={startEdit}>{t("edit_starting_rating")}</button>
       )}
     </Sec>
   );

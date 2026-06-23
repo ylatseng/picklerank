@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { t, DEFAULT_RATING, computePartnerMatrix } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, StatRow } from '../components/Shared.jsx';
+import { Sec, StatRow, Avatar } from '../components/Shared.jsx';
 
 export default function StatsView({players,matches,nav,theme}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
+  const [selectedPartnerId, setSelectedPartnerId] = useState(null);
   const totalGames=matches.reduce((s,m)=>s+(m.games?.length||0),0);
   const singlesCount=matches.filter(m=>m.type==="singles").length;
   const doublesCount=matches.filter(m=>m.type==="doubles").length;
@@ -70,7 +71,7 @@ export default function StatsView({players,matches,nav,theme}) {
         </Sec>
       )}
 
-      {/* ── DOUBLES PARTNER MATRIX ──────────────────────────────────────── */}
+      {/* ── DOUBLES PARTNER MATRIX — player-picker + ranked cards ────── */}
       {(() => {
         const matrix = computePartnerMatrix(matches);
         const activePlayers = players.filter(p => (p.doublesPlayed || 0) > 0);
@@ -79,72 +80,135 @@ export default function StatsView({players,matches,nav,theme}) {
             <div style={{color:theme.sub, fontSize:12*z, textAlign:"center", padding:16*z}}>{t("partner_matrix_no_data")}</div>
           </Sec>
         );
+
         const key = (a, b) => [a, b].sort().join('|');
         const pctColor = pct => pct >= 60 ? "#50c878" : pct >= 45 ? "#f0a830" : "#e05050";
-        const cellSize = Math.min(52, Math.floor(300 / activePlayers.length));
+        const getName = id => activePlayers.find(p => p.id === id)?.name || '?';
+
+        // Build ranked partner list for the selected player
+        const selectedPlayer = activePlayers.find(p => p.id === selectedPartnerId) || activePlayers[0];
+        const partnerStats = activePlayers
+          .filter(p => p.id !== selectedPlayer.id)
+          .map(p => {
+            const k = key(selectedPlayer.id, p.id);
+            const stat = matrix[k];
+            return stat ? { partner: p, wins: stat.wins, total: stat.total, pct: stat.pct, gamesWon: stat.gamesWon, gamesLost: stat.gamesLost, gamePct: stat.gamePct } : null;
+          })
+          .filter(Boolean)
+          .sort((a, b) => b.pct - a.pct);
+
+        // Best overall pairings across entire group
+        const allPairings = Object.entries(matrix)
+          .filter(([, s]) => s.total >= 2)
+          .map(([k, s]) => {
+            const [idA, idB] = k.split('|');
+            return { idA, idB, nameA: getName(idA), nameB: getName(idB), ...s };
+          })
+          .sort((a, b) => b.pct - a.pct);
+
         return (
           <Sec title={t("partner_matrix_sec")} theme={theme}>
-            <div style={{fontSize:10*z, color:theme.sub, marginBottom:10*z}}>{t("partner_matrix_desc")}</div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{borderCollapse:"separate", borderSpacing:0, fontSize:10*z, width:"100%"}}>
-                <thead>
-                  <tr>
-                    <th style={{
-                      position:"sticky", left:0, zIndex:2,
-                      background:theme.card, width:cellSize*z, padding:`${3*z}px`,
-                      boxShadow:`2px 0 4px ${theme.border}`
-                    }}></th>
-                    {activePlayers.map(p => (
-                      <th key={p.id} style={{width:cellSize*z, textAlign:"center", padding:`${3*z}px`, color:theme.sub, fontWeight:600, fontSize:9*z}}>
-                        {p.name.split(' ')[0]}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {activePlayers.map(rowP => (
-                    <tr key={rowP.id}>
-                      <td style={{
-                        position:"sticky", left:0, zIndex:1,
-                        background:theme.card,
-                        padding:`${3*z}px`, color:theme.sub, fontSize:9*z, fontWeight:600, whiteSpace:"nowrap",
-                        boxShadow:`2px 0 4px ${theme.border}`
-                      }}>
-                        {rowP.name.split(' ')[0]}
-                      </td>
-                      {activePlayers.map(colP => {
-                        if (rowP.id === colP.id) return (
-                          <td key={colP.id} style={{background:theme.border, borderRadius:4*z, textAlign:"center", padding:`${4*z}px`}}>
-                            <span style={{color:theme.sub, fontSize:10*z}}>—</span>
-                          </td>
-                        );
-                        const k = key(rowP.id, colP.id);
-                        const stat = matrix[k];
-                        return (
-                          <td key={colP.id} style={{textAlign:"center", padding:`${2*z}px`}}>
-                            {stat ? (
-                              <div style={{
-                                background: pctColor(stat.pct) + "22",
-                                border: `1px solid ${pctColor(stat.pct)}44`,
-                                borderRadius:6*z, padding:`${3*z}px ${2*z}px`,
-                              }}>
-                                <div style={{fontWeight:800, color:pctColor(stat.pct), fontSize:11*z}}>{stat.pct}%</div>
-                                <div style={{color:theme.sub, fontSize:8*z}}>{stat.total}{t("partner_matrix_games")}</div>
-                              </div>
-                            ) : (
-                              <div style={{color:theme.border, fontSize:10*z}}>·</div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>{t("partner_matrix_desc")}</div>
+
+            {/* Player picker row */}
+            <div style={{display:"flex", gap:6*z, flexWrap:"wrap", marginBottom:16*z}}>
+              {activePlayers.map(p => {
+                const isSelected = p.id === selectedPlayer.id;
+                return (
+                  <button key={p.id} onClick={() => setSelectedPartnerId(p.id)}
+                    style={{
+                      display:"flex", alignItems:"center", gap:6*z,
+                      padding:`${5*z}px ${10*z}px`,
+                      borderRadius:20*z,
+                      border:`2px solid ${isSelected ? theme.accent : theme.border}`,
+                      background: isSelected ? theme.accent+"22" : "transparent",
+                      color: isSelected ? theme.accent : theme.sub,
+                      fontWeight: isSelected ? 700 : 400,
+                      fontSize:12*z, cursor:"pointer"
+                    }}>
+                    <Avatar name={p.name} size={20} />
+                    {p.name.split(' ')[0]}
+                  </button>
+                );
+              })}
             </div>
-            <div style={{display:"flex", gap:10*z, marginTop:10*z, fontSize:10*z, color:theme.sub}}>
-              {[["#50c878","≥60% Win rate"],["#f0a830","45–59%"],["#e05050","<45%"]].map(([c,l])=>(
-                <span key={l}><span style={{color:c,fontWeight:700}}>■</span> {l}</span>
+
+            {/* Ranked partner cards for selected player */}
+            {partnerStats.length === 0 ? (
+              <div style={{color:theme.sub, fontSize:12*z, textAlign:"center", padding:12*z}}>
+                {t("partner_matrix_no_data")}
+              </div>
+            ) : (
+              <div style={{display:"flex", flexDirection:"column", gap:8*z, marginBottom:16*z}}>
+                {partnerStats.map(({partner, wins, total, pct, gamesWon, gamesLost, gamePct}, i) => (
+                  <div key={partner.id} style={{
+                    background: theme.bg, border:`1px solid ${theme.border}`,
+                    borderRadius:10*z, padding:`${10*z}px ${12*z}px`,
+                    display:"flex", alignItems:"center", gap:10*z
+                  }}>
+                    <div style={{fontSize:13*z, color:theme.sub, fontWeight:700, minWidth:20*z, textAlign:"center"}}>#{i+1}</div>
+                    <Avatar name={partner.name} size={32} />
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700, fontSize:13*z, color:theme.text}}>{partner.name}</div>
+                      {/* Match record — primary stat */}
+                      <div style={{fontSize:10*z, color:theme.sub}}>
+                        {wins}W {total-wins}L · {total} {t("partner_matrix_games")}
+                      </div>
+                      {/* Game record — secondary stat (only shown when game data exists) */}
+                      {gamesWon + gamesLost > 0 && (
+                        <div style={{fontSize:10*z, color:theme.sub}}>
+                          {gamesWon}–{gamesLost} {t("partner_matrix_in_games") || "in games"}
+                          {gamePct !== null && (
+                            <span style={{marginLeft:4*z, color: gamePct >= 50 ? "#50c878" : "#e05050", fontWeight:600}}>
+                              ({gamePct}%)
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div style={{height:5*z, background:theme.border, borderRadius:3*z, overflow:"hidden", marginTop:4*z}}>
+                        <div style={{width:`${Math.min(100,pct)}%`, height:"100%", background:pctColor(pct), borderRadius:3*z, transition:"width 0.4s"}}/>
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize:15*z, fontWeight:800, color:pctColor(pct),
+                      background:pctColor(pct)+"18", borderRadius:8*z,
+                      padding:`${4*z}px ${8*z}px`, minWidth:44*z, textAlign:"center"
+                    }}>{pct}%</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Top pairings across entire group */}
+            {allPairings.length > 0 && (
+              <>
+                <div style={{fontSize:11*z, fontWeight:700, color:theme.sub, marginBottom:8*z, marginTop:4*z}}>
+                  🏆 {t("partner_matrix_top") || "Top Partnerships (2+ matches)"}
+                </div>
+                {allPairings.slice(0, 5).map(({idA, nameA, nameB, wins, total, pct, gamesWon, gamesLost, gamePct}) => (
+                  <div key={idA+nameB} style={{padding:`${6*z}px 0`, borderBottom:`1px solid ${theme.border}`}}>
+                    <div style={{display:"flex", alignItems:"center", gap:8*z}}>
+                      <div style={{flex:1, fontSize:12*z, color:theme.text, fontWeight:600}}>
+                        {nameA.split(' ')[0]} & {nameB.split(' ')[0]}
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:11*z, color:theme.sub}}>{wins}W {total-wins}L · {total} {t("partner_matrix_games")}</div>
+                        {gamesWon + gamesLost > 0 && (
+                          <div style={{fontSize:10*z, color:theme.sub}}>
+                            {gamesWon}–{gamesLost} {t("partner_matrix_in_games") || "in games"}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{fontSize:12*z, fontWeight:800, color:pctColor(pct), minWidth:40*z, textAlign:"right"}}>{pct}%</div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            <div style={{display:"flex", gap:10*z, marginTop:12*z, fontSize:10*z, color:theme.sub}}>
+              {[["#50c878","≥60%"],["#f0a830","45–59%"],["#e05050","<45%"]].map(([c,l])=>(
+                <span key={l}><span style={{color:c, fontWeight:700}}>■</span> {l}</span>
               ))}
             </div>
           </Sec>

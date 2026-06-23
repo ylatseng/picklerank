@@ -87,9 +87,25 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
   }
 
   function moveToTrash(player) {
+    // Only keep raw player fields in trash — not computed stats (gamesPlayed, wins, etc.)
+    // that are re-derived on every replay. The critical field is `id`: because every
+    // match stores player IDs in its teams array, restoring the same id automatically
+    // reconnects ALL match history, ratings, and stats.
+    const rawPlayer = {
+      id:            player.id,
+      name:          player.name,
+      ratingSingles: player.ratingSingles,
+      ratingDoubles: player.ratingDoubles,
+      baseRating:    player.baseRating,
+      duprImported:  player.duprImported,
+      joinedDate:    player.joinedDate,
+      avatar:        player.avatar,
+      notes:         player.notes,
+      pin:           player.pin,
+    };
     set(s => ({
       ...s,
-      trash: [...(s.trash || []), { id: player.id, type: 'player', data: player, deletedAt: Date.now() }],
+      trash: [...(s.trash || []), { id: player.id, type: 'player', data: rawPlayer, deletedAt: Date.now() }],
       players: s.players.filter(p => p.id !== player.id)
     }));
     // Remove from this user's private star list (keyed by player ID)
