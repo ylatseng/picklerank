@@ -558,3 +558,102 @@ export function Sparkline({history,width=320,height=60,theme}) {
     </svg>
   );
 }
+// ── PinManager component ──────────────────────────────────────────────────────
+// Lets a logged-in player set, change, or remove their PIN from Settings.
+export function PinManager({ player, hasPIN, theme, onSave }) {
+  const S = makeS(theme);
+  const z = theme.zoom || 1.0;
+  const [mode, setMode] = useState(null); // null | "set" | "change" | "remove"
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [err, setErr] = useState("");
+  const [success, setSuccess] = useState("");
+
+  function reset() { setMode(null); setCurrentPin(""); setNewPin(""); setConfirmPin(""); setErr(""); }
+
+  function submit() {
+    // If player already has a PIN, verify current first
+    if (hasPIN && mode !== "set") {
+      if (currentPin !== player?.pin) { setErr(t("incorrect_pin")); return; }
+    }
+    if (mode === "remove") {
+      onSave(null);
+      setSuccess(t("pin_removed") || "PIN removed.");
+      reset(); return;
+    }
+    if (newPin.length !== 4) { setErr(t("pin_must_be_4") || "PIN must be 4 digits."); return; }
+    if (newPin !== confirmPin) { setErr(t("pin_mismatch") || "PINs don't match."); return; }
+    onSave(newPin);
+    setSuccess(hasPIN ? (t("pin_updated") || "PIN updated.") : (t("pin_set") || "PIN set successfully."));
+    reset();
+  }
+
+  return (
+    <div style={{marginTop:14*z, padding:12*z, background:theme.bg, borderRadius:10*z, border:`1px solid ${theme.border}`}}>
+      <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: mode ? 10*z : 0}}>
+        <div>
+          <div style={{fontSize:12*z, fontWeight:700, color:theme.text}}>
+            🔒 {t("pin_sec") || "Account PIN"}
+          </div>
+          <div style={{fontSize:10*z, color:theme.sub, marginTop:2*z}}>
+            {hasPIN ? (t("pin_is_set") || "PIN is set — protects your account") : (t("pin_not_set") || "No PIN — anyone can log in as you")}
+          </div>
+        </div>
+        {!mode && (
+          <div style={{display:"flex", gap:6*z}}>
+            <button style={{...S.btnPrimary, marginTop:0, padding:`${4*z}px ${10*z}px`, fontSize:11*z}}
+              onClick={() => { setMode(hasPIN ? "change" : "set"); setErr(""); setSuccess(""); }}>
+              {hasPIN ? (t("change_pin") || "Change") : (t("set_pin") || "Set PIN")}
+            </button>
+            {hasPIN && (
+              <button style={{...S.btnDanger, marginTop:0, padding:`${4*z}px ${10*z}px`, fontSize:11*z}}
+                onClick={() => { setMode("remove"); setErr(""); setSuccess(""); }}>
+                {t("remove_pin") || "Remove"}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {success && <div style={{fontSize:11*z, color:"#50c878", marginBottom:8*z}}>✓ {success}</div>}
+
+      {mode && (
+        <div style={{display:"flex", flexDirection:"column", gap:8*z}}>
+          {hasPIN && (
+            <>
+              <label style={S.label}>{t("current_pin") || "Current PIN"}</label>
+              <input style={{...S.input, textAlign:"center", letterSpacing:"6px"}}
+                type="password" maxLength="4" placeholder="••••" value={currentPin}
+                onChange={e => { setCurrentPin(e.target.value.replace(/\D/g,'')); setErr(""); }} />
+            </>
+          )}
+          {mode !== "remove" && (
+            <>
+              <label style={S.label}>{t("new_pin") || "New PIN (4 digits)"}</label>
+              <input style={{...S.input, textAlign:"center", letterSpacing:"6px"}}
+                type="password" maxLength="4" placeholder="••••" value={newPin}
+                onChange={e => { setNewPin(e.target.value.replace(/\D/g,'')); setErr(""); }} />
+              <label style={S.label}>{t("confirm_pin") || "Confirm PIN"}</label>
+              <input style={{...S.input, textAlign:"center", letterSpacing:"6px"}}
+                type="password" maxLength="4" placeholder="••••" value={confirmPin}
+                onChange={e => { setConfirmPin(e.target.value.replace(/\D/g,'')); setErr(""); }} />
+            </>
+          )}
+          {mode === "remove" && (
+            <div style={{fontSize:11*z, color:"#e05050", textAlign:"center"}}>
+              {t("pin_remove_warning") || "This will remove your PIN. Anyone can log in as you."}
+            </div>
+          )}
+          {err && <Err msg={err} theme={theme} />}
+          <div style={{display:"flex", gap:8*z}}>
+            <button style={{...S.btnSecondary, flex:1, marginTop:0}} onClick={reset}>{t("cancel")}</button>
+            <button style={{...(mode === "remove" ? S.btnDanger : S.btnPrimary), flex:1, marginTop:0}} onClick={submit}>
+              {mode === "remove" ? (t("remove_pin") || "Remove PIN") : t("save_changes")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

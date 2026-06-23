@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { t, APP_MODES, APP_ACCENTS, APP_FONTS, processImage, APP_VERSION, APP_UPDATED, blankState } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, Err, ConfirmInline, Sel } from '../components/Shared.jsx';
+import { Sec, Err, ConfirmInline, Sel, PinManager } from '../components/Shared.jsx';
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../engine";
 
@@ -120,7 +120,28 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
             ]} 
             theme={theme} 
           />
-          
+
+          {/* PIN management — shown when a player is linked */}
+          {user.myPlayerId && (() => {
+            const linkedPlayer = state.players?.find(p => p.id === user.myPlayerId);
+            const hasPIN = !!linkedPlayer?.pin;
+            return (
+              <PinManager
+                player={linkedPlayer}
+                hasPIN={hasPIN}
+                theme={theme}
+                onSave={(newPin) => {
+                  setShared(s => ({
+                    ...s,
+                    players: (s.players||[]).map(p =>
+                      p.id === user.myPlayerId ? { ...p, pin: newPin || null } : p
+                    )
+                  }));
+                }}
+              />
+            );
+          })()}
+
           <div style={{marginTop: 16*z}}>
             <button style={{...S.btnSecondary, width: "100%", borderColor: "#e05050", color: "#e05050"}} onClick={handleLogout}>
               {t("logout_btn")}

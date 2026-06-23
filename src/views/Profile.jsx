@@ -343,8 +343,9 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
         <GoalSection player={p} user={user} setUser={setUser} theme={theme} />
       )}
 
-      {/* SECURITY FIX: Only the owner or an Admin can edit the starting rating */}
-      {(isAdmin || user?.myPlayerId === p.id) && (
+      {/* Starting ratings — admin only. Regular users cannot alter their own ratings
+          as that would allow gaming the system. Admin sets initial DUPR import values. */}
+      {isAdmin && (
         <EditBaseRating player={p} set={set} theme={theme}/>
       )}
 

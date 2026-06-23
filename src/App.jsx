@@ -28,42 +28,113 @@ import { Header, BottomNav } from './components/Navigation.jsx';
 const ADMIN_PASSCODE = "1234";
 
 // --- PIN VERIFICATION GATE ---
-function PinVerification({ player, onVerify, theme }) {
+function PinVerification({ player, onVerify, onCancel, onAdminLogin, theme }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [adminErr, setAdminErr] = useState(false);
   
   if (!player) {
     return <div style={{position:"fixed", inset:0, background:theme.bg, zIndex:9999}} />; 
   }
 
   return (
-    <div style={{position:"fixed", inset:0, background:theme.bg, zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:20*z}}>
-      <div style={{background:theme.card, border:`1px solid ${theme.border}`, padding:24*z, borderRadius:16*z, width:"100%", maxWidth:320*z, textAlign:"center"}}>
-        <h2 style={{color:theme.text, marginTop:0}}>{t("verify_identity")}</h2>
-        <p style={{color:theme.sub, fontSize:14*z}}>{t("verify_desc").replace("{name}", player.name)}</p>
-        <input 
-          style={{...S.input, textAlign:"center", fontSize:24*z, letterSpacing:"8px", marginBottom:20*z}} 
-          type="password" 
-          maxLength="4" 
-          autoFocus 
-          value={pin}
-          onChange={e => {setPin(e.target.value.replace(/\D/g,'')); setError(false);}}
-        />
-        {error && <Err msg={t("incorrect_pin")} theme={theme} />}
-        <button 
-          style={{...S.btnPrimary, width:"100%", padding:"12px 0", marginTop:10*z}} 
-          disabled={pin.length !== 4}
-          onClick={() => { 
-            if (pin === player.pin) {
-              onVerify(pin);
-            } else {
-              setError(true); 
-            }
-          }}>
-          {t("unlock")}
-        </button>
+    <div style={{position:"fixed", inset:0, background:theme.bg, zIndex:9999, display:"flex", flexDirection:"column"}}>
+
+      {/* Top bar with back button */}
+      <div style={{
+        padding:`${14*z}px ${16*z}px`,
+        background:theme.nav,
+        borderBottom:`1px solid ${theme.border}`,
+        display:"flex", alignItems:"center"
+      }}>
+        {onCancel && (
+          <button onClick={onCancel} style={{background:"transparent", border:"none", color:theme.sub, fontSize:16*z, cursor:"pointer", padding:`${4*z}px ${8*z}px`}}>
+            ← {t("cancel")}
+          </button>
+        )}
+        <div style={{flex:1, textAlign:"center", color:theme.text, fontWeight:700, fontSize:16*z}}>
+          {t("verify_identity")}
+        </div>
+        <div style={{width:60*z}} />
+      </div>
+
+      {/* Main content */}
+      <div style={{flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:20*z}}>
+        <div style={{background:theme.card, border:`1px solid ${theme.border}`, padding:24*z, borderRadius:16*z, width:"100%", maxWidth:320*z, textAlign:"center"}}>
+
+          {!showAdminLogin ? (
+            <>
+              <div style={{fontSize:32*z, marginBottom:8*z}}>🔒</div>
+              <p style={{color:theme.sub, fontSize:14*z, marginBottom:16*z}}>
+                {t("verify_desc").replace("{name}", player.name)}
+              </p>
+              <input 
+                style={{...S.input, textAlign:"center", fontSize:24*z, letterSpacing:"8px", marginBottom:8*z}} 
+                type="password" 
+                maxLength="4" 
+                autoFocus 
+                placeholder="••••"
+                value={pin}
+                onChange={e => {setPin(e.target.value.replace(/\D/g,'')); setError(false);}}
+                onKeyDown={e => { if (e.key === "Enter" && pin.length === 4 && pin === player.pin) onVerify(pin); }}
+              />
+              {error && <Err msg={t("incorrect_pin")} theme={theme} />}
+              <button 
+                style={{...S.btnPrimary, width:"100%", padding:"12px 0", marginTop:10*z}} 
+                disabled={pin.length !== 4}
+                onClick={() => { 
+                  if (pin === player.pin) { onVerify(pin); }
+                  else { setError(true); setPin(""); }
+                }}>
+                {t("unlock")}
+              </button>
+
+              {/* Admin login link */}
+              {onAdminLogin && (
+                <button
+                  onClick={() => { setShowAdminLogin(true); setPin(""); setError(false); }}
+                  style={{background:"transparent", border:"none", color:theme.sub, fontSize:11*z, cursor:"pointer", marginTop:16*z, textDecoration:"underline"}}>
+                  {t("admin_login")}
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <div style={{fontSize:32*z, marginBottom:8*z}}>🛡️</div>
+              <p style={{color:theme.sub, fontSize:14*z, marginBottom:16*z}}>
+                {t("admin_pin_prompt") || "Enter Admin PIN to continue"}
+              </p>
+              <input
+                style={{...S.input, textAlign:"center", fontSize:24*z, letterSpacing:"8px", marginBottom:8*z}}
+                type="password"
+                autoFocus
+                placeholder="••••"
+                value={adminPin}
+                onChange={e => { setAdminPin(e.target.value); setAdminErr(false); }}
+                onKeyDown={e => { if (e.key === "Enter") document.getElementById("adminVerifyBtn")?.click(); }}
+              />
+              {adminErr && <Err msg={t("incorrect_pin")} theme={theme} />}
+              <button
+                id="adminVerifyBtn"
+                style={{...S.btnPrimary, width:"100%", padding:"12px 0", marginTop:10*z}}
+                onClick={() => {
+                  if (onAdminLogin(adminPin)) { /* success handled by caller */ }
+                  else { setAdminErr(true); setAdminPin(""); }
+                }}>
+                {t("admin_login")}
+              </button>
+              <button
+                onClick={() => { setShowAdminLogin(false); setAdminPin(""); setAdminErr(false); }}
+                style={{background:"transparent", border:"none", color:theme.sub, fontSize:11*z, cursor:"pointer", marginTop:12*z, textDecoration:"underline"}}>
+                ← {t("back") || "Back"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -81,11 +152,11 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
   const sortedPlayers = [...players].sort((a,b) => a.name.localeCompare(b.name));
 
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:20*z}}>
-      <div style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:16*z, padding:24*z, width:"100%", maxWidth:400*z, boxShadow:"0 10px 30px rgba(0,0,0,0.5)", position: "relative"}}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:9999, overflowY:"auto", padding:`${20*z}px ${16*z}px`}}>
+      <div style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:16*z, padding:24*z, width:"100%", maxWidth:400*z, margin:"0 auto", boxShadow:"0 10px 30px rgba(0,0,0,0.5)", position:"relative"}}>
         
-        {/* Language Toggle in Top Right */}
-        <div style={{position:"absolute", top: 16*z, right: 16*z}}>
+        {/* Top row: Language + Zoom controls */}
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z}}>
           <select 
             style={{background:"transparent", border:"none", color:theme.sub, fontSize:13*z, cursor:"pointer", outline:"none"}}
             value={user.langId || "en"}
@@ -95,6 +166,22 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
             <option value="zh_tw">繁體中文</option>
             <option value="zh_cn">简体中文</option>
           </select>
+          {/* Zoom adjuster — especially useful when screen is too large */}
+          <div style={{display:"flex", alignItems:"center", gap:6*z}}>
+            <span style={{fontSize:10*z, color:theme.sub}}>Aa</span>
+            {[0.85, 1.0, 1.15].map(zv => (
+              <button key={zv} onClick={() => setUser({zoomLevel: zv})}
+                style={{
+                  padding:`${2*z}px ${7*z}px`, borderRadius:6*z, fontSize:11*z,
+                  border:`1px solid ${Math.abs((user.zoomLevel||1) - zv) < 0.01 ? theme.accent : theme.border}`,
+                  background: Math.abs((user.zoomLevel||1) - zv) < 0.01 ? theme.accent+"22" : "transparent",
+                  color: Math.abs((user.zoomLevel||1) - zv) < 0.01 ? theme.accent : theme.sub,
+                  cursor:"pointer", fontWeight: Math.abs((user.zoomLevel||1) - zv) < 0.01 ? 700 : 400
+                }}>
+                {zv === 0.85 ? "S" : zv === 1.0 ? "M" : "L"}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div style={{textAlign:"center", marginBottom:20*z, marginTop: 12*z}}>
@@ -116,20 +203,28 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
           <div style={{marginBottom: 20*z}}>
             <Sel 
               value={selectedId} 
-              onChange={(val) => { setSelectedId(val); setError(false); }} 
+              onChange={(val) => { setSelectedId(val); setError(false); setPin(""); }} 
               opts={sortedPlayers.map(p => ({ value: p.id, label: p.name }))} 
               placeholder={t("select_name_placeholder")} 
               theme={theme} 
             />
-            <input 
-              style={{...S.input, marginTop:10*z}} 
-              type="password" 
-              maxLength="4" 
-              placeholder={t("pin_placeholder")} 
-              value={pin}
-              onChange={e=>{setPin(e.target.value.replace(/\D/g,'')); setError(false);}}
-            />
-            {error && <div style={{marginTop: 10*z}}><Err msg={t("invalid_pin_msg")} theme={theme} /></div>}
+            {selectedId && players.find(p => p.id === selectedId)?.pin ? (
+              <>
+                <input 
+                  style={{...S.input, marginTop:10*z}} 
+                  type="password" 
+                  maxLength="4" 
+                  placeholder={t("pin_placeholder")} 
+                  value={pin}
+                  onChange={e=>{setPin(e.target.value.replace(/\D/g,'')); setError(false);}}
+                />
+                {error && <div style={{marginTop: 10*z}}><Err msg={t("invalid_pin_msg")} theme={theme} /></div>}
+              </>
+            ) : selectedId ? (
+              <div style={{marginTop:10*z, fontSize:11*z, color:"#50c878", textAlign:"center"}}>
+                ✓ {t("no_pin_required") || "No PIN required — tap Enter to continue"}
+              </div>
+            ) : null}
           </div>
         ) : mode === "admin" ? (
           <div style={{marginBottom: 20*z}}>
@@ -150,11 +245,15 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
 
         <button 
           style={{...S.btnPrimary, width:"100%", padding:"12px 0", fontSize:15*z}} 
-          disabled={(mode==="select" && (!selectedId || pin.length !== 4)) || (mode==="admin" && !pin)}
+          disabled={(mode==="select" && (!selectedId || (players.find(p=>p.id===selectedId)?.pin && pin.length !== 4))) || (mode==="admin" && !pin)}
           onClick={() => {
             if (mode === "select") {
               const p = players.find(x => x.id === selectedId);
-              if (p && p.pin && p.pin === pin) {
+              if (!p) return;
+              if (!p.pin) {
+                // No PIN set — log in directly
+                onSelect(selectedId, "");
+              } else if (p.pin === pin) {
                 onSelect(selectedId, pin);
               } else {
                 setError(true);
@@ -256,7 +355,7 @@ export default function App() {
     if (!user.myPlayerId) return false;
     const player = state.players?.find(p => p.id === user.myPlayerId);
     if (!player) return false;
-    if (!player.pin) return false;
+    if (!player.pin) return true; // no PIN set = no barrier, auto-verified
     return user.verifiedHash === hashPin(user.myPlayerId, player.pin);
   }, [user, state.players]);
 
@@ -375,7 +474,15 @@ export default function App() {
         {(!user.isAdmin && user.myPlayerId && !isCurrentlyVerified) && (
            <PinVerification 
              player={stats.find(p => p.id === user.myPlayerId)} 
-             onVerify={(pin) => setUserSettings({ verifiedHash: hashPin(user.myPlayerId, pin) })} 
+             onVerify={(pin) => setUserSettings({ verifiedHash: hashPin(user.myPlayerId, pin) })}
+             onCancel={() => setUserSettings({ myPlayerId: "", verifiedHash: "" })}
+             onAdminLogin={(pin) => {
+               if (pin === state.adminPass) {
+                 setUserSettings({ isAdmin: true, myPlayerId: "", verifiedHash: "", pendingAutoLink: false });
+                 return true;
+               }
+               return false;
+             }}
              theme={theme} 
            />
         )}

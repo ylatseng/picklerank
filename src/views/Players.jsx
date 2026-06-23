@@ -133,9 +133,20 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
   function saveEdit(id){
     const tName=editName.trim();
     if(!tName) return;
-    set(s=>({...s,players:(s.players||[]).map(p=>p.id===id?{
-        ...p, name:tName, ratingSingles: parseFloat(editSR)||3, ratingDoubles: parseFloat(editDR)||3, avatar: editAvatar, notes: editNotes.trim(), pin: editPIN
-    }:p)}));
+    set(s=>({...s,players:(s.players||[]).map(p=>{
+      if(p.id!==id) return p;
+      // Everyone can edit name, avatar, notes. Only admin can change ratings + PIN.
+      const base = { ...p, name:tName, avatar: editAvatar, notes: editNotes.trim() };
+      if (isAdmin) {
+        return { ...base,
+          ratingSingles: parseFloat(editSR) || p.ratingSingles || 3,
+          ratingDoubles: parseFloat(editDR) || p.ratingDoubles || 3,
+          pin: editPIN
+        };
+      }
+      // Non-admin: preserve existing ratings and PIN untouched
+      return base;
+    })}));
     setEditingId(null);
   }
 
@@ -270,11 +281,24 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                       </div>
                     </div>
 
-                    {/* EDIT RATINGS */}
-                    <div style={{display:"flex", gap:10*z}}>
-                       <div style={{flex:1}}><label style={S.label}>{t("singles_rating")}</label><input style={S.input} type="number" value={editSR} onChange={e=>setEditSR(e.target.value)}/></div>
-                       <div style={{flex:1}}><label style={S.label}>{t("doubles_rating")}</label><input style={S.input} type="number" value={editDR} onChange={e=>setEditDR(e.target.value)}/></div>
-                    </div>
+                    {/* EDIT RATINGS — admin only. Regular users see read-only values. */}
+                    {isAdmin ? (
+                      <div style={{display:"flex", gap:10*z}}>
+                         <div style={{flex:1}}><label style={S.label}>{t("singles_rating")}</label><input style={S.input} type="number" value={editSR} onChange={e=>setEditSR(e.target.value)}/></div>
+                         <div style={{flex:1}}><label style={S.label}>{t("doubles_rating")}</label><input style={S.input} type="number" value={editDR} onChange={e=>setEditDR(e.target.value)}/></div>
+                      </div>
+                    ) : (
+                      <div style={{display:"flex", gap:10*z}}>
+                        <div style={{flex:1}}>
+                          <label style={S.label}>{t("singles_rating")}</label>
+                          <div style={{...S.input, opacity:0.6, display:"flex", alignItems:"center"}}>{(p.ratingSingles||3).toFixed(3)} 🔒</div>
+                        </div>
+                        <div style={{flex:1}}>
+                          <label style={S.label}>{t("doubles_rating")}</label>
+                          <div style={{...S.input, opacity:0.6, display:"flex", alignItems:"center"}}>{(p.ratingDoubles||3).toFixed(3)} 🔒</div>
+                        </div>
+                      </div>
+                    )}
 
                     <div style={{display:"flex", gap:8*z, justifyContent:"flex-end", marginTop:10*z}}>
                       <button style={S.btnSecondary} onClick={()=>setEditingId(null)}>{t("cancel")}</button>
