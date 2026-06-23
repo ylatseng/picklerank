@@ -17,7 +17,32 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
   const [newPass, setNewPass] = useState("");
   const [adminErr, setAdminErr] = useState("");
 
-  // Helper for completely logging out the device
+  // Resolving the correct active settings to display in the dropdowns
+  const pref = (user.myPlayerId && user.preferences) ? user.preferences[user.myPlayerId] : {};
+  const activeLangId = pref?.langId || user.langId || "en";
+  const activeModeId = pref?.modeId || user.modeId || "sky";
+  const activeAccentId = pref?.accentId || user.accentId || "green";
+  const activeFontId = pref?.fontId || user.fontId || "heiti";
+  const activeZoomLevel = pref?.zoomLevel || user.zoomLevel || 1.0;
+
+  // Helper to save setting exclusively to the logged-in user, or to the device if Guest/Admin
+  const updateAppearance = (key, val) => {
+    if (user.myPlayerId) {
+      setUser(prev => ({
+        ...prev,
+        preferences: {
+          ...(prev.preferences || {}),
+          [user.myPlayerId]: {
+            ...((prev.preferences || {})[user.myPlayerId] || {}),
+            [key]: val
+          }
+        }
+      }));
+    } else {
+      setUser({ [key]: val });
+    }
+  };
+
   const handleLogout = () => {
     setUser({ 
       myPlayerId: "", 
@@ -177,7 +202,7 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
           <div style={{display:"flex", alignItems:"center", gap:10*z}}>
             <label style={{...S.label, margin:0, flex:1}}>{t("lang_sec")}</label>
             <div style={{flex:2}}>
-              <Sel value={user.langId || "en"} onChange={v=>setUser({langId: v})} opts={[
+              <Sel value={activeLangId} onChange={v=>updateAppearance('langId', v)} opts={[
                 { value: "en", label: "English" }, 
                 { value: "zh_tw", label: "繁體中文" }, 
                 { value: "zh_cn", label: "简体中文" }
@@ -188,21 +213,21 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
           <div style={{display:"flex", alignItems:"center", gap:10*z}}>
             <label style={{...S.label, margin:0, flex:1}}>{t("bg_mode_sec")}</label>
             <div style={{flex:2}}>
-              <Sel value={user.modeId || "dark"} onChange={v=>setUser({modeId: v})} opts={APP_MODES.map(m=>({value:m.id, label:m.label}))} theme={theme} />
+              <Sel value={activeModeId} onChange={v=>updateAppearance('modeId', v)} opts={APP_MODES.map(m=>({value:m.id, label:m.label}))} theme={theme} />
             </div>
           </div>
 
           <div style={{display:"flex", alignItems:"center", gap:10*z}}>
             <label style={{...S.label, margin:0, flex:1}}>{t("typography_sec")}</label>
             <div style={{flex:2}}>
-              <Sel value={user.fontId || "sans"} onChange={v=>setUser({fontId: v})} opts={APP_FONTS.map(f=>({value:f.id, label:f.label}))} theme={theme} />
+              <Sel value={activeFontId} onChange={v=>updateAppearance('fontId', v)} opts={APP_FONTS.map(f=>({value:f.id, label:f.label}))} theme={theme} />
             </div>
           </div>
 
           <div style={{display:"flex", alignItems:"center", gap:10*z}}>
             <label style={{...S.label, margin:0, flex:1}}>{t("display_size_sec")}</label>
             <div style={{flex:2}}>
-              <Sel value={user.zoomLevel || 1.0} onChange={v=>setUser({zoomLevel: parseFloat(v)})} opts={[
+              <Sel value={activeZoomLevel} onChange={v=>updateAppearance('zoomLevel', parseFloat(v))} opts={[
                 { value: 0.85, label: t("size_compact") }, 
                 { value: 1.0, label: t("size_standard") }, 
                 { value: 1.15, label: t("size_large") }
@@ -214,9 +239,9 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
             <label style={{...S.label, marginBottom:8*z}}>{t("accent_style_sec")}</label>
             <div style={{display:"flex", flexWrap:"wrap", gap:12*z, marginTop: 4*z}}>
               {APP_ACCENTS.map(a=>{
-                const active = (user.accentId || "green") === a.id;
+                const active = activeAccentId === a.id;
                 return (
-                  <button key={a.id} onClick={()=>setUser({accentId:a.id})} title={a.label}
+                  <button key={a.id} onClick={()=>updateAppearance('accentId', a.id)} title={a.label}
                     style={{
                       width: 28*z, height: 28*z, borderRadius: "50%", background: a.hex, padding: 0, cursor: "pointer",
                       border: active ? `2px solid ${theme.bg}` : "none", 

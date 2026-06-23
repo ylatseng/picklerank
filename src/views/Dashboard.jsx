@@ -73,7 +73,9 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
 
   const motd = useMemo(() => computeMatchOfDay(matches, rawStats || players), [matches, players]);
   const potm = useMemo(() => computePlayerOfMonth(rawStats || players, matches), [players, matches]);
-  const getName = id => (rawStats || players).find(p => p.id === id)?.name ?? '?';
+
+  // Fall back to English plural if the translation key returns raw
+  const potmTitle = t("potm_sec") === "potm_sec" ? "Players of the Month" : t("potm_sec");
 
   return (
     <div style={S.view}>
@@ -112,26 +114,67 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
         </div>
       )}
 
-      {/* ── PLAYER OF THE MONTH ───────────────────────────────────────── */}
+      {/* ── PLAYERS OF THE MONTH (MODERN PODIUM) ──────────────────────── */}
       {potm.length > 0 && (
         <div style={{marginBottom:16*z}}>
-          <div style={{fontSize:11*z, fontWeight:700, color:theme.sub, marginBottom:8*z}}>{t("potm_sec")}</div>
-          <div style={{fontSize:10*z, color:theme.sub, marginBottom:8*z}}>{t("potm_desc")}</div>
-          <div style={{display:"flex", gap:6*z, flexWrap:"wrap"}}>
-            {potm.map((p, i) => (
-              <div key={p.id} onClick={() => nav("profile", {profileId: p.id})} style={{
-                flex:"1 1 28%", background:theme.card, border:`1px solid ${theme.border}`,
-                borderRadius:10*z, padding:`${8*z}px ${10*z}px`, cursor:"pointer",
-                borderLeft: i === 0 ? `3px solid #f0c040` : undefined
-              }}>
-                {i === 0 && <div style={{fontSize:9*z, color:"#f0c040", fontWeight:800, marginBottom:2*z}}>🥇 #1</div>}
-                <div style={{fontWeight:700, fontSize:12*z, color:theme.text}}>{p.name}</div>
-                <div style={{fontSize:11*z, fontWeight:700, color: p.gain >= 0 ? "#50c878" : "#e05050", marginTop:2*z}}>
-                  {p.gain >= 0 ? "+" : ""}{p.gain.toFixed(3)}
-                </div>
-                <div style={{fontSize:9*z, color:theme.sub}}>{p.played}G · {p.wins}W</div>
+          <div style={{display:"flex", alignItems:"center", gap: 8*z, marginBottom:12*z}}>
+            <span style={{fontSize:18*z}}>📈</span>
+            <div>
+              <div style={{fontSize:14*z, fontWeight:800, color:theme.text}}>
+                {potmTitle}
               </div>
-            ))}
+              <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
+                {t("potm_desc")}
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ display:"flex", gap:8*z }}>
+            {potm.slice(0, 3).map((p, i) => {
+              const medals = ["🥇", "🥈", "🥉"];
+              const bgColors = [
+                "rgba(255, 215, 0, 0.15)",   // Brighter Gold
+                "rgba(200, 200, 200, 0.15)", // Brighter Silver
+                "rgba(205, 127, 50, 0.15)"   // Brighter Bronze
+              ];
+              const borderColors = [
+                "rgba(255, 215, 0, 0.5)",
+                "rgba(200, 200, 200, 0.5)",
+                "rgba(205, 127, 50, 0.5)"
+              ];
+              const shadowColors = [
+                "rgba(255, 215, 0, 0.1)",
+                "rgba(200, 200, 200, 0.1)",
+                "rgba(205, 127, 50, 0.1)"
+              ];
+
+              return (
+                <div key={p.id} onClick={() => nav("profile", {profileId: p.id})} style={{
+                  flex: 1, 
+                  background: bgColors[i] || theme.card, 
+                  border: `1px solid ${borderColors[i] || theme.border}`,
+                  borderRadius: 12*z, 
+                  padding: `${12*z}px ${8*z}px`, 
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  textAlign: "center",
+                  boxShadow: `0 4px 12px ${shadowColors[i] || "transparent"}`
+                }}>
+                  <div style={{fontSize:16*z, marginBottom:4*z}}>{medals[i]}</div>
+                  <div style={{fontWeight:800, fontSize:13*z, color:theme.text, width:"100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
+                    {p.name}
+                  </div>
+                  <div style={{fontSize:14*z, fontWeight:800, color: p.gain >= 0 ? "#50c878" : "#e05050", marginTop:6*z}}>
+                    {p.gain >= 0 ? "+" : ""}{p.gain.toFixed(3)}
+                  </div>
+                  <div style={{fontSize:10*z, color:theme.sub, marginTop:4*z, fontWeight:600}}>
+                    {p.played}G · {p.wins}W
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -139,7 +182,10 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
       {/* Unified Hub Toggle */}
       <div style={{display:"flex", gap:8*z, marginBottom:16*z}}>
         <button style={{...S.btnSecondary, flex:1, marginTop:0, ...(view==="rank"?S.toggleOn:{})}} onClick={() => setView("rank")}>🏆 {t("rankings")}</button>
-        <button style={{...S.btnSecondary, flex:1, marginTop:0, ...(view==="roster"?S.toggleOn:{})}} onClick={() => setView("roster")}>👤 {t("roster")}</button>
+        <button style={{...S.btnSecondary, flex:1, marginTop:0, ...(view==="roster"?S.toggleOn:{})}} onClick={() => setView("roster")}>
+          <span style={{ filter: theme.invert ? "drop-shadow(0px 0px 2px rgba(255,255,255,0.4)) brightness(1.3)" : "none", marginRight: 4*z }}>👥</span> 
+          {t("roster")}
+        </button>
       </div>
 
       {view === "rank" ? (

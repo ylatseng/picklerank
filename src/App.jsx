@@ -298,21 +298,24 @@ export default function App() {
     let parsed = saved ? JSON.parse(saved) : {
       langId: "en",
       isAdmin: false,
-      modeId: "dark",
+      modeId: "sky",
       accentId: "green",
-      fontId: "sans",
+      fontId: "heiti",
       zoomLevel: 1.0,
       myPlayerId: "", 
       pendingAutoLink: false,
       verifiedHash: "",
-      pinAuthV1: true 
+      pinAuthV1: true,
+      preferences: {} // Stores appearance settings keyed by myPlayerId
     };
+    if (!parsed.preferences) parsed.preferences = {};
     if (!parsed.pinAuthV1) {
       parsed.myPlayerId = "";
       parsed.verifiedHash = "";
       parsed.isAdmin = false;
       parsed.pendingAutoLink = false;
       parsed.pinAuthV1 = true;
+      parsed.preferences = {};
       localStorage.setItem("user_settings", JSON.stringify(parsed));
     }
     return parsed;
@@ -400,12 +403,22 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user.myPlayerId]);
 
-  setLang(user.langId); 
+  // ── Compute Active Appearance Settings ─────────────────────────────────────
+  // We resolve the theme variables using the currently logged in player's dictionary.
+  // If no one is logged in, or the player hasn't saved preferences yet, it falls back to the device defaults.
+  const pref = (user.myPlayerId && user.preferences) ? user.preferences[user.myPlayerId] : {};
+  const activeLangId = pref?.langId || user.langId || "en";
+  const activeModeId = pref?.modeId || user.modeId || "sky";
+  const activeAccentId = pref?.accentId || user.accentId || "green";
+  const activeFontId = pref?.fontId || user.fontId || "heiti";
+  const activeZoomLevel = pref?.zoomLevel || user.zoomLevel || 1.0;
+
+  setLang(activeLangId); 
   
-  const activeMode = APP_MODES.find(m => m.id === user.modeId) || APP_MODES[0];
-  const activeAccent = APP_ACCENTS.find(a => a.id === user.accentId) || APP_ACCENTS[0];
-  const activeFont = APP_FONTS.find(f => f.id === user.fontId) || APP_FONTS[0];
-  const theme = { ...activeMode, accent: activeAccent.hex, zoom: user.zoomLevel, logoText: state.logoText, logoData: state.logoData, format: state.leaderboardFormat };
+  const activeMode = APP_MODES.find(m => m.id === activeModeId) || APP_MODES[0];
+  const activeAccent = APP_ACCENTS.find(a => a.id === activeAccentId) || APP_ACCENTS[0];
+  const activeFont = APP_FONTS.find(f => f.id === activeFontId) || APP_FONTS[0];
+  const theme = { ...activeMode, accent: activeAccent.hex, zoom: activeZoomLevel, logoText: state.logoText, logoData: state.logoData, format: state.leaderboardFormat };
 
   useEffect(() => { 
     document.documentElement.style.background = theme.bg;

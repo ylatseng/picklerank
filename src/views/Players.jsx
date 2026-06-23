@@ -35,10 +35,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
   const editFileInputRef = useRef(null); 
   
   // ── Starred players: per-player, keyed by myPlayerId ─────────────────────
-  // Stars must be indexed by the logged-in player's ID (not just per-device),
-  // because multiple people share the same phone. If Allen logs in as Lily
-  // and Lily stars Michael, that should be stored under Lily's ID — not bleed
-  // into Allen's list when he switches back.
   const starKey = user?.isAdmin ? '__admin__' : (user?.myPlayerId || '__guest__');
   const favoredPlayerIds = (user?.starredPlayers || {})[starKey] || [];
 
@@ -80,17 +76,12 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
     
     setName(""); setSinglesRating(""); setDoublesRating(""); setAvatarData(null); setNotes(""); setPin(""); setErr("");
     
-    // Automatically close the accordion after successfully adding a player
     if (!user?.pendingAutoLink) {
       setShowAdd(false);
     }
   }
 
   function moveToTrash(player) {
-    // Only keep raw player fields in trash — not computed stats (gamesPlayed, wins, etc.)
-    // that are re-derived on every replay. The critical field is `id`: because every
-    // match stores player IDs in its teams array, restoring the same id automatically
-    // reconnects ALL match history, ratings, and stats.
     const rawPlayer = {
       id:            player.id,
       name:          player.name,
@@ -108,7 +99,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
       trash: [...(s.trash || []), { id: player.id, type: 'player', data: rawPlayer, deletedAt: Date.now() }],
       players: s.players.filter(p => p.id !== player.id)
     }));
-    // Remove from this user's private star list (keyed by player ID)
     if (setUser) setUser(prev => {
       const key = prev?.isAdmin ? '__admin__' : (prev?.myPlayerId || '__guest__');
       const starred = prev?.starredPlayers || {};
@@ -135,7 +125,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
     if(!tName) return;
     set(s=>({...s,players:(s.players||[]).map(p=>{
       if(p.id!==id) return p;
-      // Everyone can edit name, avatar, notes. Only admin can change ratings + PIN.
       const base = { ...p, name:tName, avatar: editAvatar, notes: editNotes.trim() };
       if (isAdmin) {
         return { ...base,
@@ -144,7 +133,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
           pin: editPIN
         };
       }
-      // Non-admin: preserve existing ratings and PIN untouched
       return base;
     })}));
     setEditingId(null);
@@ -167,7 +155,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
   return (
     <div style={S.view}>
       
-      {/* Streamlined Accordion Toggle */}
       {!showAdd ? (
         <button 
           style={{...S.btnSecondary, width:"100%", marginBottom: 16*z, padding: "12px 0", fontWeight: "bold", border: `1px dashed ${theme.accent}`, color: theme.accent}} 
@@ -189,7 +176,12 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
           <div style={{display:"flex", gap:12*z, marginBottom:10*z}}>
             <div style={{display:"flex", flexDirection:"column", alignItems:"center", gap:6*z, width: 60*z}}>
                {avatarData ? <img src={avatarData} style={{width:50*z, height:50*z, borderRadius:"50%", objectFit:"cover"}} /> : <div style={{width:50*z, height:50*z, borderRadius:"50%", background:theme.nav, border:`1px dashed ${theme.sub}`, display:"flex", alignItems:"center", justifyContent:"center", color:theme.sub}}>📷</div>}
-               <button style={{...S.btnSecondary, padding:"2px 6px", fontSize:10*z, marginTop:0}} onClick={() => fileInputRef.current.click()}>{t("photo")}</button>
+               <div style={{display:"flex", gap:4*z}}>
+                 <button style={{...S.btnSecondary, padding:"2px 6px", fontSize:10*z, marginTop:0}} onClick={() => fileInputRef.current.click()}>{t("change_photo")}</button>
+                 {avatarData && (
+                   <button style={{...S.btnDanger, padding:"2px 6px", fontSize:10*z, marginTop:0}} onClick={() => setAvatarData(null)}>✕</button>
+                 )}
+               </div>
                <input type="file" accept="image/*" ref={fileInputRef} className="file-input-hidden" onChange={handleFileAdd} />
             </div>
             <div style={{flex:1}}>
@@ -219,7 +211,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
         </Sec>
       )}
       
-      {/* Roster Section - Hidden during user setup flow */}
       {!user?.pendingAutoLink && (
         <Sec title={`${t("roster_lbl")} (${players.length})`} theme={theme}>
           
@@ -259,11 +250,15 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                 {editingId===p.id ? (
                   <div style={{padding:"10px 0",borderBottom:`1px solid ${theme.border}`}}>
                     
-                    {/* EDIT PROFILE PICTURE AND NAME */}
                     <div style={{display:"flex", gap:12*z, marginBottom:10*z}}>
                       <div style={{display:"flex", flexDirection:"column", alignItems:"center", gap:6*z, width: 60*z}}>
                          {editAvatar ? <img src={editAvatar} style={{width:50*z, height:50*z, borderRadius:"50%", objectFit:"cover"}} /> : <div style={{width:50*z, height:50*z, borderRadius:"50%", background:theme.nav, border:`1px dashed ${theme.sub}`, display:"flex", alignItems:"center", justifyContent:"center", color:theme.sub}}>📷</div>}
-                         <button style={{...S.btnSecondary, padding:"2px 6px", fontSize:10*z, marginTop:0}} onClick={() => editFileInputRef.current.click()}>{t("change_photo")}</button>
+                         <div style={{display:"flex", gap:4*z}}>
+                           <button style={{...S.btnSecondary, padding:"2px 6px", fontSize:10*z, marginTop:0}} onClick={() => editFileInputRef.current.click()}>{t("change_photo")}</button>
+                           {editAvatar && (
+                             <button style={{...S.btnDanger, padding:"2px 6px", fontSize:10*z, marginTop:0}} onClick={() => setEditAvatar(null)}>✕</button>
+                           )}
+                         </div>
                          <input type="file" accept="image/*" ref={editFileInputRef} className="file-input-hidden" onChange={handleEditFileAdd} />
                       </div>
                       <div style={{flex:1}}>
@@ -281,7 +276,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                       </div>
                     </div>
 
-                    {/* EDIT RATINGS — admin only. Regular users see read-only values. */}
                     {isAdmin ? (
                       <div style={{display:"flex", gap:10*z}}>
                          <div style={{flex:1}}><label style={S.label}>{t("singles_rating")}</label><input style={S.input} type="number" value={editSR} onChange={e=>setEditSR(e.target.value)}/></div>
@@ -307,7 +301,14 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                   </div>
                 ) : (
                   <div style={{...S.lbRow,cursor:"pointer", display:"flex", alignItems:"center"}} onClick={()=>nav("profile",{profileId:p.id})}>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFavorited(p.id); }} style={{marginRight: 2*z, border:0, background: 'transparent'}}>{favoredPlayerIds.includes(p.id) ? "⭐" : "☆"}</button>
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorited(p.id); }} style={{marginRight: 2*z, border:0, background: 'transparent', cursor: 'pointer'}}>
+                      <span style={{ 
+                        color: favoredPlayerIds.includes(p.id) ? "#f0c040" : theme.sub, 
+                        fontSize: 16*z,
+                        opacity: favoredPlayerIds.includes(p.id) ? 1 : 0.4}}>
+                        ★
+                      </span>
+                    </button>
                     <Avatar name={p.name} url={p.avatar} size={38}/>
                     <div style={S.lbInfo}>
                       <div style={{display:"flex",alignItems:"center",gap:6*z}}>
@@ -315,8 +316,16 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                         {isOnline(p.id) && <span style={{width: 8*z, height: 8*z, borderRadius: "50%", background: "#50c878", boxShadow: "0 0 5px #50c878", display: "inline-block"}} title="Online Now"></span>}
                         {p.duprImported && <span style={{ background: "rgba(64, 160, 224, 0.15)", color: "#40a0e0", padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 800 }}>D</span>}
                         {p.pin && <span style={{fontSize: 10*z}} title="Secured Account">🔒</span>}
+                        {(isAdmin || user?.myPlayerId === p.id) && (
+                          <button 
+                            style={{background: "transparent", border: "none", padding: "0 4px", fontSize: 12*z, cursor: "pointer", opacity: 0.6}} 
+                            onClick={e=>{e.stopPropagation();startEdit(p);}}
+                            title="Edit Profile"
+                          >
+                            ✏️
+                          </button>
+                        )}
                       </div>
-                      {/* FIX 4: Show games played + W/L record directly on the roster card */}
                       <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
                         {(p.gamesPlayed||0)}G · {(p.wins||0)}W {(p.losses||0)}L
                       </div>
@@ -326,18 +335,20 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                         </div>
                       )}
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:8*z}}>
-                      <div style={{display:"flex",flexDirection:"column",gap:4*z,alignItems:"flex-end"}}>
+                    
+                    {/* Fixed Width Right Container for Perfect Alignment */}
+                    <div style={{display:"flex", alignItems:"center", width: 90*z, justifyContent: "flex-end"}}>
+                      <div style={{display:"flex", flexDirection:"column", gap:4*z, alignItems:"flex-end", width: 55*z}}>
                         <span style={{fontSize:10*z, fontWeight:800, color:"#111", background:ratingColor(p.ratingDoubles), borderRadius:4*z, padding:"2px 6px"}}>D: {(p.ratingDoubles||3).toFixed(2)}</span>
                         <span style={{fontSize:10*z, fontWeight:800, color:"#111", background:ratingColor(p.ratingSingles), borderRadius:4*z, padding:"2px 6px"}}>S: {(p.ratingSingles||3).toFixed(2)}</span>
                       </div>
                       
-                      {(isAdmin || user?.myPlayerId === p.id) && (
-                        <button style={{...S.btnSecondary,marginTop:0,padding:"5px 9px",fontSize:12*z}} onClick={e=>{e.stopPropagation();startEdit(p);}}>✏️</button>
-                      )}
-                      
-                      {isAdmin && <button style={S.btnDanger} onClick={e=>{e.stopPropagation();setPendingRemove(p.id);}}>✕</button>}
+                      {/* Fixed width slot for Trash to prevent shifting */}
+                      <div style={{width: 28*z, marginLeft: 6*z, display: "flex", justifyContent: "flex-end"}}>
+                        {isAdmin && <button style={S.btnDanger} onClick={e=>{e.stopPropagation();setPendingRemove(p.id);}}>✕</button>}
+                      </div>
                     </div>
+                    
                   </div>
                 )}
                 {pendingRemove===p.id&&(

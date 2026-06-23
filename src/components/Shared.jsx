@@ -518,7 +518,7 @@ export function ConfirmInline({msg,note,onConfirm,onCancel,danger=false,theme}) 
 export function Sec({title,children,theme}) { const S=makeS(theme); return <div style={S.sec}>{title?<div style={S.secTitle}>{title}</div>:null}{children}</div>; }
 export function Empty({text,onAction,label,theme}) { const S=makeS(theme); const z = theme.zoom || 1.0; return <div style={{color:theme.sub,fontSize:13*z,textAlign:"center",padding:"20px 0",display:"flex",flexDirection:"column",alignItems:"center",gap:10*z}}><div>{text}</div>{onAction&&<button style={S.btnSecondary} onClick={onAction}>{label}</button>}</div>; }
 export function Err({msg, theme}){ const z = theme.zoom || 1.0; return <div style={{color:"#e05050",fontSize:13*z,padding:"8px 12px",background:"rgba(224,80,80,0.1)",border:"1px solid rgba(224,80,80,0.3)",borderRadius:10*z,marginTop:8*z}}>{msg}</div>; }
-export function Sel({opts,value,onChange,placeholder,theme}){ const S=makeS(theme); return <select style={S.select} value={value} onChange={e=>onChange(e.target.value)}><option value="">{placeholder}</option>{(opts||[]).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>; }
+export function Sel({opts,value,onChange,placeholder,theme}){ const S=makeS(theme); return <select style={S.select} value={value} onChange={e=>onChange(e.target.value)}>{placeholder !== undefined && <option value="">{placeholder}</option>}{(opts||[]).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>; }
 
 export function Avatar({name, url, size=36}) {
   const theme = useContext(ThemeCtx);
