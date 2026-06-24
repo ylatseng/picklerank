@@ -300,8 +300,8 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                     </div>
                   </div>
                 ) : (
-                  <div style={{...S.lbRow,cursor:"pointer", display:"flex", alignItems:"center"}} onClick={()=>nav("profile",{profileId:p.id})}>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFavorited(p.id); }} style={{marginRight: 2*z, border:0, background: 'transparent', cursor: 'pointer'}}>
+                  <div style={{...S.lbRow,cursor:"pointer", display:"flex", alignItems:"center", minWidth:0}} onClick={()=>nav("profile",{profileId:p.id})}>
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorited(p.id); }} style={{marginRight: 2*z, border:0, background: 'transparent', cursor: 'pointer', flexShrink:0}}>
                       <span style={{ 
                         color: favoredPlayerIds.includes(p.id) ? "#f0c040" : theme.sub, 
                         fontSize: 16*z,
@@ -309,16 +309,16 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                         ★
                       </span>
                     </button>
-                    <Avatar name={p.name} url={p.avatar} size={38}/>
-                    <div style={S.lbInfo}>
-                      <div style={{display:"flex",alignItems:"center",gap:6*z}}>
-                        <span style={S.lbName}>{p.name}</span>
-                        {isOnline(p.id) && <span style={{width: 8*z, height: 8*z, borderRadius: "50%", background: "#50c878", boxShadow: "0 0 5px #50c878", display: "inline-block"}} title="Online Now"></span>}
-                        {p.duprImported && <span style={{ background: "rgba(64, 160, 224, 0.15)", color: "#40a0e0", padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 800 }}>D</span>}
-                        {p.pin && <span style={{fontSize: 10*z}} title="Secured Account">🔒</span>}
+                    <div style={{flexShrink:0}}><Avatar name={p.name} url={p.avatar} size={38}/></div>
+                    <div style={{...S.lbInfo, minWidth:0, overflow:"hidden"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6*z, flexWrap:"wrap"}}>
+                        <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%"}}>{p.name}</span>
+                        {isOnline(p.id) && <span style={{width: 8*z, height: 8*z, borderRadius: "50%", background: "#50c878", boxShadow: "0 0 5px #50c878", display: "inline-block", flexShrink:0}} title="Online Now"></span>}
+                        {p.duprImported && <span style={{ background: "rgba(64, 160, 224, 0.15)", color: "#40a0e0", padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 800, flexShrink:0 }}>D</span>}
+                        {p.pin && <span style={{fontSize: 10*z, flexShrink:0}} title="Secured Account">🔒</span>}
                         {(isAdmin || user?.myPlayerId === p.id) && (
                           <button 
-                            style={{background: "transparent", border: "none", padding: "0 4px", fontSize: 12*z, cursor: "pointer", opacity: 0.6}} 
+                            style={{background: "transparent", border: "none", padding: "0 4px", fontSize: 12*z, cursor: "pointer", opacity: 0.6, flexShrink:0}} 
                             onClick={e=>{e.stopPropagation();startEdit(p);}}
                             title="Edit Profile"
                           >
@@ -330,23 +330,25 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                         {(p.gamesPlayed||0)}G · {(p.wins||0)}W {(p.losses||0)}L
                       </div>
                       {p.notes && (
-                        <div style={{fontSize: 11*z, color: theme.sub, marginTop: 4*z, display: 'flex', alignItems: 'center', gap: 4*z}}>
-                          <span>📝</span> <span style={{fontStyle: 'italic'}}>{p.notes}</span>
+                        <div style={{fontSize: 11*z, color: theme.sub, marginTop: 4*z, display: 'flex', alignItems: 'center', gap: 4*z, overflow:"hidden"}}>
+                          <span style={{flexShrink:0}}>📝</span> <span style={{fontStyle: 'italic', overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{p.notes}</span>
                         </div>
                       )}
                     </div>
                     
-                    {/* Fixed Width Right Container for Perfect Alignment */}
-                    <div style={{display:"flex", alignItems:"center", width: 90*z, justifyContent: "flex-end"}}>
-                      <div style={{display:"flex", flexDirection:"column", gap:4*z, alignItems:"flex-end", width: 55*z}}>
-                        <span style={{fontSize:10*z, fontWeight:800, color:"#111", background:ratingColor(p.ratingDoubles), borderRadius:4*z, padding:"2px 6px"}}>D: {(p.ratingDoubles||3).toFixed(2)}</span>
-                        <span style={{fontSize:10*z, fontWeight:800, color:"#111", background:ratingColor(p.ratingSingles), borderRadius:4*z, padding:"2px 6px"}}>S: {(p.ratingSingles||3).toFixed(2)}</span>
+                    {/* Right column — never shrinks, always full size */}
+                    <div style={{display:"flex", alignItems:"center", justifyContent: "flex-end", flexShrink:0, marginLeft: 8*z}}>
+                      <div style={{display:"flex", flexDirection:"column", gap:4*z, alignItems:"flex-end"}}>
+                        <span style={{fontSize:10*z, fontWeight:800, color:"#111", background:ratingColor(p.ratingDoubles), borderRadius:4*z, padding:"2px 6px", whiteSpace:"nowrap"}}>D: {(p.ratingDoubles||3).toFixed(2)}</span>
+                        <span style={{fontSize:10*z, fontWeight:800, color:"#111", background:ratingColor(p.ratingSingles), borderRadius:4*z, padding:"2px 6px", whiteSpace:"nowrap"}}>S: {(p.ratingSingles||3).toFixed(2)}</span>
                       </div>
                       
-                      {/* Fixed width slot for Trash to prevent shifting */}
-                      <div style={{width: 28*z, marginLeft: 6*z, display: "flex", justifyContent: "flex-end"}}>
-                        {isAdmin && <button style={S.btnDanger} onClick={e=>{e.stopPropagation();setPendingRemove(p.id);}}>✕</button>}
-                      </div>
+                      {/* Trash slot — fixed width to prevent layout shift */}
+                      {isAdmin && (
+                        <div style={{marginLeft: 6*z, display: "flex", flexShrink:0}}>
+                          <button style={S.btnDanger} onClick={e=>{e.stopPropagation();setPendingRemove(p.id);}}>✕</button>
+                        </div>
+                      )}
                     </div>
                     
                   </div>

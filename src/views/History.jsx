@@ -147,21 +147,6 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
         <MatchEditModal match={editingMatch} players={players} onSave={saveEdit} onClose={()=>setEditingMatch(null)} theme={theme}/>
       )}
 
-      {/* --- FILTERS --- */}
-      <Sec title={t("filter_search_sec")} theme={theme}>
-        <input style={{...S.input,marginBottom:10*z}} placeholder={t("search_placeholder")} value={search} onChange={e=>setSearch(e.target.value)}/>
-        <div style={{display:"flex", gap:10*z, marginBottom:10*z}}>
-          <Sel opts={selectOpts} value={playerFilter} onChange={setPlayerFilter} placeholder={t("all_players")} theme={theme}/>
-        </div>
-        <div style={S.toggle}>
-          {["all","singles","doubles"].map(f=>(
-            <button key={f} style={{...S.toggleBtn,...(filter===f?{...S.toggleOn,background:theme.card,borderColor:theme.accent,color:theme.accent}:{})}} onClick={()=>setFilter(f)}>
-              {f.charAt(0).toUpperCase()+f.slice(1)}
-            </button>
-          ))}
-        </div>
-      </Sec>
-
       {/* --- CALENDAR WIDGET --- */}
       <Sec theme={theme}>
         <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16*z}}>
@@ -229,6 +214,21 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
             ))}
           </div>
         )}
+      </Sec>
+
+      {/* --- FILTERS --- */}
+      <Sec title={t("filter_search_sec")} theme={theme}>
+        <input style={{...S.input,marginBottom:10*z}} placeholder={t("search_placeholder")} value={search} onChange={e=>setSearch(e.target.value)}/>
+        <div style={{display:"flex", gap:10*z, marginBottom:10*z}}>
+          <Sel opts={selectOpts} value={playerFilter} onChange={setPlayerFilter} placeholder={t("all_players")} theme={theme}/>
+        </div>
+        <div style={S.toggle}>
+          {["all","singles","doubles"].map(f=>(
+            <button key={f} style={{...S.toggleBtn,...(filter===f?{...S.toggleOn,background:theme.card,borderColor:theme.accent,color:theme.accent}:{})}} onClick={()=>setFilter(f)}>
+              {f.charAt(0).toUpperCase()+f.slice(1)}
+            </button>
+          ))}
+        </div>
       </Sec>
 
       {/* --- MATCH RESULTS --- */}

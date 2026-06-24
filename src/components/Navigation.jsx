@@ -69,7 +69,7 @@ export function Header({activeView,nav,profilePlayer,theme,isAdmin}) {
 export function BottomNav({active,nav,theme}) {
   const S = makeS(theme);
   const tabs=[
-    {id:"dashboard",icon:"🏆",label:t("rank")},
+    {id:"dashboard",icon:"🏠",label:t("home")},
     {id:"matches",icon:"🏓",label:t("matches_tab")},
     {id:"history",icon:"📋",label:t("history")},
     {id:"events",icon:"📅",label:t("events")},

@@ -26,31 +26,31 @@ function LeaderboardRow({player:p,rank,onClick,theme,format}) {
   const confColor = conf >= 75 ? "#50c878" : conf >= 45 ? "#f0a830" : "#e05050";
 
   return (
-    <div style={S.lbRow} onClick={onClick}>
-      <div style={S.lbRank}>{medal||<span style={{fontSize:13*z,color:theme.sub}}>#{rank}</span>}</div>
-      <Avatar name={p.name} url={p.avatar} size={36}/>
-      <div style={S.lbInfo}>
-        <div style={{display:"flex",alignItems:"center",gap:6*z}}>
-          <span style={S.lbName}>{p.name}</span>
-          {streakIcon && <span style={{fontSize:12*z}} title={`${p.streak} Game Streak`}>{streakIcon}{p.streak}</span>}
-          <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background: isProv ? "rgba(245,158,11,0.12)" : "rgba(80,200,120,0.12)", color: isProv ? "#f59e0b" : "#50c878", fontWeight:700}}>
+    <div style={{...S.lbRow, minWidth: 0}} onClick={onClick}>
+      <div style={{...S.lbRank, flexShrink: 0}}>{medal||<span style={{fontSize:13*z,color:theme.sub}}>#{rank}</span>}</div>
+      <div style={{flexShrink: 0}}><Avatar name={p.name} url={p.avatar} size={36}/></div>
+      <div style={{...S.lbInfo, minWidth: 0, overflow: "hidden"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6*z, flexWrap:"wrap"}}>
+          <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%"}}>{p.name}</span>
+          {streakIcon && <span style={{fontSize:12*z, flexShrink:0}} title={`${p.streak} Game Streak`}>{streakIcon}{p.streak}</span>}
+          <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background: isProv ? "rgba(245,158,11,0.12)" : "rgba(80,200,120,0.12)", color: isProv ? "#f59e0b" : "#50c878", fontWeight:700, flexShrink:0}}>
              {isProv ? "P" : "C"}
           </span>
         </div>
-        <div style={{display:"flex", alignItems:"center", gap:6*z, marginTop:2*z}}>
+        <div style={{display:"flex", alignItems:"center", gap:6*z, marginTop:2*z, flexWrap:"wrap"}}>
           <span style={{fontSize:11*z,color:theme.sub}}>{gP||0}G · {w||0}W {l||0}L</span>
           {gP > 0 && (
             <span title="Rating Confidence" style={{
               fontSize:10*z, fontWeight:700, color:confColor,
               background: confColor + "18", borderRadius:10*z,
-              padding:`1px ${5*z}px`, cursor:"default"
+              padding:`1px ${5*z}px`, cursor:"default", flexShrink:0
             }}>
               📊 {conf}%
             </span>
           )}
         </div>
       </div>
-      <div style={{textAlign:"right", opacity: (gP||0) === 0 ? 0.4 : 1}}>
+      <div style={{textAlign:"right", opacity: (gP||0) === 0 ? 0.4 : 1, flexShrink: 0, marginLeft: 8*z}}>
         <div style={{...S.badge,background:ratingColor(activeRating)}}>{activeRating.toFixed(3)}</div>
         {delta!==0&&<div style={{fontSize:10*z,color:d.color,marginTop:2}}>{d.text}</div>}
       </div>
@@ -60,6 +60,8 @@ function LeaderboardRow({player:p,rank,onClick,theme,format}) {
 
 export default function Dashboard({players, rawStats, state, matches, nav, theme, set, format, user, setUser}) {
   const [view, setView] = useState("rank");
+  const [motdExpanded, setMotdExpanded] = useState(false);
+  const [potmExpanded, setPotmExpanded] = useState(false);
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
 
@@ -80,102 +82,126 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
   return (
     <div style={S.view}>
 
-      {/* ── MATCH OF THE DAY ──────────────────────────────────────────── */}
+      {/* ── MATCH OF THE DAY — compact teaser, expandable ─────────────── */}
       {motd && (
         <div style={{
-          background: motd.upsetFactor > 0.2
-            ? "rgba(240,192,64,0.08)" : "rgba(64,160,224,0.08)",
+          background: motd.upsetFactor > 0.2 ? "rgba(240,192,64,0.08)" : "rgba(64,160,224,0.08)",
           border: `1px solid ${motd.upsetFactor > 0.2 ? "#f0c04044" : "#40a0e044"}`,
-          borderRadius: 12*z, padding: 12*z, marginBottom: 16*z, cursor:"pointer"
-        }} onClick={() => nav("history")}>
-          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6*z}}>
-            <span style={{fontSize:12*z, fontWeight:700, color: motd.upsetFactor > 0.2 ? "#f0c040" : "#40a0e0"}}>
-              {t("motd_sec")} {motd.upsetFactor > 0.2 ? `🎉 ${t("motd_upset")}` : motd.tightness > 0.9 ? `😤 ${t("motd_tight")}` : ""}
-            </span>
-            <span style={{fontSize:10*z, color:theme.sub}}>
-              {new Date(motd.match.date).toLocaleDateString()}
-            </span>
+          borderRadius: 10*z, marginBottom: 8*z, overflow: "hidden"
+        }}>
+          {/* Compact one-line teaser */}
+          <div onClick={() => setMotdExpanded(e => !e)} style={{
+            display:"flex", alignItems:"center", justifyContent:"space-between",
+            padding: `${8*z}px ${12*z}px`, cursor:"pointer", gap: 8*z
+          }}>
+            <div style={{display:"flex", alignItems:"center", gap:8*z, flex:1, minWidth:0, overflow:"hidden"}}>
+              <span style={{fontSize:14*z, flexShrink:0}}>
+                {motd.upsetFactor > 0.2 ? "🎉" : motd.tightness > 0.9 ? "😤" : "⚡"}
+              </span>
+              <span style={{fontSize:11*z, fontWeight:700, color: motd.upsetFactor > 0.2 ? "#f0c040" : "#40a0e0", flexShrink:0, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+                {t("motd_sec")}
+              </span>
+              <span style={{fontSize:12*z, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                {motd.winTeam.join(" & ")} {t("motd_beat")} {motd.loseTeam.join(" & ")}
+              </span>
+            </div>
+            <span style={{fontSize:12*z, color:theme.sub, transform: motdExpanded ? "rotate(180deg)" : "none", transition:"transform 0.2s", flexShrink:0}}>▾</span>
           </div>
-          <div style={{fontSize:13*z, fontWeight:700, color:theme.text}}>
-            {motd.winTeam.join(" & ")}
-            <span style={{color:theme.sub, fontWeight:400}}> {t("motd_beat")} </span>
-            {motd.loseTeam.join(" & ")}
-          </div>
-          {motd.match.games?.length > 0 && (
-            <div style={{fontSize:11*z, color:theme.sub, marginTop:3*z}}>
-              {t("motd_score")}: {motd.match.games.map(g => `${g.a}–${g.b}`).join(", ")}
-              {motd.upsetFactor > 0.1 && (
-                <span style={{marginLeft:8*z, color:"#f0a830", fontWeight:600}}>
-                  🎯 +{motd.upsetFactor.toFixed(2)} upset
+          {/* Expanded detail */}
+          {motdExpanded && (
+            <div style={{padding:`0 ${12*z}px ${10*z}px`, borderTop:`1px solid ${theme.border}`, paddingTop:10*z}}>
+              <div style={{display:"flex", justifyContent:"space-between", marginBottom:4*z}}>
+                <span style={{fontSize:10*z, color:theme.sub}}>
+                  {motd.upsetFactor > 0.2 ? `🎉 ${t("motd_upset")}` : motd.tightness > 0.9 ? `😤 ${t("motd_tight")}` : ""}
                 </span>
+                <span style={{fontSize:10*z, color:theme.sub}}>{new Date(motd.match.date).toLocaleDateString()}</span>
+              </div>
+              {motd.match.games?.length > 0 && (
+                <div style={{fontSize:11*z, color:theme.sub}}>
+                  {t("motd_score")}: {motd.match.games.map(g => `${g.a}–${g.b}`).join(", ")}
+                  {motd.upsetFactor > 0.1 && (
+                    <span style={{marginLeft:8*z, color:"#f0a830", fontWeight:600}}>
+                      🎯 +{motd.upsetFactor.toFixed(2)} upset
+                    </span>
+                  )}
+                </div>
               )}
+              <button onClick={(e) => { e.stopPropagation(); nav("history"); }} style={{
+                marginTop: 8*z, background: "transparent", border: `1px solid ${theme.border}`,
+                borderRadius: 6*z, padding: "4px 10px", fontSize: 10*z, color: theme.sub, cursor: "pointer"
+              }}>{t("view_in_history") || "View in History →"}</button>
             </div>
           )}
         </div>
       )}
 
-      {/* ── PLAYERS OF THE MONTH (MODERN PODIUM) ──────────────────────── */}
+      {/* ── PLAYERS OF THE MONTH — compact teaser, expandable podium ── */}
       {potm.length > 0 && (
-        <div style={{marginBottom:16*z}}>
-          <div style={{display:"flex", alignItems:"center", gap: 8*z, marginBottom:12*z}}>
-            <span style={{fontSize:18*z}}>📈</span>
-            <div>
-              <div style={{fontSize:14*z, fontWeight:800, color:theme.text}}>
+        <div style={{
+          background: theme.card, border:`1px solid ${theme.border}`,
+          borderRadius: 10*z, marginBottom: 16*z, overflow: "hidden"
+        }}>
+          {/* Compact one-line teaser */}
+          <div onClick={() => setPotmExpanded(e => !e)} style={{
+            display:"flex", alignItems:"center", justifyContent:"space-between",
+            padding: `${8*z}px ${12*z}px`, cursor:"pointer", gap: 8*z
+          }}>
+            <div style={{display:"flex", alignItems:"center", gap:8*z, flex:1, minWidth:0, overflow:"hidden"}}>
+              <span style={{fontSize:14*z, flexShrink:0}}>📈</span>
+              <span style={{fontSize:11*z, fontWeight:700, color:theme.accent, flexShrink:0, textTransform:"uppercase", letterSpacing:"0.5px"}}>
                 {potmTitle}
-              </div>
-              <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
-                {t("potm_desc")}
+              </span>
+              <span style={{fontSize:12*z, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                {potm.slice(0,3).map((p,i) => ["🥇","🥈","🥉"][i] + " " + p.name.split(" ")[0]).join("  ")}
+              </span>
+            </div>
+            <span style={{fontSize:12*z, color:theme.sub, transform: potmExpanded ? "rotate(180deg)" : "none", transition:"transform 0.2s", flexShrink:0}}>▾</span>
+          </div>
+
+          {/* Expanded podium detail */}
+          {potmExpanded && (
+            <div style={{padding:`0 ${12*z}px ${12*z}px`, borderTop:`1px solid ${theme.border}`, paddingTop:12*z}}>
+              <div style={{fontSize:10*z, color:theme.sub, marginBottom:10*z}}>{t("potm_desc")}</div>
+              <div style={{display:"flex", gap:8*z}}>
+                {potm.slice(0, 3).map((p, i) => {
+                  const medals = ["🥇", "🥈", "🥉"];
+                  const bgColors = [
+                    "rgba(255, 215, 0, 0.15)",
+                    "rgba(200, 200, 200, 0.15)",
+                    "rgba(205, 127, 50, 0.15)"
+                  ];
+                  const borderColors = [
+                    "rgba(255, 215, 0, 0.5)",
+                    "rgba(200, 200, 200, 0.5)",
+                    "rgba(205, 127, 50, 0.5)"
+                  ];
+                  return (
+                    <div key={p.id} onClick={(e) => { e.stopPropagation(); nav("profile", {profileId: p.id}); }} style={{
+                      flex: 1,
+                      background: bgColors[i] || theme.card,
+                      border: `1px solid ${borderColors[i] || theme.border}`,
+                      borderRadius: 10*z,
+                      padding: `${10*z}px ${6*z}px`,
+                      cursor: "pointer",
+                      display: "flex", flexDirection: "column",
+                      alignItems: "center", textAlign: "center"
+                    }}>
+                      <div style={{fontSize:14*z, marginBottom:3*z}}>{medals[i]}</div>
+                      <div style={{fontWeight:800, fontSize:12*z, color:theme.text, width:"100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
+                        {p.name}
+                      </div>
+                      <div style={{fontSize:13*z, fontWeight:800, color: p.gain >= 0 ? "#50c878" : "#e05050", marginTop:4*z}}>
+                        {p.gain >= 0 ? "+" : ""}{p.gain.toFixed(3)}
+                      </div>
+                      <div style={{fontSize:10*z, color:theme.sub, marginTop:3*z, fontWeight:600}}>
+                        {p.played}G · {p.wins}W
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
-          
-          <div style={{ display:"flex", gap:8*z }}>
-            {potm.slice(0, 3).map((p, i) => {
-              const medals = ["🥇", "🥈", "🥉"];
-              const bgColors = [
-                "rgba(255, 215, 0, 0.15)",   // Brighter Gold
-                "rgba(200, 200, 200, 0.15)", // Brighter Silver
-                "rgba(205, 127, 50, 0.15)"   // Brighter Bronze
-              ];
-              const borderColors = [
-                "rgba(255, 215, 0, 0.5)",
-                "rgba(200, 200, 200, 0.5)",
-                "rgba(205, 127, 50, 0.5)"
-              ];
-              const shadowColors = [
-                "rgba(255, 215, 0, 0.1)",
-                "rgba(200, 200, 200, 0.1)",
-                "rgba(205, 127, 50, 0.1)"
-              ];
-
-              return (
-                <div key={p.id} onClick={() => nav("profile", {profileId: p.id})} style={{
-                  flex: 1, 
-                  background: bgColors[i] || theme.card, 
-                  border: `1px solid ${borderColors[i] || theme.border}`,
-                  borderRadius: 12*z, 
-                  padding: `${12*z}px ${8*z}px`, 
-                  cursor: "pointer",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  textAlign: "center",
-                  boxShadow: `0 4px 12px ${shadowColors[i] || "transparent"}`
-                }}>
-                  <div style={{fontSize:16*z, marginBottom:4*z}}>{medals[i]}</div>
-                  <div style={{fontWeight:800, fontSize:13*z, color:theme.text, width:"100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
-                    {p.name}
-                  </div>
-                  <div style={{fontSize:14*z, fontWeight:800, color: p.gain >= 0 ? "#50c878" : "#e05050", marginTop:6*z}}>
-                    {p.gain >= 0 ? "+" : ""}{p.gain.toFixed(3)}
-                  </div>
-                  <div style={{fontSize:10*z, color:theme.sub, marginTop:4*z, fontWeight:600}}>
-                    {p.played}G · {p.wins}W
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          )}
         </div>
       )}
 
