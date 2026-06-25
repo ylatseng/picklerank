@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS, suggestBalancedTeams, computeSessionSummary, getRecentForm } from '../engine.js';
+import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS, suggestBalancedTeams, computeSessionSummary, getRecentForm, shortName, isLargeZoom } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, Empty, Err, Sel, MatchEloBreakdown, ConfirmInline, MatchEditModal, MatchCard } from '../components/Shared.jsx';
+import { Sec, Empty, Err, Sel, MatchEloBreakdown, ConfirmInline, MatchEditModal, MatchCard, usePersistentFormState } from '../components/Shared.jsx';
 import { MatchesSubNav } from '../components/Navigation.jsx';
 
 // Tiny inline form indicator: shows last 3 results as W/L badges
@@ -26,11 +26,12 @@ export function LogMatch({state,players,set,nav,theme,user}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   const [type,setType]=useState("singles"), [winTo,setWinTo]=useState(11), [winBy,setWinBy]=useState(2);
-  const [sp,setSp]=useState({s1:"",s2:"",d1a:"",d1b:"",d2a:"",d2b:""});
-  const [games,setGames]=useState([{a:"",b:""}]);
-  const [tnames,setTnames]=useState({t1:"",t2:""});
-  const [venue,setVenue]=useState("");
-  const [notes,setNotes]=useState(""); 
+  // Persisted in-progress form state — survives tab navigation, cleared after successful Log.
+  const [sp,setSp,clearSp]=usePersistentFormState("logMatch:sp", {s1:"",s2:"",d1a:"",d1b:"",d2a:"",d2b:""});
+  const [games,setGames,clearGames]=usePersistentFormState("logMatch:games", [{a:"",b:""}]);
+  const [tnames,setTnames,clearTnames]=usePersistentFormState("logMatch:tnames", {t1:"",t2:""});
+  const [venue,setVenue,clearVenue]=usePersistentFormState("logMatch:venue", "");
+  const [notes,setNotes,clearNotes]=usePersistentFormState("logMatch:notes", "");
   const [err,setErr]=useState(""), [result,setResult]=useState(null);
   const [matchDate,setMatchDate]=useState(()=>isoToDatetimeLocal(new Date().toISOString()));
 
@@ -84,11 +85,11 @@ export function LogMatch({state,players,set,nav,theme,user}) {
     const { derivedPlayers, derivedMatches } = replayAllMatches(state.players, newMatchArray);
     setResult({ match: derivedMatches.find(m => m.id === match.id), players: derivedPlayers });
     set(s => ({...s, matches: newMatchArray}));
-    setGames([{a:"",b:""}]); 
-    setNotes(""); 
+    // Clear all persisted form state — fresh start for next log
+    clearSp(); clearGames(); clearTnames(); clearVenue(); clearNotes();
   }
   
-  const rawOpts=players.map(p=>({value:p.id,label:p.name}));
+  const rawOpts=players.map(p=>({value:p.id,label:shortName(p.name, isLargeZoom(z) ? "always" : "auto")}));
   const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
 
   return (
@@ -194,11 +195,12 @@ export function LogMatch({state,players,set,nav,theme,user}) {
 export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
-  const [sessionIds, setSessionIds] = useState(["","","",""]);
+  // Persisted draft for Session — survives accidental tab-away. Cleared after Log.
+  const [sessionIds, setSessionIds, clearSessionIds] = usePersistentFormState("session:ids", ["","","",""]);
   const [winTo,setWinTo]=useState(11);
   const [winBy,setWinBy]=useState(2);
-  const [roundScores, setRoundScores] = useState([{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
-  const [notes, setNotes] = useState(""); 
+  const [roundScores, setRoundScores, clearRoundScores] = usePersistentFormState("session:scores", [{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
+  const [notes, setNotes, clearSessionNotes] = usePersistentFormState("session:notes", ""); 
   const [err, setErr] = useState(""), [success, setSuccess] = useState("");
   const [groupName, setGroupName] = useState("");
   const [sessionSummary, setSessionSummary] = useState(null);
@@ -215,9 +217,9 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
   const hasDupes = new Set(filledIds).size < filledIds.length;
   const isReady = filledIds.length === 4 && !hasDupes;
 
-  const rawOpts = players.map(p=>({value:p.id,label:p.name}));
+  const rawOpts = players.map(p=>({value:p.id,label:shortName(p.name, isLargeZoom(z) ? "always" : "auto")}));
   const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
-  const getName = id => players.find(p=>p.id===id)?.name??"?";
+  const getName = id => shortName(players.find(p=>p.id===id)?.name ?? "?", isLargeZoom(z) ? "always" : "auto");
   
   const matchups = [{ id: 1, t1: [0, 1], t2: [2, 3] }, { id: 2, t1: [0, 2], t2: [1, 3] }, { id: 3, t1: [0, 3], t2: [1, 2] }];
   
@@ -252,7 +254,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
         const t2w = winnerTeam === 1 ? 1 : 0;
         const t1Ids = [sessionIds[matchups[i].t1[0]], sessionIds[matchups[i].t1[1]]];
         const t2Ids = [sessionIds[matchups[i].t2[0]], sessionIds[matchups[i].t2[1]]];
-        matchesToLog.push({id:genId(),type:"doubles",date:new Date().toISOString(),teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:"Session Play", notes:notes.trim()||null, loggedBy: user?.myPlayerId || "guest"});
+        matchesToLog.push({id:genId(),type:"doubles",date:new Date().toISOString(),teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:null, notes:`Session: ${notes.trim() || "Round-robin play"}`, loggedBy: user?.myPlayerId || "guest"});
     }
 
     // Compute rich summary before and after
@@ -262,10 +264,11 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
     setSessionSummary(summary);
 
     set(s => ({...s, matches: allMatchesAfter}));
-    setRoundScores([{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
-    setSessionIds(["","","",""]);
+    // Clear persisted draft now that session is logged
+    clearRoundScores();
+    clearSessionIds();
     setChosenSplit(null);
-    setNotes(""); 
+    clearSessionNotes();
   }
 
   // Team Suggester: compute balanced pairings when 4 players are selected
@@ -428,9 +431,17 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
                 <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
               </div>
             </div>
-            <div style={{display:"flex", gap:8*z}}>
-              <input style={{...S.input, flex:1}} placeholder="e.g. The Usuals" value={groupName} onChange={e=>setGroupName(e.target.value)} />
-              <button style={{...S.btnPrimary}} onClick={saveCurrentGroup}>{t("save_group_btn")}</button>
+            <div>
+              <label style={S.label}>
+                {t("save_group_lbl") || "Save Group"}
+                <span style={{fontWeight:400, color:theme.sub, fontSize:10*z, marginLeft:6*z}}>
+                  — {t("save_group_help") || "Save this 4-player lineup for quick re-selection later"}
+                </span>
+              </label>
+              <div style={{display:"flex", gap:8*z}}>
+                <input style={{...S.input, flex:1}} placeholder={t("save_group_placeholder") || "e.g. The Usuals"} value={groupName} onChange={e=>setGroupName(e.target.value)} />
+                <button style={{...S.btnPrimary}} onClick={saveCurrentGroup}>{t("save_group_btn")}</button>
+              </div>
             </div>
           </div>
         )}
@@ -438,19 +449,49 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
 
       {isReady&&(
         <Sec title={t("rr_matchups")} theme={theme}>
+          {chosenSplit !== null && suggestions[chosenSplit] && (
+            <div style={{
+              padding:`${8*z}px ${10*z}px`, marginBottom:12*z,
+              background: theme.accent + "11", border: `1px solid ${theme.accent}44`,
+              borderRadius: 8*z, fontSize: 11*z, color: theme.sub
+            }}>
+              💡 {t("rr_suggester_hint") || "Tip: highlighted round below matches your chosen team split. You'll still play all 3 rounds — this is just the matchup with the fairest team balance."}
+            </div>
+          )}
           <div style={{display:"flex", flexDirection:"column", gap:16*z}}>
-            {matchups.map((m, i) => (
-              <div key={i} style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
-                <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("round")} {i+1}</div>
-                <div style={S.gameRow}>
-                  <span style={{flex:1, fontSize:13*z, color:theme.text}}>{getName(sessionIds[m.t1[0]])}/{getName(sessionIds[m.t1[1]])}</span>
-                  <input style={S.scoreInput} type="number" placeholder="T1" value={roundScores[i].t1} onChange={e=>updScore(i, "t1", e.target.value)}/>
-                  <span style={{color:theme.sub}}>–</span>
-                  <input style={S.scoreInput} type="number" placeholder="T2" value={roundScores[i].t2} onChange={e=>updScore(i, "t2", e.target.value)}/>
-                  <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(sessionIds[m.t2[0]])}/{getName(sessionIds[m.t2[1]])}</span>
+            {matchups.map((m, i) => {
+              // Map this matchup to a suggestion index by checking if the team-pairing matches.
+              // suggestion.t1/t2 contain player IDs; m.t1/t2 contain INDICES into sessionIds.
+              const matchupPlayerSet = new Set([sessionIds[m.t1[0]], sessionIds[m.t1[1]]].sort());
+              const isChosenMatchup = chosenSplit !== null && suggestions[chosenSplit] &&
+                JSON.stringify([...suggestions[chosenSplit].t1].sort()) === JSON.stringify([...matchupPlayerSet]);
+              return (
+                <div key={i} style={{
+                  background: isChosenMatchup ? theme.accent + "10" : theme.bg,
+                  border:`${isChosenMatchup ? 2 : 1}px solid ${isChosenMatchup ? theme.accent : theme.border}`,
+                  borderRadius:12*z, padding:12*z, position:"relative"
+                }}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z}}>
+                    <div style={{fontSize:12*z, fontWeight:700, color:theme.accent}}>{t("round")} {i+1}</div>
+                    {isChosenMatchup && <div style={{fontSize:10*z, color:theme.accent, fontWeight:700}}>✅ {t("team_fairest")}</div>}
+                  </div>
+                  {/* Team names on their own row */}
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z, gap:8*z}}>
+                    <span style={{flex:1, fontSize:12*z, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                      {getName(sessionIds[m.t1[0]])} / {getName(sessionIds[m.t1[1]])}
+                    </span>
+                    <span style={{flex:1, fontSize:12*z, color:theme.text, fontWeight:600, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                      {getName(sessionIds[m.t2[0]])} / {getName(sessionIds[m.t2[1]])}
+                    </span>
+                  </div>
+                  <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
+                    <input style={S.scoreInput} type="number" placeholder="T1" value={roundScores[i].t1} onChange={e=>updScore(i, "t1", e.target.value)}/>
+                    <span style={{color:theme.sub, fontSize:14*z}}>–</span>
+                    <input style={S.scoreInput} type="number" placeholder="T2" value={roundScores[i].t2} onChange={e=>updScore(i, "t2", e.target.value)}/>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             
             <div>
               <label style={S.label}>Session Notes (Optional)</label>
@@ -469,11 +510,12 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
 export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
-  const [sessionIds, setSessionIds] = useState(["","","",""]);
+  // Persisted draft for KOTC — survives accidental tab-away. Cleared after Log.
+  const [sessionIds, setSessionIds, clearKotcIds] = usePersistentFormState("kotc:ids", ["","","",""]);
   const [winTo,setWinTo]=useState(11);
   const [winBy,setWinBy]=useState(1);
-  const [roundScores, setRoundScores] = useState([{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
-  const [notes, setNotes] = useState(""); 
+  const [roundScores, setRoundScores, clearKotcScores] = usePersistentFormState("kotc:scores", [{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
+  const [notes, setNotes, clearKotcNotes] = usePersistentFormState("kotc:notes", ""); 
   const [err, setErr] = useState(""), [success, setSuccess] = useState("");
   
   useEffect(() => {
@@ -486,9 +528,9 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
   const hasDupes = new Set(filledIds).size < filledIds.length;
   const isReady = filledIds.length === 4 && !hasDupes;
 
-  const rawOpts = players.map(p=>({value:p.id,label:p.name}));
+  const rawOpts = players.map(p=>({value:p.id,label:shortName(p.name, isLargeZoom(z) ? "always" : "auto")}));
   const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
-  const getName = id => players.find(p=>p.id===id)?.name??"?";
+  const getName = id => shortName(players.find(p=>p.id===id)?.name ?? "?", isLargeZoom(z) ? "always" : "auto");
   const matchups = [{ id: 1, t1: [0, 1], t2: [2, 3] }, { id: 2, t1: [0, 2], t2: [1, 3] }, { id: 3, t1: [0, 3], t2: [1, 2] }];
   
   function upP(idx,val){const n=[...sessionIds];n[idx]=val;setSessionIds(n);}
@@ -531,13 +573,14 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
         const t2w = winnerTeam === 1 ? 0 : 1;
         const t1Ids = [sessionIds[matchups[i].t1[0]], sessionIds[matchups[i].t1[1]]];
         const t2Ids = [sessionIds[matchups[i].t2[0]], sessionIds[matchups[i].t2[1]]];
-        matchesToLog.push({id:genId(),type:"doubles",date:new Date().toISOString(),teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:"King of the Court", notes:notes.trim()||null, loggedBy: user?.myPlayerId || "guest"});
+        matchesToLog.push({id:genId(),type:"doubles",date:new Date().toISOString(),teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:null, notes:`King of the Court: ${notes.trim() || "Winners stay on court"}`, loggedBy: user?.myPlayerId || "guest"});
     }
     set(s => ({...s, matches: [...(s.matches||[]), ...matchesToLog]}));
     setSuccess(`✅ 3 Matches Logged. King Crowned: ${getName(kotcLeaderboard[0].id)}!`); 
-    setRoundScores([{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
-    setSessionIds(["","","",""]);
-    setNotes(""); 
+    // Clear persisted draft
+    clearKotcScores();
+    clearKotcIds();
+    clearKotcNotes();
   }
 
   return (
@@ -569,12 +612,18 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
             {matchups.map((m, i) => (
               <div key={i} style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
                 <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("round")} {i+1}</div>
-                <div style={S.gameRow}>
-                  <span style={{flex:1, fontSize:13*z, color:theme.text}}>{getName(sessionIds[m.t1[0]])}/{getName(sessionIds[m.t1[1]])}</span>
+                <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z, gap:8*z}}>
+                  <span style={{flex:1, fontSize:12*z, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                    {getName(sessionIds[m.t1[0]])} / {getName(sessionIds[m.t1[1]])}
+                  </span>
+                  <span style={{flex:1, fontSize:12*z, color:theme.text, fontWeight:600, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                    {getName(sessionIds[m.t2[0]])} / {getName(sessionIds[m.t2[1]])}
+                  </span>
+                </div>
+                <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
                   <input style={S.scoreInput} type="number" placeholder="T1" value={roundScores[i].t1} onChange={e=>updScore(i, "t1", e.target.value)}/>
-                  <span style={{color:theme.sub}}>–</span>
+                  <span style={{color:theme.sub, fontSize:14*z}}>–</span>
                   <input style={S.scoreInput} type="number" placeholder="T2" value={roundScores[i].t2} onChange={e=>updScore(i, "t2", e.target.value)}/>
-                  <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(sessionIds[m.t2[0]])}/{getName(sessionIds[m.t2[1]])}</span>
                 </div>
               </div>
             ))}
@@ -598,20 +647,20 @@ export function TournamentMode({ players, state, set, nav, theme, user }) {
   const z = theme.zoom || 1.0;
   
   const [step, setStep] = useState(0); 
-  const [teams, setTeams] = useState([["",""], ["",""], ["",""], ["",""]]);
+  const [teams, setTeams, clearTeams] = usePersistentFormState("tourney:teams", [["",""], ["",""], ["",""], ["",""]]);
   const [winTo, setWinTo] = useState(11);
   const [winBy, setWinBy] = useState(2);
-  const [scores, setScores] = useState({ sf1a:"", sf1b:"", sf2a:"", sf2b:"", fina:"", finb:"" });
-  const [notes, setNotes] = useState(""); 
+  const [scores, setScores, clearScores] = usePersistentFormState("tourney:scores", { sf1a:"", sf1b:"", sf2a:"", sf2b:"", fina:"", finb:"" });
+  const [notes, setNotes, clearTourneyNotes] = usePersistentFormState("tourney:notes", ""); 
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState("");
 
   const filledTeams = teams.flat().filter(Boolean);
   const hasDupes = new Set(filledTeams).size < filledTeams.length;
 
-  const rawOpts = players.map(p => ({ value: p.id, label: p.name }));
+  const rawOpts = players.map(p => ({ value: p.id, label: shortName(p.name, isLargeZoom(z) ? "always" : "auto") }));
   const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
-  const getName = id => players.find(p => p.id === id)?.name ?? "TBD";
+  const getName = id => shortName(players.find(p => p.id === id)?.name ?? "TBD", isLargeZoom(z) ? "always" : "auto");
 
   function upT(tIdx, pIdx, val) {
     const n = [...teams];
@@ -631,6 +680,39 @@ export function TournamentMode({ players, state, set, nav, theme, user }) {
     const ids = teams.flat();
     if(ids.some(id => !id)) return setErr(t("err_select_players"));
     setStep(1);
+  }
+
+  // Compute who advances to the Final, based on entered SF scores.
+  // Returns nulls if SF scores aren't valid yet.
+  const sfWinners = (() => {
+    const s_sf1a = parseInt(scores.sf1a), s_sf1b = parseInt(scores.sf1b);
+    const s_sf2a = parseInt(scores.sf2a), s_sf2b = parseInt(scores.sf2b);
+    if ([s_sf1a, s_sf1b, s_sf2a, s_sf2b].some(isNaN)) return { sf1: null, sf2: null };
+    const r1 = validatePickleballScore(s_sf1a, s_sf1b, winTo, winBy);
+    const r2 = validatePickleballScore(s_sf2a, s_sf2b, winTo, winBy);
+    return {
+      sf1: r1 ? (r1.winner === 0 ? teams[0] : teams[1]) : null,
+      sf2: r2 ? (r2.winner === 0 ? teams[2] : teams[3]) : null,
+      r1Valid: !!r1, r2Valid: !!r2,
+    };
+  })();
+
+  function advanceToSF2() {
+    setErr("");
+    const s1a = parseInt(scores.sf1a), s1b = parseInt(scores.sf1b);
+    if (isNaN(s1a) || isNaN(s1b)) return setErr(t("err_valid_scores"));
+    const r1 = validatePickleballScore(s1a, s1b, winTo, winBy);
+    if (!r1) return setErr(t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy));
+    setStep(2);
+  }
+
+  function advanceToFinal() {
+    setErr("");
+    const s2a = parseInt(scores.sf2a), s2b = parseInt(scores.sf2b);
+    if (isNaN(s2a) || isNaN(s2b)) return setErr(t("err_valid_scores"));
+    const r2 = validatePickleballScore(s2a, s2b, winTo, winBy);
+    if (!r2) return setErr(t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy));
+    setStep(3);
   }
 
   function logTournament() {
@@ -654,17 +736,18 @@ export function TournamentMode({ players, state, set, nav, theme, user }) {
 
     const dateStr = new Date().toISOString();
     
-    const m1 = { id: genId(), type: "doubles", date: dateStr, teams: [t1, t2], winnerTeam: r_sf1.winner, games: [{a:s_sf1a, b:s_sf1b, winner: r_sf1.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_sf1.winner===0?1:0, team2Wins: r_sf1.winner===1?1:0, venue: "Tournament SF1", notes:notes.trim()||null, loggedBy: user?.myPlayerId || "guest" };
-    const m2 = { id: genId(), type: "doubles", date: dateStr, teams: [t3, t4], winnerTeam: r_sf2.winner, games: [{a:s_sf2a, b:s_sf2b, winner: r_sf2.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_sf2.winner===0?1:0, team2Wins: r_sf2.winner===1?1:0, venue: "Tournament SF2", notes:notes.trim()||null, loggedBy: user?.myPlayerId || "guest" };
-    const m3 = { id: genId(), type: "doubles", date: dateStr, teams: [win_sf1, win_sf2], winnerTeam: r_fin.winner, games: [{a:s_fina, b:s_finb, winner: r_fin.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_fin.winner===0?1:0, team2Wins: r_fin.winner===1?1:0, venue: "Tournament Final", notes:notes.trim()||null, loggedBy: user?.myPlayerId || "guest" };
+    const m1 = { id: genId(), type: "doubles", date: dateStr, teams: [t1, t2], winnerTeam: r_sf1.winner, games: [{a:s_sf1a, b:s_sf1b, winner: r_sf1.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_sf1.winner===0?1:0, team2Wins: r_sf1.winner===1?1:0, venue: null, notes: `Tournament Semifinal 1${notes.trim() ? ": " + notes.trim() : ""}`, loggedBy: user?.myPlayerId || "guest" };
+    const m2 = { id: genId(), type: "doubles", date: dateStr, teams: [t3, t4], winnerTeam: r_sf2.winner, games: [{a:s_sf2a, b:s_sf2b, winner: r_sf2.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_sf2.winner===0?1:0, team2Wins: r_sf2.winner===1?1:0, venue: null, notes: `Tournament Semifinal 2${notes.trim() ? ": " + notes.trim() : ""}`, loggedBy: user?.myPlayerId || "guest" };
+    const m3 = { id: genId(), type: "doubles", date: dateStr, teams: [win_sf1, win_sf2], winnerTeam: r_fin.winner, games: [{a:s_fina, b:s_finb, winner: r_fin.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_fin.winner===0?1:0, team2Wins: r_fin.winner===1?1:0, venue: null, notes: `Tournament Final${notes.trim() ? ": " + notes.trim() : ""}`, loggedBy: user?.myPlayerId || "guest" };
 
     set(s => ({...s, matches: [...(s.matches||[]), m1, m2, m3]}));
     
-    setSuccess("✅ Tournament Logged! Champions: " + getName(win_sf1 === r_fin.winner ? win_sf1[0] : win_sf2[0]) + " & " + getName(win_sf1 === r_fin.winner ? win_sf1[1] : win_sf2[1]));
+    setSuccess("🏆 Tournament Logged! Champions: " + getName(win_sf1 === r_fin.winner ? win_sf1[0] : win_sf2[0]) + " & " + getName(win_sf1 === r_fin.winner ? win_sf1[1] : win_sf2[1]));
     setStep(0);
-    setTeams([["",""],["",""],["",""],["",""]]);
-    setScores({ sf1a:"", sf1b:"", sf2a:"", sf2b:"", fina:"", finb:"" });
-    setNotes(""); 
+    // Clear persisted draft
+    clearTeams();
+    clearScores();
+    clearTourneyNotes();
   }
 
   return (
@@ -709,50 +792,96 @@ export function TournamentMode({ players, state, set, nav, theme, user }) {
         </Sec>
       )}
 
+      {/* STEP 1 — Semifinal 1 */}
       {step === 1 && (
-        <Sec title={t("tournament")} theme={theme}>
-          <div style={{display:"flex", flexDirection:"column", gap:16*z}}>
-            <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
-              <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("sf")} 1</div>
-              <div style={S.gameRow}>
-                <span style={{flex:1, fontSize:13*z, color:theme.text}}>{getName(teams[0][0])}/{getName(teams[0][1])}</span>
-                <input style={S.scoreInput} type="number" placeholder="T1" value={scores.sf1a} onChange={e=>upS("sf1a", e.target.value)}/>
-                <span style={{color:theme.sub}}>–</span>
-                <input style={S.scoreInput} type="number" placeholder="T2" value={scores.sf1b} onChange={e=>upS("sf1b", e.target.value)}/>
-                <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(teams[1][0])}/{getName(teams[1][1])}</span>
-              </div>
+        <Sec title={`🏆 ${t("sf")} 1`} theme={theme}>
+          <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
+            Round 1 of 3 · {t("sf")} 1 → {t("sf")} 2 → {t("final")}
+          </div>
+          <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z, marginBottom:16*z}}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10*z, gap:8*z}}>
+              <span style={{flex:1, fontSize:13*z, color:theme.text, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{getName(teams[0][0])} / {getName(teams[0][1])}</span>
+              <span style={{fontSize:11*z, color:theme.sub}}>vs</span>
+              <span style={{flex:1, fontSize:13*z, color:theme.text, fontWeight:700, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{getName(teams[1][0])} / {getName(teams[1][1])}</span>
             </div>
-            <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
-              <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("sf")} 2</div>
-              <div style={S.gameRow}>
-                <span style={{flex:1, fontSize:13*z, color:theme.text}}>{getName(teams[2][0])}/{getName(teams[2][1])}</span>
-                <input style={S.scoreInput} type="number" placeholder="T3" value={scores.sf2a} onChange={e=>upS("sf2a", e.target.value)}/>
-                <span style={{color:theme.sub}}>–</span>
-                <input style={S.scoreInput} type="number" placeholder="T4" value={scores.sf2b} onChange={e=>upS("sf2b", e.target.value)}/>
-                <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{getName(teams[3][0])}/{getName(teams[3][1])}</span>
-              </div>
+            <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
+              <input style={S.scoreInput} type="number" placeholder="T1" value={scores.sf1a} onChange={e=>upS("sf1a", e.target.value)}/>
+              <span style={{color:theme.sub, fontSize:14*z}}>–</span>
+              <input style={S.scoreInput} type="number" placeholder="T2" value={scores.sf1b} onChange={e=>upS("sf1b", e.target.value)}/>
             </div>
-            <div style={{background:theme.card, border:`2px solid ${theme.accent}`, borderRadius:12*z, padding:12*z}}>
-              <div style={{fontSize:14*z, fontWeight:800, color:theme.accent, marginBottom:8*z}}>🏆 {t("final")}</div>
-              <div style={S.gameRow}>
-                <span style={{flex:1, fontSize:13*z, color:theme.text}}>{t("winner")} SF1</span>
-                <input style={S.scoreInput} type="number" placeholder="W1" value={scores.fina} onChange={e=>upS("fina", e.target.value)}/>
-                <span style={{color:theme.sub}}>–</span>
-                <input style={S.scoreInput} type="number" placeholder="W2" value={scores.finb} onChange={e=>upS("finb", e.target.value)}/>
-                <span style={{flex:1, fontSize:13*z, color:theme.text, textAlign:"right"}}>{t("winner")} SF2</span>
-              </div>
-            </div>
-            
-            <div>
-              <label style={S.label}>Tournament Notes (Optional)</label>
-              <input style={S.input} placeholder="e.g. Injury in SF2, great finals..." value={notes} onChange={e=>setNotes(e.target.value)}/>
-            </div>
-
           </div>
           {err && <Err msg={err} theme={theme}/>}
-          <div style={{display:"flex", gap:10*z, marginTop:16*z}}>
-            <button style={{...S.btnBig, flex:1}} onClick={logTournament}>{t("log_match_btn")}</button>
-            <button style={{...S.btnSecondary, marginTop:0}} onClick={() => setStep(0)}>{t("cancel")}</button>
+          <div style={{display:"flex", gap:10*z, marginTop:12*z}}>
+            <button style={{...S.btnSecondary, marginTop:0, flex:1}} onClick={() => setStep(0)}>← {t("back") || "Back"}</button>
+            <button style={{...S.btnPrimary, marginTop:0, flex:2}} onClick={advanceToSF2}>{t("sf")} 2 →</button>
+          </div>
+        </Sec>
+      )}
+
+      {/* STEP 2 — Semifinal 2 */}
+      {step === 2 && (
+        <Sec title={`🏆 ${t("sf")} 2`} theme={theme}>
+          <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
+            Round 2 of 3 · {t("sf")} 1 ✓ · {t("sf")} 2 → {t("final")}
+          </div>
+          {/* Show the SF1 winner so user has context */}
+          {sfWinners.sf1 && (
+            <div style={{background:theme.accent + "11", border:`1px solid ${theme.accent}44`, borderRadius:8*z, padding:10*z, marginBottom:12*z, fontSize:11*z, color:theme.sub}}>
+              ✅ {t("sf")} 1 Winner: <strong style={{color:theme.accent}}>{getName(sfWinners.sf1[0])} / {getName(sfWinners.sf1[1])}</strong>
+            </div>
+          )}
+          <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z, marginBottom:16*z}}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10*z, gap:8*z}}>
+              <span style={{flex:1, fontSize:13*z, color:theme.text, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{getName(teams[2][0])} / {getName(teams[2][1])}</span>
+              <span style={{fontSize:11*z, color:theme.sub}}>vs</span>
+              <span style={{flex:1, fontSize:13*z, color:theme.text, fontWeight:700, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{getName(teams[3][0])} / {getName(teams[3][1])}</span>
+            </div>
+            <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
+              <input style={S.scoreInput} type="number" placeholder="T3" value={scores.sf2a} onChange={e=>upS("sf2a", e.target.value)}/>
+              <span style={{color:theme.sub, fontSize:14*z}}>–</span>
+              <input style={S.scoreInput} type="number" placeholder="T4" value={scores.sf2b} onChange={e=>upS("sf2b", e.target.value)}/>
+            </div>
+          </div>
+          {err && <Err msg={err} theme={theme}/>}
+          <div style={{display:"flex", gap:10*z, marginTop:12*z}}>
+            <button style={{...S.btnSecondary, marginTop:0, flex:1}} onClick={() => setStep(1)}>← {t("back") || "Back"}</button>
+            <button style={{...S.btnPrimary, marginTop:0, flex:2}} onClick={advanceToFinal}>🏆 {t("final")} →</button>
+          </div>
+        </Sec>
+      )}
+
+      {/* STEP 3 — Final */}
+      {step === 3 && (
+        <Sec title={`🏆 ${t("final")}`} theme={theme}>
+          <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
+            Round 3 of 3 · {t("sf")} 1 ✓ · {t("sf")} 2 ✓ · {t("final")}
+          </div>
+          {/* Real finalist names — computed from SF results */}
+          <div style={{background:theme.card, border:`2px solid ${theme.accent}`, borderRadius:12*z, padding:14*z, marginBottom:16*z}}>
+            <div style={{fontSize:11*z, fontWeight:700, color:theme.accent, marginBottom:10*z, textTransform:"uppercase", letterSpacing:"0.5px", textAlign:"center"}}>Championship Match</div>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12*z, gap:8*z}}>
+              <span style={{flex:1, fontSize:14*z, color:theme.text, fontWeight:800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                {sfWinners.sf1 ? `${getName(sfWinners.sf1[0])} / ${getName(sfWinners.sf1[1])}` : `${t("winner")} SF1`}
+              </span>
+              <span style={{fontSize:12*z, color:theme.accent, fontWeight:700}}>vs</span>
+              <span style={{flex:1, fontSize:14*z, color:theme.text, fontWeight:800, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                {sfWinners.sf2 ? `${getName(sfWinners.sf2[0])} / ${getName(sfWinners.sf2[1])}` : `${t("winner")} SF2`}
+              </span>
+            </div>
+            <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
+              <input style={S.scoreInput} type="number" placeholder="W1" value={scores.fina} onChange={e=>upS("fina", e.target.value)}/>
+              <span style={{color:theme.sub, fontSize:14*z}}>–</span>
+              <input style={S.scoreInput} type="number" placeholder="W2" value={scores.finb} onChange={e=>upS("finb", e.target.value)}/>
+            </div>
+          </div>
+          <div style={{marginBottom:12*z}}>
+            <label style={S.label}>Tournament Notes (Optional)</label>
+            <input style={S.input} placeholder="e.g. Injury in SF2, great finals..." value={notes} onChange={e=>setNotes(e.target.value)}/>
+          </div>
+          {err && <Err msg={err} theme={theme}/>}
+          <div style={{display:"flex", gap:10*z, marginTop:12*z}}>
+            <button style={{...S.btnSecondary, marginTop:0, flex:1}} onClick={() => setStep(2)}>← {t("back") || "Back"}</button>
+            <button style={{...S.btnBig, flex:2, marginTop:0}} onClick={logTournament}>🏆 {t("log_match_btn")}</button>
           </div>
         </Sec>
       )}

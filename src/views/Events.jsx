@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { makeS } from '../styles.js';
-import { Sec, ConfirmInline } from '../components/Shared.jsx';
+import { Sec, ConfirmInline, usePersistentFormState } from '../components/Shared.jsx';
 import { t, genId } from '../engine.js';
 
 const toYYYYMMDD = (d) => {
@@ -12,9 +12,14 @@ export default function Events({ state, set, theme, isAdmin }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
 
-  const [newEvent, setNewEvent] = useState({ title: "", date: "", venue: "", notes: "", invitees: [] });
+  // Form state persists in sessionStorage so accidental tab-aways don't lose progress.
+  // Cleared on successful save (or when user closes the form with ✕).
+  const [newEvent, setNewEvent, clearNewEvent] = usePersistentFormState(
+    "events:newEvent", { title: "", date: "", venue: "", notes: "", invitees: [] }
+  );
   const [editingEvent, setEditingEvent] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [formError, setFormError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [playerSearch, setPlayerSearch] = useState("");      // in the create form
   const [eventSearch, setEventSearch] = useState("");        // main page event search
@@ -24,7 +29,16 @@ export default function Events({ state, set, theme, isAdmin }) {
 
   // ── Save / Edit / Delete ────────────────────────────────────────────────
   const saveEvent = () => {
-    if (!newEvent.title || !newEvent.date) return;
+    // Validate required fields
+    const missing = [];
+    if (!newEvent.title?.trim()) missing.push(t("event_name") || "Event Name");
+    if (!newEvent.date)          missing.push(t("date_time_lbl") || "Date & Time");
+    if (!newEvent.venue?.trim()) missing.push(t("venue") || "Venue");
+    if (missing.length) {
+      setFormError((t("required_fields_msg") || "Please fill in:") + " " + missing.join(", "));
+      return;
+    }
+    setFormError("");
     set(s => ({
       ...s,
       events: editingEvent
@@ -32,7 +46,7 @@ export default function Events({ state, set, theme, isAdmin }) {
         : [...(s.events || []), { ...newEvent, id: genId() }]
     }));
     setEditingEvent(null);
-    setNewEvent({ title: "", date: "", venue: "", notes: "", invitees: [] });
+    clearNewEvent();
     setShowForm(false);
   };
 
@@ -115,9 +129,15 @@ export default function Events({ state, set, theme, isAdmin }) {
     }).sort((a,b) => new Date(a.date) - new Date(b.date));
   }, [state.events, state.players, eventSearch, selectedDateStr, cYear, cMonth]);
 
+  // Sort: starred players first (still alphabetically within each group), then everyone else alphabetically
+  const favored = new Set(state.favoredPlayerIds || []);
   const sortedPlayers = [...(state.players || [])]
     .filter(p => p.name.toLowerCase().includes(playerSearch.toLowerCase()))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      const aFav = favored.has(a.id), bFav = favored.has(b.id);
+      if (aFav !== bFav) return aFav ? -1 : 1;     // starred above unstarred
+      return a.name.localeCompare(b.name);          // alphabetical within group
+    });
 
   const mobileDateFix = newEvent.date ? newEvent.date.slice(0, 16) : "";
 
@@ -245,10 +265,9 @@ export default function Events({ state, set, theme, isAdmin }) {
                   )}
                 </div>
                 <div style={{display:"flex", gap:8*z, flexShrink:0, marginLeft:8*z}}>
-                  {isAdmin && (
-                    <button style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:6*z, color:theme.text, cursor:"pointer", padding:"6px 10px", fontSize:12*z}}
-                      onClick={() => startEdit(ev)}>✏️</button>
-                  )}
+                  {/* Edit is open to all users; delete remains admin-only below */}
+                  <button style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:6*z, color:theme.text, cursor:"pointer", padding:"6px 10px", fontSize:12*z}}
+                    onClick={() => startEdit(ev)}>✏️</button>
                   <button style={{background:theme.accent, border:"none", borderRadius:6*z, color:theme.invert ? "#fff" : "#000", cursor:"pointer", padding:"6px 10px", fontSize:12*z, fontWeight:"bold"}}
                     onClick={() => {
                       const text = `🥒 Pickleball: ${ev.title}\n📅 ${new Date(ev.date).toLocaleString()}\n📍 ${ev.venue}${ev.notes ? `\n📝 ${ev.notes}` : ''}`;
@@ -298,26 +317,26 @@ export default function Events({ state, set, theme, isAdmin }) {
                 {editingEvent ? t("edit_session") : t("new_session")}
               </div>
               <button style={{background:"transparent", border:"none", color:theme.sub, fontSize:20*z, cursor:"pointer"}}
-                onClick={() => { setShowForm(false); setEditingEvent(null); }}>✕</button>
+                onClick={() => { setShowForm(false); setEditingEvent(null); setFormError(""); }}>✕</button>
             </div>
 
             <div style={{display:"flex", flexDirection:"column", gap:16*z}}>
               <div>
-                <label style={S.label}>{t("event_name")}</label>
+                <label style={S.label}>{t("event_name")} <span style={{color:"#e05050"}}>*</span></label>
                 <input style={S.input} placeholder={t("event_name")} value={newEvent.title}
-                  onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
+                  onChange={e => { setNewEvent({...newEvent, title: e.target.value}); if (formError) setFormError(""); }} />
               </div>
-              <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12*z}}>
-                <div>
-                  <label style={S.label}>{t("date_time_lbl") || "Date & Time"}</label>
-                  <input style={S.input} type="datetime-local" value={mobileDateFix}
-                    onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
-                </div>
-                <div>
-                  <label style={S.label}>{t("venue") || "Venue"}</label>
-                  <input style={S.input} placeholder={t("venue")} value={newEvent.venue}
-                    onChange={e => setNewEvent({...newEvent, venue: e.target.value})} />
-                </div>
+              <div>
+                <label style={S.label}>{t("date_time_lbl") || "Date & Time"} <span style={{color:"#e05050"}}>*</span></label>
+                <input style={{...S.input, width:"100%", boxSizing:"border-box", maxWidth:"100%"}}
+                  type="datetime-local" value={mobileDateFix}
+                  onChange={e => { setNewEvent({...newEvent, date: e.target.value}); if (formError) setFormError(""); }} />
+              </div>
+              <div>
+                <label style={S.label}>{t("venue") || "Venue"} <span style={{color:"#e05050"}}>*</span></label>
+                <input style={{...S.input, width:"100%", boxSizing:"border-box"}}
+                  placeholder={t("venue")} value={newEvent.venue}
+                  onChange={e => { setNewEvent({...newEvent, venue: e.target.value}); if (formError) setFormError(""); }} />
               </div>
               <div>
                 <label style={S.label}>{t("notes_lbl") || "Notes"}</label>
@@ -348,16 +367,30 @@ export default function Events({ state, set, theme, isAdmin }) {
                 <div style={{maxHeight:180*z, overflowY:"auto", background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:8*z}}>
                   {sortedPlayers.map(p => {
                     const isSel = newEvent.invitees.includes(p.id);
+                    const isFav = favored.has(p.id);
                     return (
                       <div key={p.id} onClick={() => toggleInvitee(p.id)}
                         style={{padding:"10px 14px", borderBottom:`1px solid ${theme.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:14*z, cursor:"pointer", background: isSel ? theme.accent+"11" : "transparent"}}>
-                        <span style={{color:theme.text, fontWeight: isSel ? 700 : 400}}>{p.name}</span>
+                        <span style={{color:theme.text, fontWeight: isSel ? 700 : 400, display:"flex", alignItems:"center", gap:6*z}}>
+                          {isFav && <span style={{color:"#f0c040", fontSize:12*z}}>★</span>}
+                          {p.name}
+                        </span>
                         <span style={{color: isSel ? theme.accent : theme.sub, fontSize:16*z}}>{isSel ? "✓" : "+"}</span>
                       </div>
                     );
                   })}
                 </div>
               </div>
+
+              {formError && (
+                <div style={{
+                  background:"rgba(224,80,80,0.1)", border:"1px solid #e0505044",
+                  color:"#e05050", padding:`${8*z}px ${12*z}px`, borderRadius:8*z,
+                  fontSize:12*z, fontWeight:600
+                }}>
+                  ⚠️ {formError}
+                </div>
+              )}
 
               <button style={{...S.btnPrimary, padding:"14px", borderRadius:10*z, fontSize:15*z, marginTop:8*z}} onClick={saveEvent}>
                 {editingEvent ? t("save_changes") : t("create_session")}

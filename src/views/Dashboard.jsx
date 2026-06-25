@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { t, ratingColor, fmtDelta, patchPlayerRatings, computeMatchOfDay, computePlayerOfMonth } from '../engine.js';
+import { t, ratingColor, fmtDelta, patchPlayerRatings, computeMatchOfDay, computePlayerOfMonth, shortName, isLargeZoom } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, Avatar } from '../components/Shared.jsx';
 import Players from './Players.jsx'; // Bring in the heavy lifting!
@@ -31,23 +31,13 @@ function LeaderboardRow({player:p,rank,onClick,theme,format}) {
       <div style={{flexShrink: 0}}><Avatar name={p.name} url={p.avatar} size={36}/></div>
       <div style={{...S.lbInfo, minWidth: 0, overflow: "hidden"}}>
         <div style={{display:"flex",alignItems:"center",gap:6*z, flexWrap:"wrap"}}>
-          <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%"}}>{p.name}</span>
-          {streakIcon && <span style={{fontSize:12*z, flexShrink:0}} title={`${p.streak} Game Streak`}>{streakIcon}{p.streak}</span>}
-          <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background: isProv ? "rgba(245,158,11,0.12)" : "rgba(80,200,120,0.12)", color: isProv ? "#f59e0b" : "#50c878", fontWeight:700, flexShrink:0}}>
-             {isProv ? "P" : "C"}
+          <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%"}} title={p.name}>
+            {shortName(p.name, isLargeZoom(z) ? "always" : "auto")}
           </span>
+          {streakIcon && <span style={{fontSize:12*z, flexShrink:0}} title={`${p.streak} Game Streak`}>{streakIcon}{p.streak}</span>}
         </div>
         <div style={{display:"flex", alignItems:"center", gap:6*z, marginTop:2*z, flexWrap:"wrap"}}>
           <span style={{fontSize:11*z,color:theme.sub}}>{gP||0}G · {w||0}W {l||0}L</span>
-          {gP > 0 && (
-            <span title="Rating Confidence" style={{
-              fontSize:10*z, fontWeight:700, color:confColor,
-              background: confColor + "18", borderRadius:10*z,
-              padding:`1px ${5*z}px`, cursor:"default", flexShrink:0
-            }}>
-              📊 {conf}%
-            </span>
-          )}
         </div>
       </div>
       <div style={{textAlign:"right", opacity: (gP||0) === 0 ? 0.4 : 1, flexShrink: 0, marginLeft: 8*z}}>
@@ -83,36 +73,44 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
     <div style={S.view}>
 
       {/* ── MATCH OF THE DAY — compact teaser, expandable ─────────────── */}
-      {motd && (
-        <div style={{
-          background: motd.upsetFactor > 0.2 ? "rgba(240,192,64,0.08)" : "rgba(64,160,224,0.08)",
-          border: `1px solid ${motd.upsetFactor > 0.2 ? "#f0c04044" : "#40a0e044"}`,
-          borderRadius: 10*z, marginBottom: 8*z, overflow: "hidden"
-        }}>
-          {/* Compact one-line teaser */}
+      {motd && (() => {
+        const isUpset = motd.upsetFactor > 0.2;
+        // Upsets get gold (universal); everything else uses the user's accent color
+        const motdColor = isUpset ? "#f0c040" : theme.accent;
+        const motdBg = isUpset ? "rgba(240,192,64,0.08)" : theme.accent + "11";
+        const motdBorder = isUpset ? "#f0c04044" : theme.accent + "44";
+        return (
+          <div style={{
+            background: motdBg,
+            border: `1px solid ${motdBorder}`,
+            borderRadius: 10*z, marginBottom: 8*z, overflow: "hidden"
+          }}>
+          {/* Compact one-line teaser — title only */}
           <div onClick={() => setMotdExpanded(e => !e)} style={{
             display:"flex", alignItems:"center", justifyContent:"space-between",
             padding: `${8*z}px ${12*z}px`, cursor:"pointer", gap: 8*z
           }}>
             <div style={{display:"flex", alignItems:"center", gap:8*z, flex:1, minWidth:0, overflow:"hidden"}}>
               <span style={{fontSize:14*z, flexShrink:0}}>
-                {motd.upsetFactor > 0.2 ? "🎉" : motd.tightness > 0.9 ? "😤" : "⚡"}
+                {isUpset ? "🎉" : motd.tightness > 0.9 ? "😤" : "⚡"}
               </span>
-              <span style={{fontSize:11*z, fontWeight:700, color: motd.upsetFactor > 0.2 ? "#f0c040" : "#40a0e0", flexShrink:0, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+              <span style={{fontSize:11*z, fontWeight:700, color: motdColor, flexShrink:0, textTransform:"uppercase", letterSpacing:"0.5px"}}>
                 {t("motd_sec")}
-              </span>
-              <span style={{fontSize:12*z, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                {motd.winTeam.join(" & ")} {t("motd_beat")} {motd.loseTeam.join(" & ")}
               </span>
             </div>
             <span style={{fontSize:12*z, color:theme.sub, transform: motdExpanded ? "rotate(180deg)" : "none", transition:"transform 0.2s", flexShrink:0}}>▾</span>
           </div>
           {/* Expanded detail */}
           {motdExpanded && (
-            <div style={{padding:`0 ${12*z}px ${10*z}px`, borderTop:`1px solid ${theme.border}`, paddingTop:10*z}}>
+            <div style={{padding:`${10*z}px ${12*z}px`, borderTop:`1px solid ${theme.border}`}}>
+              <div style={{fontSize:13*z, fontWeight:700, color:theme.text, marginBottom:6*z}}>
+                {motd.winTeam.join(" & ")}
+                <span style={{color:theme.sub, fontWeight:400}}> {t("motd_beat")} </span>
+                {motd.loseTeam.join(" & ")}
+              </div>
               <div style={{display:"flex", justifyContent:"space-between", marginBottom:4*z}}>
                 <span style={{fontSize:10*z, color:theme.sub}}>
-                  {motd.upsetFactor > 0.2 ? `🎉 ${t("motd_upset")}` : motd.tightness > 0.9 ? `😤 ${t("motd_tight")}` : ""}
+                  {isUpset ? `🎉 ${t("motd_upset")}` : motd.tightness > 0.9 ? `😤 ${t("motd_tight")}` : ""}
                 </span>
                 <span style={{fontSize:10*z, color:theme.sub}}>{new Date(motd.match.date).toLocaleDateString()}</span>
               </div>
@@ -132,8 +130,9 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
               }}>{t("view_in_history") || "View in History →"}</button>
             </div>
           )}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {/* ── PLAYERS OF THE MONTH — compact teaser, expandable podium ── */}
       {potm.length > 0 && (
@@ -141,7 +140,7 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
           background: theme.card, border:`1px solid ${theme.border}`,
           borderRadius: 10*z, marginBottom: 16*z, overflow: "hidden"
         }}>
-          {/* Compact one-line teaser */}
+          {/* Compact one-line teaser — title only */}
           <div onClick={() => setPotmExpanded(e => !e)} style={{
             display:"flex", alignItems:"center", justifyContent:"space-between",
             padding: `${8*z}px ${12*z}px`, cursor:"pointer", gap: 8*z
@@ -150,9 +149,6 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
               <span style={{fontSize:14*z, flexShrink:0}}>📈</span>
               <span style={{fontSize:11*z, fontWeight:700, color:theme.accent, flexShrink:0, textTransform:"uppercase", letterSpacing:"0.5px"}}>
                 {potmTitle}
-              </span>
-              <span style={{fontSize:12*z, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                {potm.slice(0,3).map((p,i) => ["🥇","🥈","🥉"][i] + " " + p.name.split(" ")[0]).join("  ")}
               </span>
             </div>
             <span style={{fontSize:12*z, color:theme.sub, transform: potmExpanded ? "rotate(180deg)" : "none", transition:"transform 0.2s", flexShrink:0}}>▾</span>
@@ -187,8 +183,8 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
                       alignItems: "center", textAlign: "center"
                     }}>
                       <div style={{fontSize:14*z, marginBottom:3*z}}>{medals[i]}</div>
-                      <div style={{fontWeight:800, fontSize:12*z, color:theme.text, width:"100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
-                        {p.name}
+                      <div style={{fontWeight:800, fontSize:12*z, color:theme.text, width:"100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}} title={p.name}>
+                        {shortName(p.name, isLargeZoom(z) ? "always" : "auto")}
                       </div>
                       <div style={{fontSize:13*z, fontWeight:800, color: p.gain >= 0 ? "#50c878" : "#e05050", marginTop:4*z}}>
                         {p.gain >= 0 ? "+" : ""}{p.gain.toFixed(3)}

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { t, DEFAULT_RATING, genId, ratingColor, processImage } from '../engine.js';
+import { t, DEFAULT_RATING, genId, ratingColor, processImage, shortName, isLargeZoom } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, Empty, Err, Sel, Avatar, ConfirmInline } from '../components/Shared.jsx';
+import { Sec, Empty, Err, Sel, Avatar, ConfirmInline, usePersistentFormState } from '../components/Shared.jsx';
 
 export default function Players({players,state,set,nav,theme,isAdmin,user,setUser}) {
   const S=makeS(theme);
@@ -10,11 +10,12 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
   // Accordion State: Open by default ONLY if the user is in the forced setup mode
   const [showAdd, setShowAdd] = useState(!!user?.pendingAutoLink);
 
-  const [name,setName]=useState("");
-  const [singlesRating, setSinglesRating] = useState("");
-  const [doublesRating, setDoublesRating] = useState("");
-  const [notes, setNotes] = useState(""); 
-  const [pin, setPin] = useState(""); 
+  // Persisted draft for new-player form — survives accidental navigation away.
+  const [name,setName,clearName]=usePersistentFormState("player:name", "");
+  const [singlesRating, setSinglesRating, clearSR] = usePersistentFormState("player:sr", "");
+  const [doublesRating, setDoublesRating, clearDR] = usePersistentFormState("player:dr", "");
+  const [notes, setNotes, clearNotes] = usePersistentFormState("player:notes", ""); 
+  const [pin, setPin, clearPin] = usePersistentFormState("player:pin", ""); 
   
   const [err,setErr]=useState(""), [pendingRemove,setPendingRemove]=useState(null);
   
@@ -29,7 +30,7 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
   
   const [avatarData, setAvatarData] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState("rating");
+  const [sortBy, setSortBy] = useState("starred");
   
   const fileInputRef = useRef(null);
   const editFileInputRef = useRef(null); 
@@ -74,7 +75,7 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
        setUser({ myPlayerId: newId, pendingAutoLink: false, verifiedHash: btoa(newId + "-" + pin) });
     }
     
-    setName(""); setSinglesRating(""); setDoublesRating(""); setAvatarData(null); setNotes(""); setPin(""); setErr("");
+    clearName(); clearSR(); clearDR(); setAvatarData(null); clearNotes(); clearPin(); setErr("");
     
     if (!user?.pendingAutoLink) {
       setShowAdd(false);
@@ -231,7 +232,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
               <div style={{ flex: 1 }}>
                 <Sel 
                   opts={[
-                    { value: 'rating', label: t("sort_rating") },
                     { value: 'starred', label: t("sort_starred") },
                     { value: 'games', label: t("sort_games") },
                     { value: 'name', label: t("sort_fn") }
@@ -312,7 +312,19 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                     <div style={{flexShrink:0}}><Avatar name={p.name} url={p.avatar} size={38}/></div>
                     <div style={{...S.lbInfo, minWidth:0, overflow:"hidden"}}>
                       <div style={{display:"flex",alignItems:"center",gap:6*z, flexWrap:"wrap"}}>
-                        <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%"}}>{p.name}</span>
+                        <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%"}} title={p.name}>
+                          {shortName(p.name, isLargeZoom(z) ? "always" : "auto")}
+                        </span>
+                        {/* C/P rating-certification badge */}
+                        {(() => {
+                          const isProv = (p.gamesPlayed || 0) < 5;
+                          return (
+                            <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background: isProv ? "rgba(245,158,11,0.12)" : "rgba(80,200,120,0.12)", color: isProv ? "#f59e0b" : "#50c878", fontWeight:700, flexShrink:0}}
+                              title={isProv ? "Provisional — under 5 matches" : "Certified — 5+ matches"}>
+                              {isProv ? "P" : "C"}
+                            </span>
+                          );
+                        })()}
                         {isOnline(p.id) && <span style={{width: 8*z, height: 8*z, borderRadius: "50%", background: "#50c878", boxShadow: "0 0 5px #50c878", display: "inline-block", flexShrink:0}} title="Online Now"></span>}
                         {p.duprImported && <span style={{ background: "rgba(64, 160, 224, 0.15)", color: "#40a0e0", padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 800, flexShrink:0 }}>D</span>}
                         {p.pin && <span style={{fontSize: 10*z, flexShrink:0}} title="Secured Account">🔒</span>}
@@ -326,9 +338,6 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                           </button>
                         )}
                       </div>
-                      <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
-                        {(p.gamesPlayed||0)}G · {(p.wins||0)}W {(p.losses||0)}L
-                      </div>
                       {p.notes && (
                         <div style={{fontSize: 11*z, color: theme.sub, marginTop: 4*z, display: 'flex', alignItems: 'center', gap: 4*z, overflow:"hidden"}}>
                           <span style={{flexShrink:0}}>📝</span> <span style={{fontStyle: 'italic', overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{p.notes}</span>
@@ -336,20 +345,12 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                       )}
                     </div>
                     
-                    {/* Right column — never shrinks, always full size */}
-                    <div style={{display:"flex", alignItems:"center", justifyContent: "flex-end", flexShrink:0, marginLeft: 8*z}}>
-                      <div style={{display:"flex", flexDirection:"column", gap:4*z, alignItems:"flex-end"}}>
-                        <span style={{fontSize:10*z, fontWeight:800, color:"#111", background:ratingColor(p.ratingDoubles), borderRadius:4*z, padding:"2px 6px", whiteSpace:"nowrap"}}>D: {(p.ratingDoubles||3).toFixed(2)}</span>
-                        <span style={{fontSize:10*z, fontWeight:800, color:"#111", background:ratingColor(p.ratingSingles), borderRadius:4*z, padding:"2px 6px", whiteSpace:"nowrap"}}>S: {(p.ratingSingles||3).toFixed(2)}</span>
+                    {/* Right column — only delete button now (admin only) */}
+                    {isAdmin && (
+                      <div style={{display:"flex", alignItems:"center", justifyContent: "flex-end", flexShrink:0, marginLeft: 8*z}}>
+                        <button style={S.btnDanger} onClick={e=>{e.stopPropagation();setPendingRemove(p.id);}}>✕</button>
                       </div>
-                      
-                      {/* Trash slot — fixed width to prevent layout shift */}
-                      {isAdmin && (
-                        <div style={{marginLeft: 6*z, display: "flex", flexShrink:0}}>
-                          <button style={S.btnDanger} onClick={e=>{e.stopPropagation();setPendingRemove(p.id);}}>✕</button>
-                        </div>
-                      )}
-                    </div>
+                    )}
                     
                   </div>
                 )}
