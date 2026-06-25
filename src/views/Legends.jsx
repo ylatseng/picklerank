@@ -225,7 +225,20 @@ export default function Legends({ theme }) {
               <ItemRow icon="🏓" title={t("legend_mode_custom_title")} desc={t("legend_mode_custom_desc")} />
               <ItemRow icon="🔄" title={t("legend_mode_session_title")} desc={t("legend_mode_session_desc")} />
               <ItemRow icon="👑" title={t("legend_mode_kotc_title")} desc={t("legend_mode_kotc_desc")} />
-              <ItemRow icon="🏆" title={t("legend_mode_tourney_title")} desc={t("legend_mode_tourney_desc")} />
+              <ItemRow icon="🏆" title={t("legend_mode_tourney_title")} desc={t("legend_tourney_overview", "Three formats available: Single Elimination, Double Elimination, and Round Robin. Choose at the top of the Tournament tab. Single-screen collapsible bracket UI — completed rounds auto-collapse to free up screen space.")} />
+            </Accordion>
+
+            <Accordion id="1-3" title={t("legend_sec_tourney_formats", "Tournament Formats")}>
+              <ItemRow icon="🥇" title={t("legend_tf_se_title", "Single Elimination (SE)")}
+                desc={t("legend_tf_se_desc", "4 teams. Lose once, you're out. Two semifinals → one final. Fastest format — only 3 matches total. Good for quick afternoons when you want a clear winner without spending much time.")} />
+              <ItemRow icon="🥈" title={t("legend_tf_de_title", "Double Elimination (DE)")}
+                desc={t("legend_tf_de_desc", "4 teams. Lose twice, you're out. Winners Bracket (2 SFs + Final) + Losers Bracket (Final) + Grand Final. 5 matches total. An early loss isn't fatal — the loser of WB-Final drops to the Grand Final via the LB path. Best when you want more games and a second chance.")} />
+              <ItemRow icon="🥉" title={t("legend_tf_rr_title", "Round Robin (RR)")}
+                desc={t("legend_tf_rr_desc", "3–6 teams. Every team plays every other team exactly once. Champion = most wins; ties broken by point differential. Most matches per team — ideal when you want max court time. 4 teams = 6 matches, 5 teams = 10 matches, 6 teams = 15 matches.")} />
+              <ItemRow icon="📊" title={t("legend_tf_standings_title", "RR Standings")}
+                desc={t("legend_tf_standings_desc", "Round Robin shows a live standings table beneath the matches: 🥇 🥈 🥉 by wins, with point differential as the tiebreaker. Updates as each match is logged.")} />
+              <ItemRow icon="🔽" title={t("legend_tf_collapse_title", "Auto-Collapse Rounds")}
+                desc={t("legend_tf_collapse_desc", "When a round finishes, its accordion auto-collapses to free up screen space. Tap the header any time to expand and review or edit. Future rounds only appear once all prior rounds are complete.")} />
             </Accordion>
 
             <Accordion id="1-4" title={t("legend_sec_h2h", "Head-to-Head (H2H) Statistics")}>

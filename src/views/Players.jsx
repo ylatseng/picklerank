@@ -315,13 +315,24 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                         <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%"}} title={p.name}>
                           {shortName(p.name, isLargeZoom(z) ? "always" : "auto")}
                         </span>
-                        {/* C/P rating-certification badge */}
+                        {/* C/P: Provisional if either singles or doubles is under 5 matches separately.
+                            A player with 4S + 4D = 8 total is still provisional in each format. */}
                         {(() => {
-                          const isProv = (p.gamesPlayed || 0) < 5;
+                          const doublesOk = (p.doublesPlayed || 0) >= 5;
+                          const singlesOk = (p.singlesPlayed || 0) >= 5;
+                          // Show C only if they're certified in at least the format they play most
+                          const isProv = !doublesOk && !singlesOk;
+                          const isMixed = doublesOk !== singlesOk; // one cert, one not
+                          const label = isProv ? "P" : isMixed ? "P/C" : "C";
+                          const bg = isProv ? "rgba(245,158,11,0.12)" : isMixed ? "rgba(100,150,255,0.12)" : "rgba(80,200,120,0.12)";
+                          const color = isProv ? "#f59e0b" : isMixed ? "#6496ff" : "#50c878";
+                          const tip = isProv ? "Provisional (both formats under 5 matches)"
+                            : isMixed ? `Doubles: ${doublesOk?"✓":"P"} · Singles: ${singlesOk?"✓":"P"}`
+                            : "Certified (5+ matches in both formats)";
                           return (
-                            <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background: isProv ? "rgba(245,158,11,0.12)" : "rgba(80,200,120,0.12)", color: isProv ? "#f59e0b" : "#50c878", fontWeight:700, flexShrink:0}}
-                              title={isProv ? "Provisional — under 5 matches" : "Certified — 5+ matches"}>
-                              {isProv ? "P" : "C"}
+                            <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background:bg, color, fontWeight:700, flexShrink:0}}
+                              title={tip}>
+                              {label}
                             </span>
                           );
                         })()}

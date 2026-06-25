@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS, suggestBalancedTeams, computeSessionSummary, getRecentForm, shortName, isLargeZoom } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, Err, Sel, MatchEloBreakdown, ConfirmInline, MatchEditModal, MatchCard, usePersistentFormState } from '../components/Shared.jsx';
@@ -22,10 +22,17 @@ function FormDots({ pid, matches, z = 1 }) {
   );
 }
 
-export function LogMatch({state,players,set,nav,theme,user}) {
+export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
-  const [type,setType]=useState("singles"), [winTo,setWinTo]=useState(11), [winBy,setWinBy]=useState(2);
+  const [type,setType]=useState(() => {
+    try { return localStorage.getItem("pr_lastMatchType") || "doubles"; } catch { return "doubles"; }
+  }), [winTo,setWinTo]=useState(11), [winBy,setWinBy]=useState(2);
+
+  // Persist match type preference whenever it changes
+  useEffect(() => {
+    try { localStorage.setItem("pr_lastMatchType", type); } catch {}
+  }, [type]);
   // Persisted in-progress form state — survives tab navigation, cleared after successful Log.
   const [sp,setSp,clearSp]=usePersistentFormState("logMatch:sp", {s1:"",s2:"",d1a:"",d1b:"",d2a:"",d2b:""});
   const [games,setGames,clearGames]=usePersistentFormState("logMatch:games", [{a:"",b:""}]);
@@ -85,6 +92,7 @@ export function LogMatch({state,players,set,nav,theme,user}) {
     const { derivedPlayers, derivedMatches } = replayAllMatches(state.players, newMatchArray);
     setResult({ match: derivedMatches.find(m => m.id === match.id), players: derivedPlayers });
     set(s => ({...s, matches: newMatchArray}));
+    showUndo?.([match.id], "Match");
     // Clear all persisted form state — fresh start for next log
     clearSp(); clearGames(); clearTnames(); clearVenue(); clearNotes();
   }
@@ -185,14 +193,27 @@ export function LogMatch({state,players,set,nav,theme,user}) {
       
       {err && !hasDupes && <Err msg={err} theme={theme}/>}
       
-      <button style={{...S.btnBig, opacity: hasDupes ? 0.5 : 1, cursor: hasDupes ? "not-allowed" : "pointer"}} disabled={hasDupes} onClick={submit}>
-        {t("log_match_btn")}
-      </button>
+      <div style={{display:"flex", gap:8*z, marginTop:8*z}}>
+        <button
+          style={{...S.btnSecondary, marginTop:0, flexShrink:0, paddingLeft:16*z, paddingRight:16*z}}
+          onClick={() => {
+            // Clear all draft fields — fresh form. Doesn't touch saved matches.
+            clearSp(); clearGames(); clearTnames(); clearVenue(); clearNotes();
+            setType("singles"); setWinTo(11); setWinBy(2);
+            setMatchDate(isoToDatetimeLocal(new Date().toISOString()));
+            setErr(""); setResult(null);
+          }}>
+          {t("reset_btn") || "🔄 Reset"}
+        </button>
+        <button style={{...S.btnBig, marginTop:0, flex:1, opacity: hasDupes ? 0.5 : 1, cursor: hasDupes ? "not-allowed" : "pointer"}} disabled={hasDupes} onClick={submit}>
+          {t("log_match_btn")}
+        </button>
+      </div>
     </div>
   );
 }
 
-export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) {
+export function SessionMode({ players, state, set, nav, theme, isAdmin, user, showUndo }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
   // Persisted draft for Session — survives accidental tab-away. Cleared after Log.
@@ -264,6 +285,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
     setSessionSummary(summary);
 
     set(s => ({...s, matches: allMatchesAfter}));
+    showUndo?.(matchesToLog.map(m => m.id), `Session (${matchesToLog.length} matches)`);
     // Clear persisted draft now that session is logged
     clearRoundScores();
     clearSessionIds();
@@ -294,6 +316,11 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
   return (
     <div style={S.view}>
       <MatchesSubNav active="session" nav={nav} theme={theme} />
+      <div style={{paddingTop:4*z, paddingBottom:2*z, paddingLeft:12*z, paddingRight:12*z}}>
+        <div style={{fontSize:10*z, color:theme.sub, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+          Session — 4-Player Round Robin
+        </div>
+      </div>
 
       {/* ── SESSION SUMMARY MODAL ─────────────────────────────────────── */}
       {sessionSummary && (
@@ -499,7 +526,17 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
             </div>
 
             {err && <Err msg={err} theme={theme}/>}
-            <button style={S.btnBig} onClick={submitSession}>{t("log_match_btn")}</button>
+            <div style={{display:"flex", gap:8*z}}>
+              <button
+                style={{...S.btnSecondary, marginTop:0, flexShrink:0, paddingLeft:16*z, paddingRight:16*z}}
+                onClick={() => {
+                  clearSessionIds(); clearRoundScores(); clearSessionNotes();
+                  setChosenSplit(null); setErr(""); setSuccess("");
+                }}>
+                {t("reset_btn") || "🔄 Reset"}
+              </button>
+              <button style={{...S.btnBig, marginTop:0, flex:1}} onClick={submitSession}>{t("log_match_btn")}</button>
+            </div>
           </div>
         </Sec>
       )}
@@ -507,7 +544,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user }) 
   );
 }
 
-export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) {
+export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, showUndo }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
   // Persisted draft for KOTC — survives accidental tab-away. Cleared after Log.
@@ -517,6 +554,9 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
   const [roundScores, setRoundScores, clearKotcScores] = usePersistentFormState("kotc:scores", [{t1:"",t2:""},{t1:"",t2:""},{t1:"",t2:""}]);
   const [notes, setNotes, clearKotcNotes] = usePersistentFormState("kotc:notes", ""); 
   const [err, setErr] = useState(""), [success, setSuccess] = useState("");
+  // Snapshot of leaderboard and matchups captured at submit time, so the analysis
+  // panel can keep rendering after the draft state is cleared.
+  const [kotcAnalysis, setKotcAnalysis] = useState(null);
   
   useEffect(() => {
     if (user?.myPlayerId && !sessionIds[0]) {
@@ -562,6 +602,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
     if(new Set(sessionIds).size !== 4) return setErr(t("err_duplicate"));
 
     const matchesToLog = [];
+    const baseTime = Date.now();
     for(let i=0; i<3; i++) {
         const s1 = parseInt(roundScores[i].t1);
         const s2 = parseInt(roundScores[i].t2);
@@ -573,10 +614,31 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
         const t2w = winnerTeam === 1 ? 0 : 1;
         const t1Ids = [sessionIds[matchups[i].t1[0]], sessionIds[matchups[i].t1[1]]];
         const t2Ids = [sessionIds[matchups[i].t2[0]], sessionIds[matchups[i].t2[1]]];
-        matchesToLog.push({id:genId(),type:"doubles",date:new Date().toISOString(),teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:null, notes:`King of the Court: ${notes.trim() || "Winners stay on court"}`, loggedBy: user?.myPlayerId || "guest"});
+        // Stagger timestamps by 1 sec each so reverse-chrono History shows last round on top
+        const matchDate = new Date(baseTime + (i * 1000)).toISOString();
+        matchesToLog.push({
+          id: genId(), type: "doubles", date: matchDate,
+          teams: [t1Ids, t2Ids], winnerTeam,
+          games: [{a:s1, b:s2, winner: winnerTeam}],
+          teamNames: {t1:null, t2:null}, winTo, winBy,
+          team1Wins: t1w, team2Wins: t2w, venue: null,
+          notes: `King of the Court: Match ${i+1} of 3${notes.trim() ? " — " + notes.trim() : ""}`,
+          loggedBy: user?.myPlayerId || "guest"
+        });
     }
     set(s => ({...s, matches: [...(s.matches||[]), ...matchesToLog]}));
-    setSuccess(`✅ 3 Matches Logged. King Crowned: ${getName(kotcLeaderboard[0].id)}!`); 
+    showUndo?.(matchesToLog.map(m => m.id), "King of the Court (3 matches)");
+    // Capture analysis snapshot so the panel can render after state clears
+    setKotcAnalysis({
+      leaderboard: kotcLeaderboard.slice(),
+      matchups: matchups.map((m, i) => ({
+        round: i + 1,
+        t1Ids: [sessionIds[m.t1[0]], sessionIds[m.t1[1]]],
+        t2Ids: [sessionIds[m.t2[0]], sessionIds[m.t2[1]]],
+        s1: parseInt(roundScores[i].t1), s2: parseInt(roundScores[i].t2),
+      })),
+    });
+    setSuccess(`✅ 3 Matches Logged. King Crowned: ${getName(kotcLeaderboard[0].id)}!`);
     // Clear persisted draft
     clearKotcScores();
     clearKotcIds();
@@ -587,6 +649,74 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
     <div style={S.view}>
       <MatchesSubNav active="kotc" nav={nav} theme={theme} />
       {success && <div style={{background:"rgba(80,200,120,0.15)", color:"#50c878", padding:10*z, borderRadius:8*z, marginBottom:12*z, fontSize:13*z, fontWeight:"bold"}}>{success}</div>}
+
+      {/* ── KOTC analysis panel — shows after matches are logged ───────────────
+          Tells the story of why each player landed where they did. */}
+      {kotcAnalysis && (
+        <Sec title="👑 King of the Court — Analysis" theme={theme}>
+          {/* Leaderboard with explanations */}
+          <div style={{display:"flex", flexDirection:"column", gap:8*z, marginBottom:14*z}}>
+            {kotcAnalysis.leaderboard.map((entry, rank) => {
+              const isKing = rank === 0;
+              const medal = rank === 0 ? "👑" : rank === 1 ? "🥈" : rank === 2 ? "🥉" : `#${rank+1}`;
+              // Reason text: explain via wins + point diff
+              let reason;
+              if (isKing) {
+                reason = `Won ${entry.wins} of 3 matches with a +${entry.diff} point differential — the strongest combined record.`;
+              } else if (entry.wins === kotcAnalysis.leaderboard[0].wins) {
+                reason = `Tied at ${entry.wins} wins but lost the tiebreaker on point differential (${entry.diff >= 0 ? '+' : ''}${entry.diff}).`;
+              } else {
+                const lostBy = kotcAnalysis.leaderboard[0].wins - entry.wins;
+                reason = `Won ${entry.wins} match${entry.wins === 1 ? '' : 'es'} (${lostBy} fewer than the King). Point differential: ${entry.diff >= 0 ? '+' : ''}${entry.diff}.`;
+              }
+              return (
+                <div key={entry.id} style={{
+                  background: isKing ? "rgba(240,192,64,0.10)" : theme.bg,
+                  border: `1px solid ${isKing ? "#f0c04055" : theme.border}`,
+                  borderRadius: 10*z, padding: 10*z
+                }}>
+                  <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", gap:8*z, marginBottom: 4*z}}>
+                    <div style={{display:"flex", alignItems:"center", gap:8*z, flex:1, minWidth:0, overflow:"hidden"}}>
+                      <span style={{fontSize:18*z, flexShrink:0}}>{medal}</span>
+                      <span style={{fontSize:14*z, fontWeight: isKing ? 800 : 700, color: isKing ? "#f0c040" : theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                        {getName(entry.id)}{isKing && " — KING"}
+                      </span>
+                    </div>
+                    <div style={{fontSize:11*z, color:theme.sub, flexShrink:0}}>
+                      {entry.wins}W · {entry.diff >= 0 ? '+' : ''}{entry.diff} pts
+                    </div>
+                  </div>
+                  <div style={{fontSize:11*z, color:theme.sub, lineHeight:1.5}}>{reason}</div>
+                </div>
+              );
+            })}
+          </div>
+          {/* Per-match recap */}
+          <div style={{fontSize:11*z, fontWeight:700, color:theme.sub, marginBottom:6*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>Match recap</div>
+          <div style={{display:"flex", flexDirection:"column", gap:6*z, marginBottom: 12*z}}>
+            {kotcAnalysis.matchups.map(m => {
+              const winT1 = m.s1 > m.s2;
+              return (
+                <div key={m.round} style={{display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:11*z, padding:`${5*z}px ${8*z}px`, background: theme.bg, borderRadius: 6*z, gap: 6*z}}>
+                  <span style={{color:theme.sub, fontWeight:700, flexShrink:0}}>#{m.round}</span>
+                  <span style={{flex:1, color: winT1 ? theme.accent : theme.text, fontWeight: winT1 ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                    {getName(m.t1Ids[0])}/{getName(m.t1Ids[1])} {winT1 && "✓"}
+                  </span>
+                  <span style={{color:theme.text, fontWeight:700, flexShrink:0}}>{m.s1}–{m.s2}</span>
+                  <span style={{flex:1, textAlign:"right", color: !winT1 ? theme.accent : theme.text, fontWeight: !winT1 ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                    {!winT1 && "✓ "}{getName(m.t2Ids[0])}/{getName(m.t2Ids[1])}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            onClick={() => { setKotcAnalysis(null); setSuccess(""); }}
+            style={{...S.btnSecondary, width:"100%", marginTop:0}}>
+            Start Another King of the Court
+          </button>
+        </Sec>
+      )}
       
       <Sec title={t("kotc")} theme={theme}>
         <div style={{fontSize:12*z, color:theme.sub, marginBottom:12*z}}>{t("kotc_desc")}</div>
@@ -634,7 +764,17 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
             </div>
 
             {err && <Err msg={err} theme={theme}/>}
-            <button style={S.btnBig} onClick={submitTournament}>{t("log_match_btn")}</button>
+            <div style={{display:"flex", gap:8*z}}>
+              <button
+                style={{...S.btnSecondary, marginTop:0, flexShrink:0, paddingLeft:16*z, paddingRight:16*z}}
+                onClick={() => {
+                  clearKotcIds(); clearKotcScores(); clearKotcNotes();
+                  setErr(""); setSuccess("");
+                }}>
+                {t("reset_btn") || "🔄 Reset"}
+              </button>
+              <button style={{...S.btnBig, marginTop:0, flex:1}} onClick={submitTournament}>{t("log_match_btn")}</button>
+            </div>
           </div>
         )}
       </Sec>
@@ -642,249 +782,643 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user }) 
   );
 }
 
-export function TournamentMode({ players, state, set, nav, theme, user }) {
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TournamentMode — supports Single Elimination, Double Elimination, Round Robin
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Format-aware state machine. Each format has its own bracket structure stored
+// under a single `bracket` field in sessionStorage. Top-level state:
+//   - format: "se" | "de" | "rr"
+//   - playerCount: number of player slots (varies by format)
+//   - teamMode: "singles" | "doubles" (for SE/DE) — RR currently doubles-only
+//   - players: array of player IDs (length = playerCount × 2 for doubles)
+//   - bracket: format-specific data — rounds/matches with scores + status
+//   - phase: which logical phase we're showing (e.g. "round1", "semis", "final", "done")
+//
+export function TournamentMode({ players: roster, state, set, nav, theme, user, showUndo }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
-  
-  const [step, setStep] = useState(0); 
-  const [teams, setTeams, clearTeams] = usePersistentFormState("tourney:teams", [["",""], ["",""], ["",""], ["",""]]);
+
+  // Persisted tournament draft — survives accidental tab-aways
+  const [format, setFormat, clearFormat] = usePersistentFormState("tourney:format", "se");
+  const [playerCount, setPlayerCount, clearPlayerCount] = usePersistentFormState("tourney:playerCount", 4);
+  const [tIds, setTIds, clearTIds] = usePersistentFormState("tourney:ids", []);
+  const [bracket, setBracket, clearBracket] = usePersistentFormState("tourney:bracket", null);
   const [winTo, setWinTo] = useState(11);
   const [winBy, setWinBy] = useState(2);
-  const [scores, setScores, clearScores] = usePersistentFormState("tourney:scores", { sf1a:"", sf1b:"", sf2a:"", sf2b:"", fina:"", finb:"" });
-  const [notes, setNotes, clearTourneyNotes] = usePersistentFormState("tourney:notes", ""); 
+  const [notes, setNotes, clearTNotes] = usePersistentFormState("tourney:notes", "");
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState("");
+  const [step, setStep] = useState(bracket ? 1 : 0);   // 0 = setup, 1 = play
+  // Per-round collapse state — track which rounds are expanded vs collapsed
+  const [collapsed, setCollapsed] = useState({});
 
-  const filledTeams = teams.flat().filter(Boolean);
-  const hasDupes = new Set(filledTeams).size < filledTeams.length;
-
-  const rawOpts = players.map(p => ({ value: p.id, label: shortName(p.name, isLargeZoom(z) ? "always" : "auto") }));
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const rawOpts = roster.map(p => ({ value: p.id, label: shortName(p.name, isLargeZoom(z) ? "always" : "auto") }));
   const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
-  const getName = id => shortName(players.find(p => p.id === id)?.name ?? "TBD", isLargeZoom(z) ? "always" : "auto");
+  const getName = id => shortName(roster.find(p => p.id === id)?.name ?? "TBD", isLargeZoom(z) ? "always" : "auto");
+  const getTeamLabel = (team) => (team || []).map(getName).join(" / ");
 
-  function upT(tIdx, pIdx, val) {
-    const n = [...teams];
-    n[tIdx] = [...n[tIdx]];
-    n[tIdx][pIdx] = val;
-    setTeams(n);
-    setErr(""); 
-  }
+  // Player slot count = (teams) × 2 for doubles
+  // SE: 4 teams × 2 players = 8 slots (or 8 teams × 2 = 16 slots if we add 8-team SE later)
+  // DE: 4 teams × 2 players = 8 slots
+  // RR: 4–6 teams × 2 players = 8–12 slots
+  // For now: SE/DE = 4 teams (8 slots), RR = 4–6 teams configurable
+  const teamCount = format === "rr" ? playerCount : 4;
+  const slotCount = teamCount * 2;
 
-  function upS(key, val) {
-    setScores(s => ({...s, [key]: val.replace(/-/g, '')}));
-  }
+  // Ensure tIds array length matches slotCount when format/playerCount changes
+  useEffect(() => {
+    if (tIds.length !== slotCount) {
+      setTIds(Array(slotCount).fill(""));
+    }
+  }, [slotCount]);
 
-  function start() {
+  // Helpers to read teams from tIds (pairs of consecutive ids)
+  const teamsFromIds = () => {
+    const result = [];
+    for (let i = 0; i < slotCount; i += 2) result.push([tIds[i] || "", tIds[i+1] || ""]);
+    return result;
+  };
+
+  const filled = tIds.filter(Boolean);
+  const hasDupes = new Set(filled).size < filled.length;
+  const allFilled = tIds.length === slotCount && tIds.every(Boolean);
+
+  const updateSlot = (idx, val) => {
+    const next = [...tIds];
+    while (next.length < slotCount) next.push("");
+    next[idx] = val;
+    setTIds(next);
     setErr("");
-    if(hasDupes) return setErr(t("err_duplicate"));
-    const ids = teams.flat();
-    if(ids.some(id => !id)) return setErr(t("err_select_players"));
+  };
+
+  // ── Bracket builders ──────────────────────────────────────────────────────
+  function buildSEBracket() {
+    const teams = teamsFromIds();
+    // Single elimination 4 teams: 2 semifinals → 1 final
+    return {
+      format: "se",
+      rounds: [
+        { name: "semifinal", matches: [
+          { teams: [teams[0], teams[1]], scoreA: "", scoreB: "", winner: null },
+          { teams: [teams[2], teams[3]], scoreA: "", scoreB: "", winner: null },
+        ]},
+        { name: "final", matches: [
+          { teams: [null, null], scoreA: "", scoreB: "", winner: null },
+        ]},
+      ],
+      champion: null,
+    };
+  }
+
+  function buildDEBracket() {
+    const teams = teamsFromIds();
+    // Double elimination 4 teams:
+    //   WB-SF1: T1 vs T2 → winner goes to WB-Final
+    //   WB-SF2: T3 vs T4 → winner goes to WB-Final
+    //   WB-Final: WB-SF1-W vs WB-SF2-W → winner goes to Grand Final
+    //   LB-Final: WB-SF1-L vs WB-SF2-L → winner goes to Grand Final
+    //   Grand Final: WB-winner vs LB-winner → champion
+    return {
+      format: "de",
+      rounds: [
+        { name: "wb_sf", matches: [
+          { teams: [teams[0], teams[1]], scoreA: "", scoreB: "", winner: null },
+          { teams: [teams[2], teams[3]], scoreA: "", scoreB: "", winner: null },
+        ]},
+        { name: "wb_final_and_lb_final", matches: [
+          { label: "Winners Bracket Final", teams: [null, null], scoreA: "", scoreB: "", winner: null },
+          { label: "Losers Bracket Final",  teams: [null, null], scoreA: "", scoreB: "", winner: null },
+        ]},
+        { name: "grand_final", matches: [
+          { teams: [null, null], scoreA: "", scoreB: "", winner: null },
+        ]},
+      ],
+      champion: null,
+    };
+  }
+
+  function buildRRBracket() {
+    const teams = teamsFromIds();
+    // Round robin: every team plays every other team exactly once
+    const matches = [];
+    for (let i = 0; i < teams.length; i++) {
+      for (let j = i + 1; j < teams.length; j++) {
+        matches.push({ teams: [teams[i], teams[j]], scoreA: "", scoreB: "", winner: null });
+      }
+    }
+    return {
+      format: "rr",
+      rounds: [{ name: "all", matches }],
+      champion: null,
+    };
+  }
+
+  function startTournament() {
+    setErr("");
+    if (hasDupes) return setErr(t("err_duplicate"));
+    if (!allFilled) return setErr(t("err_select_players"));
+    let b;
+    if (format === "se") b = buildSEBracket();
+    else if (format === "de") b = buildDEBracket();
+    else b = buildRRBracket();
+    setBracket(b);
+    setCollapsed({});
     setStep(1);
   }
 
-  // Compute who advances to the Final, based on entered SF scores.
-  // Returns nulls if SF scores aren't valid yet.
-  const sfWinners = (() => {
-    const s_sf1a = parseInt(scores.sf1a), s_sf1b = parseInt(scores.sf1b);
-    const s_sf2a = parseInt(scores.sf2a), s_sf2b = parseInt(scores.sf2b);
-    if ([s_sf1a, s_sf1b, s_sf2a, s_sf2b].some(isNaN)) return { sf1: null, sf2: null };
-    const r1 = validatePickleballScore(s_sf1a, s_sf1b, winTo, winBy);
-    const r2 = validatePickleballScore(s_sf2a, s_sf2b, winTo, winBy);
-    return {
-      sf1: r1 ? (r1.winner === 0 ? teams[0] : teams[1]) : null,
-      sf2: r2 ? (r2.winner === 0 ? teams[2] : teams[3]) : null,
-      r1Valid: !!r1, r2Valid: !!r2,
-    };
-  })();
-
-  function advanceToSF2() {
+  // ── Score input handlers ──────────────────────────────────────────────────
+  function updateScore(roundIdx, matchIdx, field, val) {
+    setBracket(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      next.rounds[roundIdx].matches[matchIdx][field] = val.replace(/-/g, '');
+      return next;
+    });
     setErr("");
-    const s1a = parseInt(scores.sf1a), s1b = parseInt(scores.sf1b);
-    if (isNaN(s1a) || isNaN(s1b)) return setErr(t("err_valid_scores"));
-    const r1 = validatePickleballScore(s1a, s1b, winTo, winBy);
-    if (!r1) return setErr(t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy));
-    setStep(2);
   }
 
-  function advanceToFinal() {
-    setErr("");
-    const s2a = parseInt(scores.sf2a), s2b = parseInt(scores.sf2b);
-    if (isNaN(s2a) || isNaN(s2b)) return setErr(t("err_valid_scores"));
-    const r2 = validatePickleballScore(s2a, s2b, winTo, winBy);
-    if (!r2) return setErr(t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy));
-    setStep(3);
+  // Validate one match's scores; if valid, set winner index (0 or 1) on the match
+  function validateMatch(m) {
+    const a = parseInt(m.scoreA), b = parseInt(m.scoreB);
+    if (isNaN(a) || isNaN(b)) return null;
+    const r = validatePickleballScore(a, b, winTo, winBy);
+    return r;
   }
 
+  // ── Compute round completion + advance brackets ───────────────────────────
+  // Whenever scores change, recompute the bracket — propagating winners forward
+  const computedBracket = useMemo(() => {
+    if (!bracket) return null;
+    const b = JSON.parse(JSON.stringify(bracket));
+
+    // First pass: validate each match independently
+    b.rounds.forEach(round => {
+      round.matches.forEach(m => {
+        if (m.teams[0] && m.teams[1]) {
+          const r = validateMatch(m);
+          m.winner = r ? r.winner : null;
+        }
+      });
+    });
+
+    // Propagate winners per format
+    if (b.format === "se") {
+      const sf = b.rounds[0].matches;
+      const fin = b.rounds[1].matches[0];
+      if (sf[0].winner !== null) fin.teams[0] = sf[0].teams[sf[0].winner];
+      if (sf[1].winner !== null) fin.teams[1] = sf[1].teams[sf[1].winner];
+      // Re-validate final since teams just got set
+      if (fin.teams[0] && fin.teams[1]) {
+        const r = validateMatch(fin);
+        fin.winner = r ? r.winner : null;
+        if (fin.winner !== null) b.champion = fin.teams[fin.winner];
+      }
+    } else if (b.format === "de") {
+      const wbSf = b.rounds[0].matches;
+      const wbFinal = b.rounds[1].matches[0];
+      const lbFinal = b.rounds[1].matches[1];
+      const grand = b.rounds[2].matches[0];
+      // WB Final = winners of both WB-SFs; LB Final = losers of both WB-SFs
+      if (wbSf[0].winner !== null && wbSf[1].winner !== null) {
+        wbFinal.teams[0] = wbSf[0].teams[wbSf[0].winner];
+        wbFinal.teams[1] = wbSf[1].teams[wbSf[1].winner];
+        lbFinal.teams[0] = wbSf[0].teams[1 - wbSf[0].winner];
+        lbFinal.teams[1] = wbSf[1].teams[1 - wbSf[1].winner];
+      }
+      // Re-validate WB Final + LB Final
+      [wbFinal, lbFinal].forEach(m => {
+        if (m.teams[0] && m.teams[1]) {
+          const r = validateMatch(m);
+          m.winner = r ? r.winner : null;
+        }
+      });
+      // Grand Final = WB winner vs LB winner
+      if (wbFinal.winner !== null && lbFinal.winner !== null) {
+        grand.teams[0] = wbFinal.teams[wbFinal.winner];
+        grand.teams[1] = lbFinal.teams[lbFinal.winner];
+        const r = validateMatch(grand);
+        grand.winner = r ? r.winner : null;
+        if (grand.winner !== null) b.champion = grand.teams[grand.winner];
+      }
+    } else if (b.format === "rr") {
+      // Round robin: champion = team with most wins. Ties broken by point differential.
+      const teams = teamsFromIds();
+      const teamKey = (team) => team ? team.join("|") : null;
+      const tally = {};
+      teams.forEach(t => { tally[teamKey(t)] = { team: t, wins: 0, pointDiff: 0, matches: 0 }; });
+      b.rounds[0].matches.forEach(m => {
+        if (m.winner === null) return;
+        const a = parseInt(m.scoreA), bb = parseInt(m.scoreB);
+        const winTeam = m.teams[m.winner];
+        const loseTeam = m.teams[1 - m.winner];
+        if (tally[teamKey(winTeam)]) {
+          tally[teamKey(winTeam)].wins++;
+          tally[teamKey(winTeam)].matches++;
+          tally[teamKey(winTeam)].pointDiff += m.winner === 0 ? (a - bb) : (bb - a);
+        }
+        if (tally[teamKey(loseTeam)]) {
+          tally[teamKey(loseTeam)].matches++;
+          tally[teamKey(loseTeam)].pointDiff += m.winner === 0 ? (bb - a) : (a - bb);
+        }
+      });
+      const allComplete = b.rounds[0].matches.every(m => m.winner !== null);
+      if (allComplete) {
+        const sorted = Object.values(tally).sort((x, y) => y.wins - x.wins || y.pointDiff - x.pointDiff);
+        b.standings = sorted;
+        b.champion = sorted[0].team;
+      } else {
+        b.standings = Object.values(tally);
+      }
+    }
+    return b;
+  }, [bracket, tIds, winTo, winBy]);
+
+  // ── Round progress tracking ───────────────────────────────────────────────
+  function isRoundComplete(round) {
+    return round.matches.every(m => m.winner !== null);
+  }
+  function isRoundActive(rounds, idx) {
+    // Active = not complete AND all prior rounds complete
+    if (isRoundComplete(rounds[idx])) return false;
+    for (let i = 0; i < idx; i++) if (!isRoundComplete(rounds[i])) return false;
+    return true;
+  }
+  function isRoundUpcoming(rounds, idx) {
+    return !isRoundComplete(rounds[idx]) && !isRoundActive(rounds, idx);
+  }
+
+  // Auto-collapse a round when it just completed (only the first time)
+  useEffect(() => {
+    if (!computedBracket) return;
+    computedBracket.rounds.forEach((round, i) => {
+      if (isRoundComplete(round) && collapsed[i] === undefined) {
+        setCollapsed(prev => ({ ...prev, [i]: true }));
+      }
+    });
+  }, [computedBracket]);
+
+  function toggleCollapse(idx) {
+    setCollapsed(prev => ({ ...prev, [idx]: !prev[idx] }));
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────
   function logTournament() {
     setErr(""); setSuccess("");
-    
-    const s_sf1a = parseInt(scores.sf1a), s_sf1b = parseInt(scores.sf1b);
-    const s_sf2a = parseInt(scores.sf2a), s_sf2b = parseInt(scores.sf2b);
-    const s_fina = parseInt(scores.fina), s_finb = parseInt(scores.finb);
+    if (!computedBracket) return;
+    // Verify ALL matches that should be playable are complete
+    const allComplete = computedBracket.rounds.every(round =>
+      round.matches.every(m => !m.teams[0] || !m.teams[1] || m.winner !== null)
+    );
+    if (!allComplete) return setErr(t("err_finish_all_matches") || "Please finish all matches before logging.");
+    if (!computedBracket.champion) return setErr(t("err_finish_all_matches") || "Cannot determine champion.");
 
-    if ([s_sf1a, s_sf1b, s_sf2a, s_sf2b, s_fina, s_finb].some(isNaN)) return setErr(t("err_valid_scores"));
+    const formatLabel = computedBracket.format === "se" ? "Single Elimination"
+                      : computedBracket.format === "de" ? "Double Elimination"
+                      : "Round Robin";
 
-    const r_sf1 = validatePickleballScore(s_sf1a, s_sf1b, winTo, winBy);
-    const r_sf2 = validatePickleballScore(s_sf2a, s_sf2b, winTo, winBy);
-    const r_fin = validatePickleballScore(s_fina, s_finb, winTo, winBy);
+    // Stagger match timestamps so reverse-chronological History naturally
+    // shows Final on top, then SF2, then SF1 (later round = newer timestamp).
+    // 1-second increments are imperceptible to users but produce correct ordering.
+    const baseTime = Date.now();
+    const matchesToLog = [];
+    let mNum = 0;
+    computedBracket.rounds.forEach((round, roundIdx) => {
+      round.matches.forEach((m, matchIdx) => {
+        if (!m.teams[0] || !m.teams[1] || m.winner === null) return;
+        mNum++;
+        const a = parseInt(m.scoreA), b = parseInt(m.scoreB);
+        const roundDisplay = round.name === "semifinal" ? "Semifinal"
+                           : round.name === "final" ? "Final"
+                           : round.name === "wb_sf" ? "Winners SF"
+                           : round.name === "wb_final_and_lb_final" ? (m.label || "Bracket Final")
+                           : round.name === "grand_final" ? "Grand Final"
+                           : round.name === "all" ? `Match ${mNum}`
+                           : round.name;
+        // Earlier rounds get earlier timestamps so History shows Final on top
+        const matchDate = new Date(baseTime + (mNum * 1000)).toISOString();
+        matchesToLog.push({
+          id: genId(), type: "doubles", date: matchDate,
+          teams: m.teams, winnerTeam: m.winner,
+          games: [{ a, b: b, winner: m.winner }],
+          teamNames: { t1: null, t2: null }, winTo, winBy,
+          team1Wins: m.winner === 0 ? 1 : 0,
+          team2Wins: m.winner === 1 ? 1 : 0,
+          venue: null,
+          notes: `${formatLabel}: ${roundDisplay}${notes.trim() ? " — " + notes.trim() : ""}`,
+          loggedBy: user?.myPlayerId || "guest",
+        });
+      });
+    });
 
-    if(!r_sf1 || !r_sf2 || !r_fin) return setErr(t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy));
-
-    const t1 = teams[0], t2 = teams[1], t3 = teams[2], t4 = teams[3];
-    const win_sf1 = r_sf1.winner === 0 ? t1 : t2;
-    const win_sf2 = r_sf2.winner === 0 ? t3 : t4;
-
-    const dateStr = new Date().toISOString();
-    
-    const m1 = { id: genId(), type: "doubles", date: dateStr, teams: [t1, t2], winnerTeam: r_sf1.winner, games: [{a:s_sf1a, b:s_sf1b, winner: r_sf1.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_sf1.winner===0?1:0, team2Wins: r_sf1.winner===1?1:0, venue: null, notes: `Tournament Semifinal 1${notes.trim() ? ": " + notes.trim() : ""}`, loggedBy: user?.myPlayerId || "guest" };
-    const m2 = { id: genId(), type: "doubles", date: dateStr, teams: [t3, t4], winnerTeam: r_sf2.winner, games: [{a:s_sf2a, b:s_sf2b, winner: r_sf2.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_sf2.winner===0?1:0, team2Wins: r_sf2.winner===1?1:0, venue: null, notes: `Tournament Semifinal 2${notes.trim() ? ": " + notes.trim() : ""}`, loggedBy: user?.myPlayerId || "guest" };
-    const m3 = { id: genId(), type: "doubles", date: dateStr, teams: [win_sf1, win_sf2], winnerTeam: r_fin.winner, games: [{a:s_fina, b:s_finb, winner: r_fin.winner}], teamNames: {t1:null, t2:null}, winTo, winBy, team1Wins: r_fin.winner===0?1:0, team2Wins: r_fin.winner===1?1:0, venue: null, notes: `Tournament Final${notes.trim() ? ": " + notes.trim() : ""}`, loggedBy: user?.myPlayerId || "guest" };
-
-    set(s => ({...s, matches: [...(s.matches||[]), m1, m2, m3]}));
-    
-    setSuccess("🏆 Tournament Logged! Champions: " + getName(win_sf1 === r_fin.winner ? win_sf1[0] : win_sf2[0]) + " & " + getName(win_sf1 === r_fin.winner ? win_sf1[1] : win_sf2[1]));
+    set(s => ({ ...s, matches: [...(s.matches || []), ...matchesToLog] }));
+    showUndo?.(matchesToLog.map(m => m.id), `${formatLabel} (${matchesToLog.length} matches)`);
+    const champLabel = `${getName(computedBracket.champion[0])} & ${getName(computedBracket.champion[1])}`;
+    setSuccess(`🏆 ${formatLabel} Logged! Champions: ${champLabel}`);
+    // Reset everything for the next tournament
+    clearFormat(); clearPlayerCount(); clearTIds(); clearBracket(); clearTNotes();
     setStep(0);
-    // Clear persisted draft
-    clearTeams();
-    clearScores();
-    clearTourneyNotes();
+    setCollapsed({});
   }
 
-  return (
-    <div style={S.view}>
-      <MatchesSubNav active="tourney" nav={nav} theme={theme} />
-      
-      {success && <div style={{background:"rgba(80,200,120,0.15)", color:"#50c878", padding:10*z, borderRadius:8*z, marginBottom:12*z, fontSize:13*z, fontWeight:"bold"}}>{success}</div>}
-      
-      {step === 0 && (
-        <Sec title={t("tourney_setup")} theme={theme}>
-          <div style={{display:"flex", gap:12*z, marginBottom:16*z}}>
-            <div style={{flex:1}}>
-              <label style={S.label}>{t("win_to_lbl")}</label>
-              <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
-            </div>
-            <div style={{flex:1}}>
-              <label style={S.label}>{t("win_by_lbl")}</label>
-              <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
-            </div>
-          </div>
-          
-          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12*z}}>
-            {teams.map((tArr, i) => (
-              <div key={i} style={{background:theme.card, padding:10*z, borderRadius:8*z, border:`1px solid ${theme.border}`}}>
-                <div style={{fontSize:12*z, fontWeight:700, color:theme.sub, marginBottom:8*z}}>{t("team")} {i+1}</div>
-                <Sel opts={opts} value={tArr[0]} onChange={v=>upT(i, 0, v)} placeholder={t("player_1")} theme={theme}/>
-                <div style={{height:8*z}}/>
-                <Sel opts={opts} value={tArr[1]} onChange={v=>upT(i, 1, v)} placeholder={t("player_2")} theme={theme}/>
+  function cancelTournament() {
+    clearBracket();
+    setStep(0);
+    setCollapsed({});
+    setErr("");
+  }
+
+  // ── Render: Setup screen (step 0) ─────────────────────────────────────────
+  function renderSetup() {
+    const formatOptions = [
+      { id: "se", label: "Single Elimination", desc: "Lose once, you're out. 4 teams (8 players) → 2 semifinals → final." },
+      { id: "de", label: "Double Elimination", desc: "Lose twice, you're out. Includes a losers bracket so an early loss isn't fatal." },
+      { id: "rr", label: "Round Robin",        desc: "Every team plays every other team once. Winner = most wins (ties: point differential)." },
+    ];
+    return (
+      <Sec title={t("tourney_setup") || "Tournament Setup"} theme={theme}>
+        {/* Format selector */}
+        <div style={{marginBottom:16*z}}>
+          <label style={S.label}>{t("tourney_format") || "Format"}</label>
+          <div style={{display:"flex", flexDirection:"column", gap:8*z}}>
+            {formatOptions.map(opt => (
+              <div key={opt.id} onClick={() => setFormat(opt.id)} style={{
+                padding:`${10*z}px ${12*z}px`,
+                background: format === opt.id ? theme.accent + "15" : theme.bg,
+                border: `2px solid ${format === opt.id ? theme.accent : theme.border}`,
+                borderRadius: 10*z, cursor: "pointer"
+              }}>
+                <div style={{fontSize:13*z, fontWeight:700, color: format === opt.id ? theme.accent : theme.text}}>
+                  {opt.label}
+                </div>
+                <div style={{fontSize:10*z, color: theme.sub, marginTop:3*z}}>{opt.desc}</div>
               </div>
             ))}
           </div>
-          
-          {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
-          {err && !hasDupes && <Err msg={err} theme={theme}/>}
-          
-          <button 
-            style={{...S.btnPrimary, marginTop:16*z, width:"100%", opacity: hasDupes ? 0.5 : 1, cursor: hasDupes ? "not-allowed" : "pointer"}} 
-            disabled={hasDupes} 
-            onClick={start}>
+        </div>
+
+        {/* Player count for RR */}
+        {format === "rr" && (
+          <div style={{marginBottom:16*z}}>
+            <label style={S.label}>{t("tourney_team_count") || "Number of Teams"}</label>
+            <div style={{display:"flex", gap:6*z}}>
+              {[3, 4, 5, 6].map(n => (
+                <button key={n} onClick={() => setPlayerCount(n)} style={{
+                  flex:1, padding:`${8*z}px`,
+                  background: playerCount === n ? theme.accent + "15" : theme.bg,
+                  border: `2px solid ${playerCount === n ? theme.accent : theme.border}`,
+                  borderRadius: 8*z, fontSize: 13*z, fontWeight: 700,
+                  color: playerCount === n ? theme.accent : theme.text, cursor: "pointer"
+                }}>{n}</button>
+              ))}
+            </div>
+            <div style={{fontSize:10*z, color:theme.sub, marginTop:6*z}}>
+              {playerCount} teams → {playerCount * (playerCount - 1) / 2} matches total
+            </div>
+          </div>
+        )}
+
+        {/* Win-To / Win-By */}
+        <div style={{display:"flex", gap:12*z, marginBottom:16*z}}>
+          <div style={{flex:1}}>
+            <label style={S.label}>{t("win_to_lbl")}</label>
+            <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
+          </div>
+          <div style={{flex:1}}>
+            <label style={S.label}>{t("win_by_lbl")}</label>
+            <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
+          </div>
+        </div>
+
+        {/* Team rosters */}
+        <div style={{display:"grid", gridTemplateColumns: teamCount <= 4 ? "1fr 1fr" : "1fr 1fr 1fr", gap:12*z}}>
+          {Array.from({length: teamCount}).map((_, tIdx) => (
+            <div key={tIdx} style={{background:theme.card, padding:10*z, borderRadius:8*z, border:`1px solid ${theme.border}`}}>
+              <div style={{fontSize:12*z, fontWeight:700, color:theme.sub, marginBottom:8*z}}>{t("team")} {tIdx+1}</div>
+              <Sel opts={opts} value={tIds[tIdx*2] || ""} onChange={v=>updateSlot(tIdx*2, v)} placeholder={t("player_1")} theme={theme}/>
+              <div style={{height:8*z}}/>
+              <Sel opts={opts} value={tIds[tIdx*2+1] || ""} onChange={v=>updateSlot(tIdx*2+1, v)} placeholder={t("player_2")} theme={theme}/>
+            </div>
+          ))}
+        </div>
+
+        {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
+        {err && !hasDupes && <Err msg={err} theme={theme}/>}
+
+        <div style={{display:"flex", gap:8*z, marginTop:16*z}}>
+          <button
+            style={{...S.btnSecondary, marginTop:0, flexShrink:0, paddingLeft:16*z, paddingRight:16*z}}
+            onClick={() => {
+              clearFormat(); clearPlayerCount(); clearTIds(); clearBracket(); clearTNotes();
+              setErr("");
+            }}>
+            {t("reset_btn") || "🔄 Reset"}
+          </button>
+          <button
+            style={{...S.btnPrimary, marginTop:0, flex:1, opacity: (hasDupes || !allFilled) ? 0.5 : 1, cursor: (hasDupes || !allFilled) ? "not-allowed" : "pointer"}}
+            disabled={hasDupes || !allFilled}
+            onClick={startTournament}>
             {t("start_tournament")}
           </button>
-        </Sec>
-      )}
+        </div>
+      </Sec>
+    );
+  }
 
-      {/* STEP 1 — Semifinal 1 */}
-      {step === 1 && (
-        <Sec title={`🏆 ${t("sf")} 1`} theme={theme}>
-          <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
-            Round 1 of 3 · {t("sf")} 1 → {t("sf")} 2 → {t("final")}
-          </div>
-          <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z, marginBottom:16*z}}>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10*z, gap:8*z}}>
-              <span style={{flex:1, fontSize:13*z, color:theme.text, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{getName(teams[0][0])} / {getName(teams[0][1])}</span>
-              <span style={{fontSize:11*z, color:theme.sub}}>vs</span>
-              <span style={{flex:1, fontSize:13*z, color:theme.text, fontWeight:700, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{getName(teams[1][0])} / {getName(teams[1][1])}</span>
-            </div>
-            <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
-              <input style={S.scoreInput} type="number" placeholder="T1" value={scores.sf1a} onChange={e=>upS("sf1a", e.target.value)}/>
-              <span style={{color:theme.sub, fontSize:14*z}}>–</span>
-              <input style={S.scoreInput} type="number" placeholder="T2" value={scores.sf1b} onChange={e=>upS("sf1b", e.target.value)}/>
-            </div>
-          </div>
-          {err && <Err msg={err} theme={theme}/>}
-          <div style={{display:"flex", gap:10*z, marginTop:12*z}}>
-            <button style={{...S.btnSecondary, marginTop:0, flex:1}} onClick={() => setStep(0)}>← {t("back") || "Back"}</button>
-            <button style={{...S.btnPrimary, marginTop:0, flex:2}} onClick={advanceToSF2}>{t("sf")} 2 →</button>
-          </div>
-        </Sec>
-      )}
+  // ── Render: Single match card with score input ────────────────────────────
+  function renderMatchCard(m, roundIdx, matchIdx, locked) {
+    const teamA = getTeamLabel(m.teams[0]);
+    const teamB = getTeamLabel(m.teams[1]);
+    const winner = m.winner;
+    const hasTeams = m.teams[0] && m.teams[1];
+    const isDecided = winner !== null;
 
-      {/* STEP 2 — Semifinal 2 */}
-      {step === 2 && (
-        <Sec title={`🏆 ${t("sf")} 2`} theme={theme}>
-          <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
-            Round 2 of 3 · {t("sf")} 1 ✓ · {t("sf")} 2 → {t("final")}
+    return (
+      <div style={{
+        background: isDecided ? theme.accent + "08" : theme.bg,
+        border: `1px solid ${isDecided ? theme.accent + "44" : theme.border}`,
+        borderRadius: 10*z, padding: 10*z, marginBottom: 8*z
+      }}>
+        {m.label && (
+          <div style={{fontSize:10*z, fontWeight:700, color:theme.accent, marginBottom:6*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+            {m.label}
           </div>
-          {/* Show the SF1 winner so user has context */}
-          {sfWinners.sf1 && (
-            <div style={{background:theme.accent + "11", border:`1px solid ${theme.accent}44`, borderRadius:8*z, padding:10*z, marginBottom:12*z, fontSize:11*z, color:theme.sub}}>
-              ✅ {t("sf")} 1 Winner: <strong style={{color:theme.accent}}>{getName(sfWinners.sf1[0])} / {getName(sfWinners.sf1[1])}</strong>
+        )}
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z, gap:8*z}}>
+          <span style={{flex:1, fontSize:12*z, fontWeight: winner === 0 ? 800 : 600,
+            color: winner === 0 ? theme.accent : (hasTeams ? theme.text : theme.sub),
+            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+            {hasTeams ? teamA : (m.label ? "Awaiting prior round" : "TBD")}
+            {winner === 0 && " ✓"}
+          </span>
+          <span style={{fontSize:10*z, color:theme.sub}}>vs</span>
+          <span style={{flex:1, fontSize:12*z, fontWeight: winner === 1 ? 800 : 600,
+            color: winner === 1 ? theme.accent : (hasTeams ? theme.text : theme.sub),
+            textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+            {hasTeams ? teamB : (m.label ? "Awaiting prior round" : "TBD")}
+            {winner === 1 && " ✓"}
+          </span>
+        </div>
+        <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:8*z}}>
+          <input style={{...S.scoreInput, opacity: hasTeams ? 1 : 0.4}}
+            type="number" placeholder="A" value={m.scoreA}
+            disabled={!hasTeams || locked}
+            onChange={e => updateScore(roundIdx, matchIdx, "scoreA", e.target.value)}/>
+          <span style={{color:theme.sub, fontSize:14*z}}>–</span>
+          <input style={{...S.scoreInput, opacity: hasTeams ? 1 : 0.4}}
+            type="number" placeholder="B" value={m.scoreB}
+            disabled={!hasTeams || locked}
+            onChange={e => updateScore(roundIdx, matchIdx, "scoreB", e.target.value)}/>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: collapsible round ─────────────────────────────────────────────
+  function renderRound(round, idx, b) {
+    const complete = isRoundComplete(round);
+    const active = isRoundActive(b.rounds, idx);
+    const upcoming = isRoundUpcoming(b.rounds, idx);
+    const isCollapsed = collapsed[idx];
+
+    const roundTitle = round.name === "semifinal" ? "Semifinals"
+                     : round.name === "final" ? "🏆 Final"
+                     : round.name === "wb_sf" ? "Winners Bracket Semifinals"
+                     : round.name === "wb_final_and_lb_final" ? "Bracket Finals"
+                     : round.name === "grand_final" ? "🏆 Grand Final"
+                     : round.name === "all" ? "Round Robin Matches"
+                     : round.name;
+
+    // Upcoming rounds: don't render at all (they appear once active)
+    if (upcoming) return null;
+
+    return (
+      <div key={idx} style={{
+        background: theme.card,
+        border: `1px solid ${complete ? theme.border : (active ? theme.accent : theme.border)}`,
+        borderRadius: 12*z, marginBottom: 10*z, overflow: "hidden"
+      }}>
+        <button onClick={() => toggleCollapse(idx)} style={{
+          width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center",
+          background:"transparent", border:"none", cursor:"pointer",
+          padding: `${12*z}px ${14*z}px`, textAlign:"left"
+        }}>
+          <div>
+            <div style={{fontSize:13*z, fontWeight:800, color: complete ? theme.sub : theme.accent, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+              {complete && "✓ "}{roundTitle}
+            </div>
+            {complete && isCollapsed && (
+              <div style={{fontSize:10*z, color:theme.sub, marginTop:2*z}}>
+                {round.matches.filter(m => m.winner !== null).length} matches complete · tap to expand
+              </div>
+            )}
+          </div>
+          <span style={{fontSize:14*z, color:theme.sub, transform: isCollapsed ? "none" : "rotate(180deg)", transition:"transform 0.2s"}}>▾</span>
+        </button>
+        {!isCollapsed && (
+          <div style={{padding:`0 ${10*z}px ${10*z}px`}}>
+            {round.matches.map((m, mIdx) => renderMatchCard(m, idx, mIdx, complete))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Render: bracket play screen (step 1) ──────────────────────────────────
+  function renderBracket() {
+    const b = computedBracket;
+    if (!b) return null;
+    const tournComplete = !!b.champion;
+
+    return (
+      <>
+        <Sec theme={theme}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z}}>
+            <div style={{fontSize:13*z, fontWeight:700, color:theme.accent, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+              {b.format === "se" ? "Single Elimination" : b.format === "de" ? "Double Elimination" : "Round Robin"}
+            </div>
+            <button onClick={cancelTournament} style={{
+              background:"transparent", border:`1px solid ${theme.border}`,
+              borderRadius:6*z, padding:`${4*z}px ${10*z}px`, fontSize:10*z, color:theme.sub, cursor:"pointer"
+            }}>{t("cancel")}</button>
+          </div>
+
+          {/* Render each round */}
+          {b.rounds.map((round, idx) => renderRound(round, idx, b))}
+
+          {/* RR standings table — show whenever bracket has standings */}
+          {b.format === "rr" && b.standings && (
+            <div style={{marginTop:14*z, background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:10*z, padding:10*z}}>
+              <div style={{fontSize:12*z, fontWeight:800, color:theme.accent, marginBottom:8*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>Standings</div>
+              {b.standings.map((s, i) => (
+                <div key={i} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:`${4*z}px 0`, borderBottom: i < b.standings.length - 1 ? `1px solid ${theme.border}` : "none"}}>
+                  <div style={{display:"flex", alignItems:"center", gap:8*z, flex:1, overflow:"hidden"}}>
+                    <span style={{fontSize:13*z, fontWeight:700, color: i === 0 ? theme.accent : theme.sub, minWidth:20*z}}>
+                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i+1}`}
+                    </span>
+                    <span style={{fontSize:12*z, color:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                      {getTeamLabel(s.team)}
+                    </span>
+                  </div>
+                  <div style={{fontSize:11*z, color:theme.sub, flexShrink:0}}>
+                    {s.wins}W · {s.matches - s.wins}L · {s.pointDiff >= 0 ? "+" : ""}{s.pointDiff} pts
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-          <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z, marginBottom:16*z}}>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10*z, gap:8*z}}>
-              <span style={{flex:1, fontSize:13*z, color:theme.text, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{getName(teams[2][0])} / {getName(teams[2][1])}</span>
-              <span style={{fontSize:11*z, color:theme.sub}}>vs</span>
-              <span style={{flex:1, fontSize:13*z, color:theme.text, fontWeight:700, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{getName(teams[3][0])} / {getName(teams[3][1])}</span>
+
+          {/* Champion announcement */}
+          {tournComplete && (
+            <div style={{
+              marginTop:16*z, padding:`${16*z}px ${12*z}px`,
+              background:"rgba(240,192,64,0.15)", border:"2px solid #f0c040",
+              borderRadius:12*z, textAlign:"center"
+            }}>
+              <div style={{fontSize:24*z, marginBottom:6*z}}>🏆</div>
+              <div style={{fontSize:11*z, fontWeight:700, color:"#f0c040", textTransform:"uppercase", letterSpacing:"1px", marginBottom:4*z}}>
+                Champions
+              </div>
+              <div style={{fontSize:16*z, fontWeight:800, color:theme.text}}>
+                {getTeamLabel(b.champion)}
+              </div>
             </div>
-            <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
-              <input style={S.scoreInput} type="number" placeholder="T3" value={scores.sf2a} onChange={e=>upS("sf2a", e.target.value)}/>
-              <span style={{color:theme.sub, fontSize:14*z}}>–</span>
-              <input style={S.scoreInput} type="number" placeholder="T4" value={scores.sf2b} onChange={e=>upS("sf2b", e.target.value)}/>
+          )}
+
+          {/* Notes field — show when ready to log */}
+          {tournComplete && (
+            <div style={{marginTop:14*z}}>
+              <label style={S.label}>{t("notes_lbl") || "Notes"} ({t("optional") || "Optional"})</label>
+              <input style={S.input} placeholder="e.g. Great matches, close finals..." value={notes} onChange={e=>setNotes(e.target.value)}/>
             </div>
-          </div>
+          )}
+
           {err && <Err msg={err} theme={theme}/>}
-          <div style={{display:"flex", gap:10*z, marginTop:12*z}}>
-            <button style={{...S.btnSecondary, marginTop:0, flex:1}} onClick={() => setStep(1)}>← {t("back") || "Back"}</button>
-            <button style={{...S.btnPrimary, marginTop:0, flex:2}} onClick={advanceToFinal}>🏆 {t("final")} →</button>
-          </div>
+
+          {/* Log button — only when complete */}
+          {tournComplete && (
+            <button style={{...S.btnBig, width:"100%", marginTop:14*z}} onClick={logTournament}>
+              🏆 {t("log_match_btn")}
+            </button>
+          )}
         </Sec>
+      </>
+    );
+  }
+
+  // ── Main render ────────────────────────────────────────────────────────────
+  return (
+    <div style={S.view}>
+      <MatchesSubNav active="tourney" nav={nav} theme={theme} />
+
+      {success && (
+        <div style={{background:"rgba(80,200,120,0.15)", color:"#50c878", padding:10*z, borderRadius:8*z, marginBottom:12*z, fontSize:13*z, fontWeight:"bold"}}>
+          {success}
+        </div>
       )}
 
-      {/* STEP 3 — Final */}
-      {step === 3 && (
-        <Sec title={`🏆 ${t("final")}`} theme={theme}>
-          <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
-            Round 3 of 3 · {t("sf")} 1 ✓ · {t("sf")} 2 ✓ · {t("final")}
-          </div>
-          {/* Real finalist names — computed from SF results */}
-          <div style={{background:theme.card, border:`2px solid ${theme.accent}`, borderRadius:12*z, padding:14*z, marginBottom:16*z}}>
-            <div style={{fontSize:11*z, fontWeight:700, color:theme.accent, marginBottom:10*z, textTransform:"uppercase", letterSpacing:"0.5px", textAlign:"center"}}>Championship Match</div>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12*z, gap:8*z}}>
-              <span style={{flex:1, fontSize:14*z, color:theme.text, fontWeight:800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                {sfWinners.sf1 ? `${getName(sfWinners.sf1[0])} / ${getName(sfWinners.sf1[1])}` : `${t("winner")} SF1`}
-              </span>
-              <span style={{fontSize:12*z, color:theme.accent, fontWeight:700}}>vs</span>
-              <span style={{flex:1, fontSize:14*z, color:theme.text, fontWeight:800, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                {sfWinners.sf2 ? `${getName(sfWinners.sf2[0])} / ${getName(sfWinners.sf2[1])}` : `${t("winner")} SF2`}
-              </span>
-            </div>
-            <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
-              <input style={S.scoreInput} type="number" placeholder="W1" value={scores.fina} onChange={e=>upS("fina", e.target.value)}/>
-              <span style={{color:theme.sub, fontSize:14*z}}>–</span>
-              <input style={S.scoreInput} type="number" placeholder="W2" value={scores.finb} onChange={e=>upS("finb", e.target.value)}/>
-            </div>
-          </div>
-          <div style={{marginBottom:12*z}}>
-            <label style={S.label}>Tournament Notes (Optional)</label>
-            <input style={S.input} placeholder="e.g. Injury in SF2, great finals..." value={notes} onChange={e=>setNotes(e.target.value)}/>
-          </div>
-          {err && <Err msg={err} theme={theme}/>}
-          <div style={{display:"flex", gap:10*z, marginTop:12*z}}>
-            <button style={{...S.btnSecondary, marginTop:0, flex:1}} onClick={() => setStep(2)}>← {t("back") || "Back"}</button>
-            <button style={{...S.btnBig, flex:2, marginTop:0}} onClick={logTournament}>🏆 {t("log_match_btn")}</button>
-          </div>
-        </Sec>
-      )}
+      {step === 0 ? renderSetup() : renderBracket()}
     </div>
   );
 }

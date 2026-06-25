@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { ThemeCtx } from './context.js';
 import { makeS } from './styles.js';
 
@@ -291,6 +291,11 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
 export default function App() {
   const [state, setState] = useState(() => blankState());
   const [isLoading, setIsLoading] = useState(true);
+  // ── Undo last match ────────────────────────────────────────────────────────
+  // Store the last logged match IDs in a ref (no re-render needed), plus
+  // an undo toast visible for 30 seconds. Undo removes those matches by ID.
+  const [undoToast, setUndoToast] = useState(null); // {label, matchIds, timer}
+  const undoTimerRef = useRef(null);
 
   // 1. Local User Settings (Isolated to browser)
   const [user, setUser] = useState(() => {
@@ -369,6 +374,23 @@ export default function App() {
       return next;
     });
   }, [isLoading]);
+
+  // Call this right after logging any match batch.
+  // matchIds = array of the newly logged match IDs, label = e.g. "Session (3 matches)"
+  const showUndo = useCallback((matchIds, label) => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast({ matchIds, label, remaining: 30 });
+    // Auto-dismiss after 30 seconds
+    undoTimerRef.current = setTimeout(() => setUndoToast(null), 30000);
+  }, []);
+
+  const doUndo = useCallback(() => {
+    if (!undoToast) return;
+    const idsToRemove = new Set(undoToast.matchIds);
+    setShared(s => ({ ...s, matches: (s.matches || []).filter(m => !idsToRemove.has(m.id)) }));
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
+  }, [undoToast, setShared]);
 
   const setUserSettings = useCallback((updater) => {
     setUser(prev => {
@@ -520,10 +542,10 @@ export default function App() {
             <Header activeView={activeView} nav={nav} profilePlayer={profilePlayer} theme={theme} isAdmin={user.isAdmin}/>
             <main style={makeS(theme).main}>
               {activeView==="dashboard" && <Dashboard players={leaderboard} rawStats={stats} state={appState} matches={derivedMatches} nav={nav} theme={theme} set={setShared} format={state.leaderboardFormat} user={user} setUser={setUserSettings}/>}
-              {activeView==="log"       && <LogMatch state={appState} players={stats} set={setShared} nav={nav} theme={theme} user={user} />}
-              {activeView==="session"   && <SessionMode players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
-              {activeView==="kotc"      && <KingOfCourt players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
-              {activeView==="tourney"   && <TournamentMode players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} />}
+              {activeView==="log"       && <LogMatch state={appState} players={stats} set={setShared} nav={nav} theme={theme} user={user} showUndo={showUndo} />}
+              {activeView==="session"   && <SessionMode players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} showUndo={showUndo} />}
+              {activeView==="kotc"      && <KingOfCourt players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} showUndo={showUndo} />}
+              {activeView==="tourney"   && <TournamentMode players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} showUndo={showUndo} />}
               {activeView==="compare"   && <Compare players={stats} matches={derivedMatches} compareIds={state.compareIds || []} set={setShared} nav={nav} theme={theme} state={appState} user={user}/>}
               {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} initialPlayerId={historyPlayerId} state={appState} user={user}/>}
               {activeView==="profile"   && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} setUser={setUserSettings}/>}
@@ -535,6 +557,35 @@ export default function App() {
               {activeView==="events"    && <Events state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} />}
             </main>
             <BottomNav active={activeView} nav={nav} theme={theme}/>
+
+            {/* ── Undo toast — floats above bottom nav for 30 seconds after any match log ── */}
+            {undoToast && (
+              <div style={{
+                position:"fixed", bottom:`calc(60px + env(safe-area-inset-bottom, 0px) + 8px)`,
+                left:"50%", transform:"translateX(-50%)",
+                maxWidth:420, width:"calc(100% - 32px)",
+                background: theme.card, border:`1px solid ${theme.accent}66`,
+                borderRadius:12, padding:"10px 14px",
+                display:"flex", justifyContent:"space-between", alignItems:"center",
+                boxShadow:"0 4px 20px rgba(0,0,0,0.3)", zIndex:1000, gap:10
+              }}>
+                <div style={{fontSize:12, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                  ✅ {undoToast.label} logged
+                </div>
+                <div style={{display:"flex", gap:8, flexShrink:0}}>
+                  <button onClick={doUndo} style={{
+                    background:"#e05050", color:"#fff", border:"none",
+                    borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer"
+                  }}>
+                    ↩ Undo
+                  </button>
+                  <button onClick={() => { if(undoTimerRef.current) clearTimeout(undoTimerRef.current); setUndoToast(null); }} style={{
+                    background:"transparent", border:`1px solid ${theme.border}`,
+                    borderRadius:8, padding:"5px 8px", fontSize:12, color:theme.sub, cursor:"pointer"
+                  }}>✕</button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

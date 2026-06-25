@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { t, fmtDate, ratingColor } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, Avatar } from '../components/Shared.jsx';
@@ -6,6 +6,18 @@ import { Sec, Empty, Avatar } from '../components/Shared.jsx';
 export default function Trash({state, set, theme, isAdmin}) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
+
+  // Auto-purge trash items older than 30 days on mount.
+  // Keeps the trash from growing indefinitely — deleted items from months ago
+  // are gone for good anyway once anyone has played a session since.
+  useEffect(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const fresh = (state.trash || []).filter(item => item.deletedAt > cutoff);
+    if (fresh.length !== (state.trash || []).length) {
+      set(s => ({ ...s, trash: fresh }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function restore(item) {
     const destination = item.type === 'match' ? 'matches'

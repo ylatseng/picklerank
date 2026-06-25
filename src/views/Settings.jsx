@@ -44,6 +44,25 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
   };
 
   const handleLogout = () => {
+    // CRITICAL: Wipe per-session draft state so the next user on this device
+    // doesn't see the previous user's half-completed match logs, event drafts,
+    // tournament brackets, or new-player forms.
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        if (!k) continue;
+        // Match anything our usePersistentFormState hook wrote (namespaced prefixes)
+        if (k.startsWith("logMatch:") || k.startsWith("session:") ||
+            k.startsWith("kotc:") || k.startsWith("tourney:") ||
+            k.startsWith("events:") || k.startsWith("player:") ||
+            k.startsWith("event:")) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => sessionStorage.removeItem(k));
+    } catch (e) { /* sessionStorage may be unavailable */ }
+
     setUser({ 
       myPlayerId: "", 
       guestMode: false, 

@@ -175,11 +175,12 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
                 const matchesCount = matchCountsByDay[dStr] || 0;
 
                 return (
-                  <div key={day} style={{display:"flex", flexDirection:"column", alignItems:"center"}}>
+                  <div key={day} style={{display:"flex", flexDirection:"column", alignItems:"center", minWidth:0}}>
                     <button 
                       onClick={() => setSelectedDateStr(isSelected ? null : dStr)}
                       style={{
-                        width: 32*z, height: 32*z, borderRadius: "50%", 
+                        width:"100%", maxWidth:36*z, aspectRatio:"1 / 1",
+                        borderRadius: "50%", 
                         border: isToday && !isSelected ? `1px solid ${theme.accent}` : "none",
                         background: isSelected ? theme.accent : "transparent",
                         color: isSelected ? theme.bg : theme.text,

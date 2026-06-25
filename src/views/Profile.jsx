@@ -234,14 +234,21 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
             </div>
           </div>
         </div>
-        <div style={{display:"flex",gap:8*z,flexWrap:"wrap"}}>
+        {/* Stats grid — CSS Grid with explicit columns scales cleanly at any zoom.
+            3 columns on normal width, drops to 2 on very narrow screens. */}
+        <div style={{display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8*z}}>
           {[[t("stat_matches"),gamesPlayed],[t("stat_wins"),p.wins||0],[t("stat_losses"),p.losses||0],
             [t("stat_win_pct"),p.winPct!==null?`${p.winPct}%`:"—"],
             [t("stat_pt_win_pct") || "🎯 Pt Win%", p.ptWinPct !== null ? `${p.ptWinPct}%` : "—"],
             [p.streakType==="W"?t("stat_w_streak"):t("stat_l_streak"),p.streak||0]].map(([label,val])=>(
-            <div key={label} style={S.statPill}>
-              <div style={{fontSize:10*z,color:theme.sub}}>{label}</div>
-              <div style={{fontSize:16*z,fontWeight:800}}>{val}</div>
+            <div key={label} style={{
+              background: theme.bg, border: `1px solid ${theme.border}`,
+              borderRadius: 12*z, padding: `${10*z}px ${4*z}px`,
+              display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 2*z, minWidth: 0, overflow: "hidden"
+            }}>
+              <div style={{fontSize:10*z, color:theme.sub, textAlign:"center", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:"100%"}}>{label}</div>
+              <div style={{fontSize:16*z, fontWeight:800, textAlign:"center"}}>{val}</div>
             </div>
           ))}
         </div>
@@ -349,7 +356,7 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
         <EditBaseRating player={p} set={set} theme={theme}/>
       )}
 
-      <Sec title={`${t("recent_matches")} (${Math.min(myMatches.length, 5)})`} theme={theme}>
+      <Sec title={`${t("recent_matches")} (${Math.min(myMatches.length, 5)} of ${myMatches.length})`} theme={theme}>
         {myMatches.slice(0,5).map(m => {
           // Regular users can edit matches they played in, but ONLY admin can delete
           const isParticipant = user?.myPlayerId && m.teams?.flat()?.includes(user?.myPlayerId);
@@ -368,6 +375,18 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
           );
         })}
         {myMatches.length===0&&<Empty text={t("no_matches")} theme={theme}/>}
+        {myMatches.length > 5 && (
+          <button
+            onClick={() => nav("history", { historyPlayerId: p.id })}
+            style={{
+              marginTop: 12*z, width:"100%", padding:`${8*z}px`,
+              background:"transparent", border:`1px solid ${theme.border}`,
+              borderRadius:8*z, color:theme.accent, fontSize:12*z,
+              fontWeight:700, cursor:"pointer"
+            }}>
+            {t("view_all_matches_link") || `View all ${myMatches.length} matches in History →`}
+          </button>
+        )}
       </Sec>
     </div>
   );
