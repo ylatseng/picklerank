@@ -5,7 +5,7 @@ import { Sec, Err, ConfirmInline, Sel, PinManager } from '../components/Shared.j
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../engine";
 
-export default function Settings({state, user, setShared, setUser, nav, theme}) {
+export default function Settings({state, user, setShared, setUser, nav, theme, matchCount=0, isLargeDataset=false}) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
   const fileRef = useRef();
@@ -276,6 +276,46 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
         </div>
       </Sec>
 
+      {/* LOGIN HISTORY (ADMIN ONLY) */}
+      {user.isAdmin && (
+        <Sec title="🔐 Player Login History" theme={theme}>
+          <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
+            Every login by each player — last 50 entries per player. Newest first.
+          </div>
+          {(state.players || [])
+            .filter(p => p.loginHistory?.length > 0)
+            .sort((a, b) => {
+              const aLast = a.loginHistory[a.loginHistory.length - 1]?.at || 0;
+              const bLast = b.loginHistory[b.loginHistory.length - 1]?.at || 0;
+              return bLast - aLast; // most recently logged-in player first
+            })
+            .map(p => (
+              <div key={p.id} style={{marginBottom:14*z, borderBottom:`1px solid ${theme.border}`, paddingBottom:10*z}}>
+                <div style={{fontSize:13*z, fontWeight:700, color:theme.accent, marginBottom:6*z}}>{p.name}</div>
+                <div style={{display:"flex", flexDirection:"column", gap:3*z}}>
+                  {[...(p.loginHistory || [])].reverse().map((entry, i) => (
+                    <div key={i} style={{display:"flex", justifyContent:"space-between", fontSize:11*z, color: i === 0 ? theme.text : theme.sub}}>
+                      <span style={{fontWeight: i===0 ? 700 : 400}}>
+                        {i === 0 ? "🟢 Latest: " : `#${p.loginHistory.length - i}: `}
+                      </span>
+                      <span>{new Date(entry.at).toLocaleString([], {
+                        weekday:"short", month:"short", day:"numeric",
+                        year:"numeric", hour:"2-digit", minute:"2-digit"
+                      })}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          }
+          {(state.players || []).every(p => !p.loginHistory?.length) && (
+            <div style={{fontSize:12*z, color:theme.sub, textAlign:"center", padding:16*z}}>
+              No login history yet. History is recorded when players verify their identity.
+            </div>
+          )}
+        </Sec>
+      )}
+
       {/* BRANDING (ADMIN ONLY) */}
       {user.isAdmin && (
         <Sec title={t("branding_sec")} theme={theme}>
@@ -351,6 +391,20 @@ export default function Settings({state, user, setShared, setUser, nav, theme}) 
             {t("view_changelog_btn")}
           </button>
         </div>
+        {user.isAdmin && matchCount > 0 && (
+          <div style={{
+            marginTop: 12*z, padding: `${8*z}px ${10*z}px`,
+            background: isLargeDataset ? "rgba(240,160,40,0.1)" : "rgba(80,200,120,0.08)",
+            border: `1px solid ${isLargeDataset ? "#f0a82844" : "#50c87844"}`,
+            borderRadius: 8*z, fontSize: 11*z,
+            color: isLargeDataset ? "#f0a828" : theme.sub
+          }}>
+            {isLargeDataset
+              ? `⚠️ ${matchCount} matches — rating recalculation may be slow on edits/deletes. Consider exporting a backup.`
+              : `✅ ${matchCount} matches — database healthy.`
+            }
+          </div>
+        )}
       </Sec>
     </div>
   );

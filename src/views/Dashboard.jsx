@@ -4,6 +4,70 @@ import { makeS } from '../styles.js';
 import { Sec, Empty, Avatar } from '../components/Shared.jsx';
 import Players from './Players.jsx'; // Bring in the heavy lifting!
 
+// ── Group Insights — must be a real component so useState is valid ─────────
+function GroupInsights({ matches, theme }) {
+  const z = theme.zoom || 1.0;
+  const [open, setOpen] = useState(false);
+  // Memoize the computation so it doesn't re-run on every parent render
+  const insights = useMemo(() => {
+    const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const dayCounts = [0,0,0,0,0,0,0];
+    const venueCounts = {};
+    matches.forEach(m => {
+      if (m.date) dayCounts[new Date(m.date).getDay()]++;
+      if (m.venue) venueCounts[m.venue] = (venueCounts[m.venue] || 0) + 1;
+    });
+    const favDay = dayNames[dayCounts.indexOf(Math.max(...dayCounts))];
+    const topVenueEntry = Object.entries(venueCounts).sort((a,b) => b[1] - a[1])[0];
+    return {
+      favDay,
+      topVenue: topVenueEntry?.[0] || null,
+      topVenueCount: topVenueEntry?.[1] || 0,
+      estHours: Math.round(matches.length * 0.25),
+    };
+  }, [matches]);
+
+  return (
+    <div style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:10*z, marginBottom:8*z, overflow:"hidden"}}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width:"100%", background:"transparent", border:"none", cursor:"pointer",
+        display:"flex", justifyContent:"space-between", alignItems:"center",
+        padding:`${8*z}px ${12*z}px`, textAlign:"left"
+      }}>
+        <div style={{display:"flex", alignItems:"center", gap:8*z}}>
+          <span style={{fontSize:14*z}}>📊</span>
+          <span style={{fontSize:11*z, fontWeight:700, color:theme.accent, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+            Group Insights
+          </span>
+        </div>
+        <span style={{fontSize:12*z, color:theme.sub, transform: open?"rotate(180deg)":"none", transition:"transform 0.2s"}}>▾</span>
+      </button>
+      {open && (
+        <div style={{padding:`0 ${12*z}px ${10*z}px`, borderTop:`1px solid ${theme.border}`, paddingTop:10*z}}>
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8*z}}>
+            {[
+              {icon:"🎮", val:matches.length, label:"Matches"},
+              {icon:"📅", val:insights.favDay, label:"Fav Day"},
+              {icon:"⏱️", val:`~${insights.estHours}h`, label:"Est. Time"},
+            ].map(({icon,val,label}) => (
+              <div key={label} style={{background:theme.bg, borderRadius:8*z, padding:`${8*z}px ${6*z}px`, textAlign:"center"}}>
+                <div style={{fontSize:18*z, marginBottom:3*z}}>{icon}</div>
+                <div style={{fontSize:16*z, fontWeight:800, color:theme.text}}>{val}</div>
+                <div style={{fontSize:10*z, color:theme.sub, marginTop:2*z}}>{label}</div>
+              </div>
+            ))}
+          </div>
+          {insights.topVenue && (
+            <div style={{marginTop:8*z, fontSize:11*z, color:theme.sub, textAlign:"center"}}>
+              📍 Most played at <strong style={{color:theme.text}}>{insights.topVenue}</strong> ({insights.topVenueCount} matches)
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeaderboardRow({player:p,rank,onClick,theme,format}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
@@ -76,9 +140,10 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
       {motd && (() => {
         const isUpset = motd.upsetFactor > 0.2;
         // Upsets get gold (universal); everything else uses the user's accent color
-        const motdColor = isUpset ? "#f0c040" : theme.accent;
-        const motdBg = isUpset ? "rgba(240,192,64,0.08)" : theme.accent + "11";
-        const motdBorder = isUpset ? "#f0c04044" : theme.accent + "44";
+        // Card chrome always uses user's accent. Gold only for upset text label.
+        const motdColor = theme.accent;
+        const motdBg = theme.accent + "11";
+        const motdBorder = theme.accent + "44";
         return (
           <div style={{
             background: motdBg,
@@ -95,7 +160,7 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
                 {isUpset ? "🎉" : motd.tightness > 0.9 ? "😤" : "⚡"}
               </span>
               <span style={{fontSize:11*z, fontWeight:700, color: motdColor, flexShrink:0, textTransform:"uppercase", letterSpacing:"0.5px"}}>
-                {t("motd_sec")}
+                {t("motd_sec")}{isUpset ? " 🎉" : motd.tightness > 0.9 ? " 😤" : ""}
               </span>
             </div>
             <span style={{fontSize:12*z, color:theme.sub, transform: motdExpanded ? "rotate(180deg)" : "none", transition:"transform 0.2s", flexShrink:0}}>▾</span>
@@ -200,6 +265,9 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
           )}
         </div>
       )}
+
+      {/* ── SESSION INSIGHTS — extracted to component so Hooks are valid ── */}
+      {matches.length >= 5 && <GroupInsights matches={matches} theme={theme} />}
 
       {/* Unified Hub Toggle */}
       <div style={{display:"flex", gap:8*z, marginBottom:16*z}}>

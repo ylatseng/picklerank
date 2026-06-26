@@ -13,10 +13,99 @@ export const PROVISIONAL_K_MULTIPLIER = 2; // provisional players move up to 2x 
 export const STORAGE_KEY = "pkl_tracker_v4"; 
 
 // ─── Version & Changelog ──────────────────────────────────────────────────────
-export const APP_VERSION = "2.2.7";
+export const APP_VERSION = "2.2.12";
 export const APP_UPDATED = "2026-06-25";
 
 export const RELEASES = [
+  {
+    version: "2.2.12",
+    date: "2026-06-25",
+    title: "Events RSVP, Group Stats Collapsible & Bug Fixes",
+    changes: [
+      // ── {n} bug ───────────────────────────────────────────────────────
+      "🐛 FIX: Profile 'View all {n} matches in History' button now correctly substitutes the actual match count instead of showing the literal {n} placeholder.",
+      // ── MOTD color ───────────────────────────────────────────────────
+      "🎨 MOTD: Match of the Day card now always uses the user's chosen Accent Style color for the card border, background tint, and label — even for upset matches. Previously, upsets forced the card to gold regardless of the user's accent. Gold is now reserved only for the upset emoji label suffix (🎉), not the card chrome.",
+      // ── Events RSVP + collapsible ────────────────────────────────────
+      "📅 EVENTS: Each event is now collapsible — tap the header row (title + date) to expand or collapse. Collapsed state shows: event title, date/time, and 'N going' count. Expanded state shows: venue, notes, full invitee list with RSVP statuses, and action buttons.",
+      "📅 EVENTS: Added RSVP system. Three response options always visible below each collapsed event: ✅ Going / ❓ Maybe / ❌ Can't. Tap to set your response; tap again to toggle off. RSVP state is stored per event per player and persists. Only logged-in players (verified PIN) can respond.",
+      "📅 EVENTS: Invitee list in expanded view shows each player's RSVP status with color coding: ✅ Going (green), ❓ Maybe (accent), ❌ Can't (red), • No response (neutral). Share button now includes the Going list in the shared text.",
+      // ── Group Stats collapsible ───────────────────────────────────────
+      "📊 GROUP STATS: All sections (Overview, Records, Venues, Partner Matrix) are now independently collapsible. Overview and Partner Matrix open by default; Venues and Records can be collapsed to save space. Chevron indicator shows open/closed state.",
+      // ── Performance bug fix: Hook in IIFE ────────────────────────────
+      "🐛 PERF FIX: Dashboard Group Insights was calling React.useState inside an IIFE render expression — a violation of React's Rules of Hooks that would cause inconsistent state when match counts changed. Extracted into a proper GroupInsights component with useMemo for the day/venue computation so it only re-runs when matches change.",
+      // ── Performance issues identified ─────────────────────────────────
+      "⚡ PERF NOTE: Identified that Session submit calls replayAllMatches on ALL historical matches to compute the post-session summary. This is a hidden O(n) cost per session log on top of the App-level replay. Will optimize in a future drop by threading derivedPlayers down from App.",
+      "⚡ PERF NOTE: Identified 4 additional performance considerations: (1) Group Insights now fixed (was re-running forEach on all matches every render). (2) detectRematches runs on finalViewMatches in History on every filter change — acceptable for small datasets. (3) computePartnerMatrix is O(n) — good. (4) Session replayAllMatches double-call noted above.",
+    ]
+  },
+  {
+    version: "2.2.11",
+    date: "2026-06-25",
+    title: "Admin, Insights & History Fix",
+    changes: [
+      // ── Custom match ordering fix ──────────────────────────────────────
+      "🐛 FIX: Custom matches now always appear in correct chronological order in History. Root cause: when logging a second custom match in the same session, the date/time field still held the timestamp from when the form first opened — not when the user clicked Log. The second match therefore received a timestamp equal to or earlier than the first. Fixed by resetting `matchDate` to the current time after every successful submission. Also fixed timezone parsing to correctly treat datetime-local as local time.",
+      // ── History filter dropdowns ───────────────────────────────────────
+      "📋 HISTORY: Match Type and Match Mode filters now use compact dropdowns instead of toggle buttons/pill chips. Displayed side-by-side in a 2-column grid, saving ~60px of vertical space in the filter section.",
+      // ── Multi-admin support ────────────────────────────────────────────
+      "🔑 MULTI-ADMIN: Admin can now grant other players admin access from their Profile page. A new '🔑 Admin Role' section shows at the bottom of each player's profile (admin-only visible). Tap 'Grant Admin' → that player will receive full admin access automatically when they verify their PIN — no separate admin passcode needed. Tap 'Revoke Admin' to remove. A player can be both a named player (appears in stats/ratings) and an admin at the same time.",
+      // ── Session Insights dashboard card ───────────────────────────────
+      "📊 DASHBOARD: Added 'Group Insights' collapsible card. Shows: total matches played, favorite day of week, estimated time played (~15 min per match), and most-played venue. Only appears once the group has 5+ matches. Collapsed by default to keep the dashboard clean.",
+      // ── Performance awareness ──────────────────────────────────────────
+      "⚡ PERFORMANCE: Settings → About section now shows a match count health indicator for admin. Under 150 matches: green '✅ database healthy'. Over 150: amber warning that rating recalculation may be slow on edits/deletes, with a recommendation to export a backup.",
+    ]
+  },
+  {
+    version: "2.2.10",
+    date: "2026-06-25",
+    title: "History Filters & Login Audit",
+    changes: [
+      // ── Custom match date bug ──────────────────────────────────────────
+      "🐛 FIX: Custom matches now always default the date/time field to the current moment when the form opens. Previously, if a user had navigated away without submitting, the persisted form state could carry a stale timestamp from earlier — causing those matches to sort below more recent entries in History.",
+      // ── History filters ────────────────────────────────────────────────
+      "📋 HISTORY: Added 'Match Mode' filter row below the existing Singles/Doubles toggle. Filter buttons (pill style): All · Custom · Session · King of Court · SE · DE · Round Robin. Uses the notes prefix set by each mode at log time to classify matches.",
+      "📋 HISTORY: The type filter (All/Singles/Doubles) and mode filter are independent and combinable — e.g. you can show only Doubles + Session matches.",
+      // ── Login history ──────────────────────────────────────────────────
+      "🔐 LOGIN HISTORY: Admin can now see a full login audit log in Settings → 'Player Login History'. Each login by each player is recorded with date/time in a per-player array (up to 50 entries). Players sorted by most-recently-logged-in first; each entry shows weekday, date, and time.",
+      "🔐 LOGIN HISTORY: In Roster, admin now sees 'Last login: [date/time] (N total)' under each player who has a login history. The total count links to the full log in Settings.",
+      "🔐 LOGIN HISTORY: Login events are appended (not overwritten) to a `loginHistory` array on the player object. Both the Welcome screen 'Select my name' flow and the PIN Verification flow record an entry.",
+      // ── My feedback ───────────────────────────────────────────────────
+      "💡 DEV NOTE: Known performance consideration — rating replay is O(n²): every match edit or deletion replays all matches from the beginning. With 200+ matches this can take 2-3 seconds. Future improvement: add a progress indicator or lazy-compute ratings on-demand.",
+      "💡 DEV NOTE: Potential enhancement — a 'Session Insights' card on the Dashboard could show the group's most-played venue, most active day of week, and estimated total hours played. The data is already in the match records.",
+    ]
+  },
+  {
+    version: "2.2.9",
+    date: "2026-06-25",
+    title: "UX Cleanup & Bug Fixes",
+    changes: [
+      // ── Session ──────────────────────────────────────────────────────
+      "🏓 SESSION: Player selection and round input forms now hide after results are logged — same as KOTC. Only the inline summary card and 'Start New Session' button are shown. Clicking 'Start New Session' returns to the setup form.",
+      "🏓 SESSION: Added live score preview that updates as you enter scores. When any round has a valid score, a '📊 Score Preview' panel appears below showing which team won each round, without needing to log first.",
+      // ── KOTC ─────────────────────────────────────────────────────────
+      "👑 KOTC: 'King Crowned: [name]' now appears on a second, larger line below '✅ 3 Matches Logged.' for clearer visual hierarchy.",
+      // ── Tournament ───────────────────────────────────────────────────
+      "🏆 TOURNAMENT: When 'Start Tournament' is clicked, the view now scrolls to the top of the screen automatically so the first round is immediately visible. Previously the user had to scroll up manually after clicking.",
+      "🏆 TOURNAMENT: Champion announcement from previous tournament is now cleared when starting a new tournament (via 'Cancel' button or 'Reset' button). Was persisting across multiple tournaments in the same session.",
+      // ── Admin login tracking ─────────────────────────────────────────
+      "🔐 ADMIN: Player last-login date/time is now tracked in the player object whenever a player verifies their identity (from Welcome screen or PIN Verification screen). Admin can see this in the Roster — shown as '🕐 Jun 25, 2026, 02:30 PM' beneath the player's notes. Only visible to admin.",
+      // ── Bug fixes from audit ──────────────────────────────────────────
+      "🐛 FIX: KingOfCourt component was missing `const S = makeS(theme)` after an earlier refactor accidentally dropped it. This would have caused crashes whenever any S.* style was referenced in KOTC. Now restored.",
+    ]
+  },
+  {
+    version: "2.2.8",
+    date: "2026-06-25",
+    title: "Match Logging Polish",
+    changes: [
+      "🏓 SESSION: Round timestamps staggered so Round 3 appears on top in History (same fix as Tournament in v2.2.6). Round number now in notes: 'Session #1 Round 3 of 3'. Multiple sessions on the same day increment: Session #1, Session #2, etc.",
+      "🏓 SESSION: Results now show as an inline card below the controls instead of a modal overlay that blocked the screen. The summary card (player stats, MVP, Most Improved, total points, match recap) appears inline and can be dismissed with 'Start New Session' — no more getting stuck.",
+      "🏆 TOURNAMENT: Champion banner now shows the format label on one line and the players' names on a second, larger line underneath — instead of cramming them onto one long line.",
+      "👑 KOTC: After results appear, the player selection form and match inputs are hidden — only the analysis panel and 'Start Another King of the Court' button remain visible. Tapping that button clears the analysis and shows the setup form again.",
+      "📝 SESSION COUNTER: Multiple logs of the same format on the same day now get numbered automatically in notes — 'Session #1 Round 2 of 3', 'King of the Court #2: Match 1 of 3', 'Single Elimination #2: Semifinal'. Lets you distinguish them in History without confusion.",
+    ]
+  },
   {
     version: "2.2.7",
     date: "2026-06-25",
@@ -511,6 +600,28 @@ export function setLang(l) { currentLang = l; }
 export function t(key, fallback) { return TRANSLATIONS[currentLang]?.[key] || TRANSLATIONS["en"]?.[key] || fallback || key; }
 
 // ─── Rating Engine ────────────────────────────────────────────────────────────
+// ─── Session counter ──────────────────────────────────────────────────────────
+// Returns the 1-based session number for a given prefix on today's date.
+// Used to distinguish multiple Session/KOTC/Tournament logs on the same day.
+// e.g. first Session of the day → 1, second → 2, etc.
+export function getSessionNum(matches, notePrefix) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todaySessions = new Set(
+    (matches || [])
+      .filter(m => {
+        if (!m.date || !m.notes) return false;
+        const matchDay = new Date(m.date).toISOString().slice(0, 10);
+        return matchDay === todayStr && m.notes.startsWith(notePrefix);
+      })
+      .map(m => {
+        // Extract the session number from notes like "Session #2 Round 1 of 3"
+        const match = m.notes.match(/#(\d+)/);
+        return match ? match[1] : "1";
+      })
+  );
+  return todaySessions.size + 1;
+}
+
 export function calcExpected(rA, rB) { return 1 / (1 + Math.pow(10, (rB - rA) / 0.4)); }
 
 // ─── Name shortening ──────────────────────────────────────────────────────────

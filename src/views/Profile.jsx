@@ -356,6 +356,38 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
         <EditBaseRating player={p} set={set} theme={theme}/>
       )}
 
+      {/* Admin Role Grant — only the global admin can promote/demote players */}
+      {isAdmin && (
+        <Sec title="🔑 Admin Role" theme={theme}>
+          <div style={{fontSize:12*z, color:theme.sub, marginBottom:12*z}}>
+            When enabled, this player will receive full admin access automatically after verifying their PIN. They can log in as themselves and still have admin powers — no separate admin passcode needed.
+          </div>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:13*z, fontWeight:700, color: p.isAdminPlayer ? theme.accent : theme.text}}>
+                {p.isAdminPlayer ? "✅ Admin access granted" : "Regular player"}
+              </div>
+              <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
+                {p.isAdminPlayer ? "Logs in with PIN → gets admin access" : "Logs in with PIN → regular access"}
+              </div>
+            </div>
+            <button
+              onClick={() => set(s => ({
+                ...s,
+                players: (s.players || []).map(pl => pl.id === p.id ? {...pl, isAdminPlayer: !pl.isAdminPlayer} : pl)
+              }))}
+              style={{
+                padding:`${8*z}px ${16*z}px`, borderRadius:8*z, fontSize:12*z, fontWeight:700,
+                cursor:"pointer", border:`1px solid ${p.isAdminPlayer ? "#e05050" : theme.accent}`,
+                background:"transparent", color: p.isAdminPlayer ? "#e05050" : theme.accent,
+                flexShrink: 0
+              }}>
+              {p.isAdminPlayer ? "Revoke Admin" : "Grant Admin"}
+            </button>
+          </div>
+        </Sec>
+      )}
+
       <Sec title={`${t("recent_matches")} (${Math.min(myMatches.length, 5)} of ${myMatches.length})`} theme={theme}>
         {myMatches.slice(0,5).map(m => {
           // Regular users can edit matches they played in, but ONLY admin can delete
@@ -384,7 +416,7 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
               borderRadius:8*z, color:theme.accent, fontSize:12*z,
               fontWeight:700, cursor:"pointer"
             }}>
-            {t("view_all_matches_link") || `View all ${myMatches.length} matches in History →`}
+            {t("view_all_matches_link").replace("{n}", myMatches.length) || `View all ${myMatches.length} matches in History →`}
           </button>
         )}
       </Sec>

@@ -15,8 +15,20 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
   
   // Basic Filters
   const [search,setSearch]=useState("");
-  const [filter,setFilter]=useState("all");
+  const [typeFilter,setTypeFilter]=useState("all");   // all | singles | doubles
+  const [modeFilter,setModeFilter]=useState("all");   // all | custom | session | kotc | se | de | rr
   const [playerFilter, setPlayerFilter] = useState(initialPlayerId || "");
+
+  // Derive match mode from notes field (set by each match mode at log time)
+  function getMatchMode(m) {
+    const notes = (m.notes || "").toLowerCase();
+    if (notes.startsWith("session")) return "session";
+    if (notes.startsWith("king of the court")) return "kotc";
+    if (notes.startsWith("single elimination")) return "se";
+    if (notes.startsWith("double elimination")) return "de";
+    if (notes.startsWith("round robin")) return "rr";
+    return "custom";
+  }
   
   // Action States
   const [pendingDelete,setPendingDelete]=useState(null);
@@ -33,10 +45,11 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
 
   const getName=id=>players.find(p=>p.id===id)?.name??"Unknown";
 
-  // 1. First, apply text, type, and player filters
+  // 1. First, apply text, type, mode, and player filters
   const baseFiltered = useMemo(() => {
     return (matches || []).filter(m => {
-      if(filter!=="all"&&m.type!==filter) return false;
+      if(typeFilter!=="all"&&m.type!==typeFilter) return false;
+      if(modeFilter!=="all"&&getMatchMode(m)!==modeFilter) return false;
       if(playerFilter && !m.teams?.flat().includes(playerFilter)) return false;
       if(search) {
         const q=search.toLowerCase();
@@ -48,7 +61,7 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
       }
       return true;
     });
-  }, [matches, filter, playerFilter, search, players]);
+  }, [matches, typeFilter, modeFilter, playerFilter, search, players]);
 
   // 2. Pre-calculate match counts per day for the calendar dots
   const matchCountsByDay = useMemo(() => {
@@ -220,15 +233,31 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
       {/* --- FILTERS --- */}
       <Sec title={t("filter_search_sec")} theme={theme}>
         <input style={{...S.input,marginBottom:10*z}} placeholder={t("search_placeholder")} value={search} onChange={e=>setSearch(e.target.value)}/>
-        <div style={{display:"flex", gap:10*z, marginBottom:10*z}}>
+        <div style={{display:"flex", gap:8*z, marginBottom:10*z}}>
           <Sel opts={selectOpts} value={playerFilter} onChange={setPlayerFilter} placeholder={t("all_players")} theme={theme}/>
         </div>
-        <div style={S.toggle}>
-          {["all","singles","doubles"].map(f=>(
-            <button key={f} style={{...S.toggleBtn,...(filter===f?{...S.toggleOn,background:theme.card,borderColor:theme.accent,color:theme.accent}:{})}} onClick={()=>setFilter(f)}>
-              {f.charAt(0).toUpperCase()+f.slice(1)}
-            </button>
-          ))}
+        {/* Type + Mode dropdowns side by side */}
+        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8*z}}>
+          <div>
+            <label style={{...S.label, marginBottom:4*z}}>Match Type</label>
+            <Sel theme={theme} value={typeFilter} onChange={setTypeFilter} opts={[
+              {value:"all",    label:"All Types"},
+              {value:"singles",label:"Singles"},
+              {value:"doubles",label:"Doubles"},
+            ]} />
+          </div>
+          <div>
+            <label style={{...S.label, marginBottom:4*z}}>Match Mode</label>
+            <Sel theme={theme} value={modeFilter} onChange={setModeFilter} opts={[
+              {value:"all",    label:"All Modes"},
+              {value:"custom", label:"Custom"},
+              {value:"session",label:"Session"},
+              {value:"kotc",   label:"King of Court"},
+              {value:"se",     label:"Single Elim"},
+              {value:"de",     label:"Double Elim"},
+              {value:"rr",     label:"Round Robin"},
+            ]} />
+          </div>
         </div>
       </Sec>
 

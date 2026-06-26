@@ -8,7 +8,7 @@ const toYYYYMMDD = (d) => {
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 };
 
-export default function Events({ state, set, theme, isAdmin }) {
+export default function Events({ state, set, theme, isAdmin, user }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
 
@@ -26,6 +26,7 @@ export default function Events({ state, set, theme, isAdmin }) {
   const [cursorDate, setCursorDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState(null);
   const [calendarMode, setCalendarMode] = useState("month");
+  const [expandedEvents, setExpandedEvents] = useState({});
 
   // ── Save / Edit / Delete ────────────────────────────────────────────────
   const saveEvent = () => {
@@ -250,62 +251,144 @@ export default function Events({ state, set, theme, isAdmin }) {
                          : (t("no_scheduled_sessions") || "No events scheduled.")}
           </div>
         ) : (
-          filteredEvents.map(ev => (
-            <div key={ev.id} style={{padding:"14px 0", borderBottom:`1px solid ${theme.border}`}}>
-              <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start"}}>
-                <div style={{flex:1, minWidth:0}}>
-                  <div style={{fontWeight:800, fontSize:15*z, color:theme.text}}>{ev.title}</div>
-                  <div style={{fontSize:12*z, color:theme.accent, marginTop:4*z, fontWeight:600}}>
-                    📅 {new Date(ev.date).toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}
-                  </div>
-                  <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>📍 {ev.venue || t("tbd")}</div>
-                  {ev.notes && (
-                    <div style={{fontSize:11*z, color:theme.sub, marginTop:6*z, fontStyle:"italic", paddingLeft:6*z, borderLeft:`2px solid ${theme.border}`}}>
-                      📝 {ev.notes}
+          filteredEvents.map(ev => {
+            const isExpanded = expandedEvents[ev.id];
+            const myId = user?.myPlayerId;
+            const myRsvp = ev.rsvps?.[myId];
+            const rsvpCounts = { going: 0, maybe: 0, declined: 0 };
+            Object.values(ev.rsvps || {}).forEach(r => { if (rsvpCounts[r] !== undefined) rsvpCounts[r]++; });
+
+            const setRsvp = (status) => {
+              set(s => ({
+                ...s,
+                events: (s.events || []).map(e => {
+                  if (e.id !== ev.id) return e;
+                  const rsvps = { ...(e.rsvps || {}) };
+                  if (rsvps[myId] === status) delete rsvps[myId]; // toggle off
+                  else rsvps[myId] = status;
+                  return { ...e, rsvps };
+                })
+              }));
+            };
+
+            const rsvpOptions = [
+              { status: "going",    emoji: "✅", label: "Going" },
+              { status: "maybe",    emoji: "❓", label: "Maybe" },
+              { status: "declined", emoji: "❌", label: "Can't" },
+            ];
+
+            return (
+              <div key={ev.id} style={{
+                borderBottom:`1px solid ${theme.border}`,
+                paddingBottom:10*z, marginBottom:2*z
+              }}>
+                {/* ── Collapsed header — always visible ── */}
+                <div
+                  onClick={() => setExpandedEvents(prev => ({...prev, [ev.id]: !prev[ev.id]}))}
+                  style={{display:"flex", alignItems:"center", justifyContent:"space-between",
+                    padding:`${10*z}px 0`, cursor:"pointer", gap:8*z}}>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{fontWeight:800, fontSize:14*z, color:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                      {ev.title}
                     </div>
-                  )}
-                </div>
-                <div style={{display:"flex", gap:8*z, flexShrink:0, marginLeft:8*z}}>
-                  {/* Edit is open to all users; delete remains admin-only below */}
-                  <button style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:6*z, color:theme.text, cursor:"pointer", padding:"6px 10px", fontSize:12*z}}
-                    onClick={() => startEdit(ev)}>✏️</button>
-                  <button style={{background:theme.accent, border:"none", borderRadius:6*z, color:theme.invert ? "#fff" : "#000", cursor:"pointer", padding:"6px 10px", fontSize:12*z, fontWeight:"bold"}}
-                    onClick={() => {
-                      const text = `🥒 Pickleball: ${ev.title}\n📅 ${new Date(ev.date).toLocaleString()}\n📍 ${ev.venue}${ev.notes ? `\n📝 ${ev.notes}` : ''}`;
-                      if (navigator.share) navigator.share({ title:"Pickleball", text });
-                      else { navigator.clipboard.writeText(text); alert("Copied!"); }
-                    }}>📤</button>
-                </div>
-              </div>
-
-              {ev.invitees?.length > 0 && (
-                <div style={{marginTop:12*z, display:"flex", alignItems:"center", gap:8*z, flexWrap:"wrap"}}>
-                  <div style={{fontSize:11*z, color:theme.sub}}>{ev.invitees.length} {t("invited")}:</div>
-                  <div style={{display:"flex", flexWrap:"wrap", gap:4*z}}>
-                    {ev.invitees.map(id => {
-                      const p = state.players.find(pl => pl.id === id);
-                      if (!p) return null;
-                      return (
-                        <div key={id} style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:"2px 8px", fontSize:10*z, color:theme.text}}>
-                          {p.name}
-                        </div>
-                      );
-                    })}
+                    <div style={{fontSize:11*z, color:theme.accent, marginTop:2*z, fontWeight:600}}>
+                      📅 {new Date(ev.date).toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}
+                      {rsvpCounts.going > 0 && <span style={{marginLeft:8*z, color:"#50c878"}}>· {rsvpCounts.going} going</span>}
+                    </div>
                   </div>
+                  <span style={{fontSize:12*z, color:theme.sub, transform: isExpanded?"rotate(180deg)":"none", transition:"transform 0.2s", flexShrink:0}}>▾</span>
                 </div>
-              )}
 
-              {isAdmin && pendingDelete === ev.id && (
-                <ConfirmInline msg={t("delete_match_q") || "Delete?"} onConfirm={() => deleteEvent(ev.id)} onCancel={() => setPendingDelete(null)} theme={theme} danger />
-              )}
-              {isAdmin && pendingDelete !== ev.id && (
-                <div style={{marginTop:10*z, textAlign:"right"}}>
-                  <button style={{background:"transparent", border:"none", color:"#e05050", cursor:"pointer", fontSize:11*z, textDecoration:"underline"}}
-                    onClick={() => setPendingDelete(ev.id)}>{t("delete_event") || "Delete Event"}</button>
-                </div>
-              )}
-            </div>
-          ))
+                {/* ── RSVP pills — always visible if invited or logged in ── */}
+                {myId && (
+                  <div style={{display:"flex", gap:6*z, marginBottom:6*z}}>
+                    {rsvpOptions.map(opt => (
+                      <button key={opt.status}
+                        onClick={e => { e.stopPropagation(); setRsvp(opt.status); }}
+                        style={{
+                          padding:`${4*z}px ${10*z}px`, borderRadius:20*z, fontSize:11*z,
+                          fontWeight: myRsvp === opt.status ? 800 : 500,
+                          border:`1px solid ${myRsvp === opt.status ? theme.accent : theme.border}`,
+                          background: myRsvp === opt.status ? theme.accent+"22" : "transparent",
+                          color: myRsvp === opt.status ? theme.accent : theme.sub,
+                          cursor:"pointer"
+                        }}>
+                        {opt.emoji} {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Expanded details ── */}
+                {isExpanded && (
+                  <div style={{paddingBottom:6*z}}>
+                    <div style={{fontSize:11*z, color:theme.sub, marginBottom:4*z}}>📍 {ev.venue || t("tbd")}</div>
+                    {ev.notes && (
+                      <div style={{fontSize:11*z, color:theme.sub, marginBottom:8*z, fontStyle:"italic",
+                        paddingLeft:8*z, borderLeft:`2px solid ${theme.border}`}}>
+                        📝 {ev.notes}
+                      </div>
+                    )}
+
+                    {/* Invitee list with RSVP statuses */}
+                    {ev.invitees?.length > 0 && (
+                      <div style={{marginTop:8*z}}>
+                        <div style={{fontSize:10*z, color:theme.sub, fontWeight:700, marginBottom:6*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+                          Invited ({ev.invitees.length})
+                        </div>
+                        <div style={{display:"flex", flexWrap:"wrap", gap:4*z}}>
+                          {ev.invitees.map(id => {
+                            const p = state.players.find(pl => pl.id === id);
+                            if (!p) return null;
+                            const rsvp = ev.rsvps?.[id];
+                            const rsvpEmoji = rsvp === "going" ? "✅" : rsvp === "maybe" ? "❓" : rsvp === "declined" ? "❌" : "•";
+                            return (
+                              <div key={id} style={{
+                                background:theme.bg, border:`1px solid ${
+                                  rsvp === "going" ? "#50c87866" : rsvp === "maybe" ? theme.accent+"66" : theme.border
+                                }`,
+                                borderRadius:12*z, padding:"3px 8px", fontSize:10*z,
+                                color: rsvp === "going" ? "#50c878" : rsvp === "declined" ? "#e05050" : theme.text,
+                                display:"flex", gap:3*z, alignItems:"center"
+                              }}>
+                                <span>{rsvpEmoji}</span>
+                                <span>{p.name}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div style={{display:"flex", gap:8*z, marginTop:12*z, alignItems:"center"}}>
+                      <button style={{background:theme.card, border:`1px solid ${theme.border}`,
+                        borderRadius:6*z, color:theme.text, cursor:"pointer", padding:"6px 10px", fontSize:12*z}}
+                        onClick={() => startEdit(ev)}>✏️ Edit</button>
+                      <button style={{background:theme.accent, border:"none", borderRadius:6*z,
+                        color:theme.invert ? "#fff" : "#000", cursor:"pointer", padding:"6px 10px",
+                        fontSize:12*z, fontWeight:"bold"}}
+                        onClick={() => {
+                          const goingNames = ev.invitees?.filter(id => ev.rsvps?.[id] === "going").map(id => state.players.find(p=>p.id===id)?.name).filter(Boolean).join(", ");
+                          const text = `🥒 Pickleball: ${ev.title}\n📅 ${new Date(ev.date).toLocaleString()}\n📍 ${ev.venue || "TBD"}${goingNames ? `\n✅ Going: ${goingNames}` : ""}${ev.notes ? `\n📝 ${ev.notes}` : ""}`;
+                          if (navigator.share) navigator.share({ title:"Pickleball", text });
+                          else { navigator.clipboard.writeText(text); alert("Copied!"); }
+                        }}>📤</button>
+                      {isAdmin && pendingDelete !== ev.id && (
+                        <button style={{background:"transparent", border:"none", color:"#e05050",
+                          cursor:"pointer", fontSize:11*z, textDecoration:"underline", marginLeft:"auto"}}
+                          onClick={() => setPendingDelete(ev.id)}>{t("delete_event") || "Delete"}</button>
+                      )}
+                    </div>
+
+                    {isAdmin && pendingDelete === ev.id && (
+                      <ConfirmInline msg={t("delete_match_q") || "Delete?"} onConfirm={() => deleteEvent(ev.id)} onCancel={() => setPendingDelete(null)} theme={theme} danger />
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </Sec>
 

@@ -454,6 +454,8 @@ export default function App() {
   const { players = [], matches = [], activeView = "dashboard", profileId, historyPlayerId } = state;
   const { derivedPlayers, derivedMatches } = useMemo(() => replayAllMatches(players, matches), [players, matches]);
   const stats = useMemo(() => computeStats(derivedPlayers, derivedMatches),[derivedPlayers, derivedMatches]);
+  // Flag for large datasets — replay is O(n²) and can get slow above ~200 matches
+  const isLargeDataset = matches.length > 150;
 
   // ── Per-user overrides injected into shared state ────────────────────────
   // Stars are keyed by the logged-in player's ID so each person on the same
@@ -496,7 +498,19 @@ export default function App() {
         {(!user.isAdmin && !user.myPlayerId && !user.pendingAutoLink) && (
           <WelcomeModal 
              players={stats} 
-             onSelect={(id, pin) => setUserSettings({myPlayerId: id, verifiedHash: hashPin(id, pin)})}
+             onSelect={(id, pin) => {
+               setUserSettings({myPlayerId: id, verifiedHash: hashPin(id, pin)});
+               // Append full login history entry (keep last 50 per player)
+               setShared(s => ({
+                 ...s,
+                 players: (s.players || []).map(p => {
+                   if (p.id !== id) return p;
+                   const entry = { at: Date.now() };
+                   const history = [...(p.loginHistory || []), entry].slice(-50);
+                   return { ...p, loginHistory: history, lastLoginAt: Date.now() };
+                 })
+               }));
+             }}
              onCreate={() => setUserSettings({pendingAutoLink: true})}
              onAdminLogin={() => setUserSettings({isAdmin: true, pendingAutoLink: false, myPlayerId: "", verifiedHash: ""})}
              theme={theme}
@@ -509,7 +523,25 @@ export default function App() {
         {(!user.isAdmin && user.myPlayerId && !isCurrentlyVerified) && (
            <PinVerification 
              player={stats.find(p => p.id === user.myPlayerId)} 
-             onVerify={(pin) => setUserSettings({ verifiedHash: hashPin(user.myPlayerId, pin) })}
+             onVerify={(pin) => {
+               // If this player has been granted admin role, elevate them
+               const verifyingPlayer = state.players?.find(p => p.id === user.myPlayerId);
+               if (verifyingPlayer?.isAdminPlayer) {
+                 setUserSettings({ verifiedHash: hashPin(user.myPlayerId, pin), isAdmin: true, myPlayerId: user.myPlayerId });
+               } else {
+                 setUserSettings({ verifiedHash: hashPin(user.myPlayerId, pin) });
+               }
+               // Append full login history entry (keep last 50 per player)
+               setShared(s => ({
+                 ...s,
+                 players: (s.players || []).map(p => {
+                   if (p.id !== user.myPlayerId) return p;
+                   const entry = { at: Date.now() };
+                   const history = [...(p.loginHistory || []), entry].slice(-50);
+                   return { ...p, loginHistory: history, lastLoginAt: Date.now() };
+                 })
+               }));
+             }}
              onCancel={() => setUserSettings({ myPlayerId: "", verifiedHash: "" })}
              onAdminLogin={(pin) => {
                if (pin === state.adminPass) {
@@ -550,11 +582,11 @@ export default function App() {
               {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} initialPlayerId={historyPlayerId} state={appState} user={user}/>}
               {activeView==="profile"   && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} setUser={setUserSettings}/>}
               {activeView==="stats"     && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme} user={user}/>}
-              {activeView==="settings"  && <Settings state={appState} user={user} setShared={setShared} setUser={setUserSettings} nav={nav} theme={theme}/>}
+              {activeView==="settings"  && <Settings state={appState} user={user} setShared={setShared} setUser={setUserSettings} nav={nav} theme={theme} matchCount={matches.length} isLargeDataset={isLargeDataset}/>}
               {activeView==="trash"     && <Trash state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} />}
               {activeView==="legends"   && <Legends theme={theme} />}
               {activeView==="changelog" && <Changelog theme={theme} />}
-              {activeView==="events"    && <Events state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} />}
+              {activeView==="events"    && <Events state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} />}
             </main>
             <BottomNav active={activeView} nav={nav} theme={theme}/>
 

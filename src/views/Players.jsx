@@ -354,6 +354,12 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                           <span style={{flexShrink:0}}>📝</span> <span style={{fontStyle: 'italic', overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{p.notes}</span>
                         </div>
                       )}
+                      {isAdmin && p.lastLoginAt && (
+                        <div style={{fontSize: 10*z, color: theme.sub, marginTop: 3*z, opacity: 0.7}}>
+                          🕐 Last login: {new Date(p.lastLoginAt).toLocaleString([], {month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit'})}
+                          {p.loginHistory?.length > 1 && ` (${p.loginHistory.length} total)`}
+                        </div>
+                      )}
                     </div>
                     
                     {/* Right column — only delete button now (admin only) */}

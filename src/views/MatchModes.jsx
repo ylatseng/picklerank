@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS, suggestBalancedTeams, computeSessionSummary, getRecentForm, shortName, isLargeZoom } from '../engine.js';
+import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS, suggestBalancedTeams, computeSessionSummary, getRecentForm, shortName, isLargeZoom, getSessionNum } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, Err, Sel, MatchEloBreakdown, ConfirmInline, MatchEditModal, MatchCard, usePersistentFormState } from '../components/Shared.jsx';
 import { MatchesSubNav } from '../components/Navigation.jsx';
@@ -42,6 +42,14 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
   const [err,setErr]=useState(""), [result,setResult]=useState(null);
   const [matchDate,setMatchDate]=useState(()=>isoToDatetimeLocal(new Date().toISOString()));
 
+  // Refresh the date to "now" whenever this component mounts so the form
+  // never shows a stale datetime from a previous session. Player picks and
+  // scores persist across navigation (desirable), but date should always
+  // default to the current moment when they open a new match.
+  useEffect(() => {
+    setMatchDate(isoToDatetimeLocal(new Date().toISOString()));
+  }, []);
+
   useEffect(() => {
     if (user?.myPlayerId) {
        setSp(prev => ({...prev, s1: prev.s1 || user.myPlayerId, d1a: prev.d1a || user.myPlayerId}));
@@ -82,7 +90,17 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
     if(t1w===t2w) return setErr(t("err_clear_winner"));
     
     const winnerTeam=t1w>t2w?0:1;
-    const isoDate = matchDate ? new Date(matchDate).toISOString() : new Date().toISOString();
+    // datetime-local gives "YYYY-MM-DDTHH:MM" — treat as LOCAL time.
+    // Without a timezone suffix, some browsers parse as UTC which shifts the time.
+    // Appending ":00" (seconds) then using Date constructor with explicit parts is safer.
+    let isoDate;
+    if (matchDate) {
+      const d = new Date(matchDate);
+      // If the datetime-local input gave a valid date, use it; otherwise fall back to now
+      isoDate = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+    } else {
+      isoDate = new Date().toISOString();
+    }
     
     const match={id:genId(),type,date:isoDate,teams:[teams[0].filter(Boolean),teams[1].filter(Boolean)],winnerTeam,
       games:parsedGames,teamNames:{t1:null,t2:null},winTo,winBy,
@@ -95,6 +113,10 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
     showUndo?.([match.id], "Match");
     // Clear all persisted form state — fresh start for next log
     clearSp(); clearGames(); clearTnames(); clearVenue(); clearNotes();
+    // Reset date to NOW so the next match logged always gets a fresh timestamp.
+    // Without this, consecutive matches on the same session get the same stale
+    // datetime from when the form was first opened — causing wrong History order.
+    setMatchDate(isoToDatetimeLocal(new Date().toISOString()));
   }
   
   const rawOpts=players.map(p=>({value:p.id,label:shortName(p.name, isLargeZoom(z) ? "always" : "auto")}));
@@ -264,6 +286,8 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
     if(new Set(sessionIds).size !== 4) return setErr(t("err_duplicate"));
 
     const matchesToLog = [];
+    const baseTime = Date.now();
+    const sessionNum = getSessionNum(state.matches, "Session");
     for(let i=0; i<3; i++) {
         const s1 = parseInt(roundScores[i].t1);
         const s2 = parseInt(roundScores[i].t2);
@@ -275,10 +299,13 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
         const t2w = winnerTeam === 1 ? 1 : 0;
         const t1Ids = [sessionIds[matchups[i].t1[0]], sessionIds[matchups[i].t1[1]]];
         const t2Ids = [sessionIds[matchups[i].t2[0]], sessionIds[matchups[i].t2[1]]];
-        matchesToLog.push({id:genId(),type:"doubles",date:new Date().toISOString(),teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:null, notes:`Session: ${notes.trim() || "Round-robin play"}`, loggedBy: user?.myPlayerId || "guest"});
+        // Stagger timestamps so Round 3 appears on top in reverse-chrono History
+        const matchDate = new Date(baseTime + i * 1000).toISOString();
+        const roundNote = `Session #${sessionNum} Round ${i+1} of 3${notes.trim() ? " — " + notes.trim() : ""}`;
+        matchesToLog.push({id:genId(),type:"doubles",date:matchDate,teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:null, notes:roundNote, loggedBy: user?.myPlayerId || "guest"});
     }
 
-    // Compute rich summary before and after
+    // Compute rich summary (inline card, not a modal)
     const allMatchesAfter = [...(state.matches||[]), ...matchesToLog];
     const { derivedPlayers: postPlayers } = replayAllMatches(state.players, allMatchesAfter);
     const summary = computeSessionSummary(matchesToLog, players, postPlayers);
@@ -286,11 +313,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
 
     set(s => ({...s, matches: allMatchesAfter}));
     showUndo?.(matchesToLog.map(m => m.id), `Session (${matchesToLog.length} matches)`);
-    // Clear persisted draft now that session is logged
-    clearRoundScores();
-    clearSessionIds();
-    setChosenSplit(null);
-    clearSessionNotes();
+    clearRoundScores(); clearSessionIds(); setChosenSplit(null); clearSessionNotes();
   }
 
   // Team Suggester: compute balanced pairings when 4 players are selected
@@ -322,59 +345,54 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
         </div>
       </div>
 
-      {/* ── SESSION SUMMARY MODAL ─────────────────────────────────────── */}
+      {/* ── Inline session summary — replaces the old modal overlay ─── */}
       {sessionSummary && (
-        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16*z}}>
-          <div style={{background:theme.card,borderRadius:16*z,padding:20*z,width:"100%",maxWidth:420*z,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}}>
-            <div style={{textAlign:"center",fontSize:20*z,fontWeight:800,marginBottom:16*z,color:theme.accent}}>{t("session_summary_title")}</div>
-
-            {/* Player stats */}
-            <div style={{display:"flex",flexWrap:"wrap",gap:8*z,marginBottom:16*z}}>
-              {sessionSummary.playerStats.map(ps => (
-                <div key={ps.id} style={{flex:"1 1 45%",background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:10*z,padding:10*z}}>
-                  <div style={{fontWeight:700,fontSize:12*z,color:theme.text,marginBottom:3*z}}>{ps.name}</div>
-                  <div style={{fontSize:11*z,color:theme.sub}}>{ps.wins}W {ps.losses}L</div>
-                  <div style={{fontSize:12*z,fontWeight:700,color:ps.delta>=0?"#50c878":"#e05050",marginTop:2*z}}>
-                    {ps.delta>=0?"+":""}{ps.delta.toFixed(3)}
-                  </div>
+        <Sec title={t("session_summary_title")} theme={theme}>
+          {/* 2×2 player stats grid */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8*z,marginBottom:16*z}}>
+            {sessionSummary.playerStats.map(ps => (
+              <div key={ps.id} style={{background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:10*z,padding:10*z}}>
+                <div style={{fontWeight:700,fontSize:12*z,color:theme.text,marginBottom:3*z}}>{ps.name}</div>
+                <div style={{fontSize:11*z,color:theme.sub}}>{ps.wins}W {ps.losses}L</div>
+                <div style={{fontSize:12*z,fontWeight:700,color:ps.delta>=0?"#50c878":"#e05050",marginTop:2*z}}>
+                  {ps.delta>=0?"+":""}{ps.delta.toFixed(3)}
                 </div>
-              ))}
-            </div>
-
-            {/* Highlights */}
-            <div style={{display:"flex",flexDirection:"column",gap:8*z,marginBottom:16*z}}>
-              <div style={{background:"rgba(80,200,120,0.1)",border:"1px solid #50c87844",borderRadius:10*z,padding:10*z}}>
-                <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>🏆 {t("session_summary_mvp")}</div>
-                <div style={{fontWeight:700,color:"#50c878"}}>{sessionSummary.mvp?.name} — {sessionSummary.mvp?.wins}W {sessionSummary.mvp?.losses}L</div>
-              </div>
-              <div style={{background:"rgba(64,160,224,0.1)",border:"1px solid #40a0e044",borderRadius:10*z,padding:10*z}}>
-                <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>📈 {t("session_summary_improved")}</div>
-                <div style={{fontWeight:700,color:"#40a0e0"}}>{sessionSummary.mostImproved?.name} {sessionSummary.mostImproved?.delta>=0?"+":""}{sessionSummary.mostImproved?.delta.toFixed(3)}</div>
-              </div>
-              <div style={{background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:10*z,padding:10*z}}>
-                <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>🎯 {t("session_summary_total_pts")}</div>
-                <div style={{fontWeight:700,color:theme.text}}>{sessionSummary.totalPts}</div>
-              </div>
-            </div>
-
-            {/* Match results */}
-            <div style={{fontSize:11*z,fontWeight:700,color:theme.sub,marginBottom:6*z}}>{t("session_summary_results")}</div>
-            {sessionSummary.matchSummaries.map((m, i) => (
-              <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11*z,padding:`${5*z}px 0`,borderBottom:`1px solid ${theme.border}`}}>
-                <span style={{color:theme.sub}}>Game {i+1}</span>
-                <span style={{color:theme.text}}>{m.t1} vs {m.t2}</span>
-                <span style={{fontWeight:700,color:"#50c878"}}>{m.score}</span>
               </div>
             ))}
-
-            <div style={{display:"flex",gap:8*z,marginTop:16*z}}>
-              <button style={{...S.btnSecondary,flex:1,marginTop:0}} onClick={() => shareRecap(sessionSummary)}>{t("session_summary_share")}</button>
-              <button style={{...S.btnPrimary,flex:1,marginTop:0}} onClick={() => setSessionSummary(null)}>{t("session_summary_close")}</button>
+          </div>
+          {/* Highlights */}
+          <div style={{display:"flex",flexDirection:"column",gap:8*z,marginBottom:16*z}}>
+            <div style={{background:"rgba(80,200,120,0.1)",border:"1px solid #50c87844",borderRadius:10*z,padding:10*z}}>
+              <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>🏆 {t("session_summary_mvp")}</div>
+              <div style={{fontWeight:700,color:"#50c878"}}>{sessionSummary.mvp?.name} — {sessionSummary.mvp?.wins}W {sessionSummary.mvp?.losses}L</div>
+            </div>
+            <div style={{background:"rgba(64,160,224,0.1)",border:"1px solid #40a0e044",borderRadius:10*z,padding:10*z}}>
+              <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>📈 {t("session_summary_improved")}</div>
+              <div style={{fontWeight:700,color:"#40a0e0"}}>{sessionSummary.mostImproved?.name} {sessionSummary.mostImproved?.delta>=0?"+":""}{sessionSummary.mostImproved?.delta.toFixed(3)}</div>
+            </div>
+            <div style={{background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:10*z,padding:10*z}}>
+              <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>🎯 {t("session_summary_total_pts")}</div>
+              <div style={{fontWeight:700,color:theme.text}}>{sessionSummary.totalPts}</div>
             </div>
           </div>
-        </div>
+          {/* Match recap */}
+          <div style={{fontSize:11*z,fontWeight:700,color:theme.sub,marginBottom:6*z}}>{t("session_summary_results")}</div>
+          {sessionSummary.matchSummaries.map((m, i) => (
+            <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11*z,padding:`${5*z}px 0`,borderBottom:`1px solid ${theme.border}`}}>
+              <span style={{color:theme.sub,fontWeight:700}}>R{i+1}</span>
+              <span style={{color:theme.text,flex:1,textAlign:"center"}}>{m.t1} vs {m.t2}</span>
+              <span style={{fontWeight:700,color:"#50c878"}}>{m.score}</span>
+            </div>
+          ))}
+          <div style={{display:"flex",gap:8*z,marginTop:16*z}}>
+            <button style={{...S.btnSecondary,flex:1,marginTop:0}} onClick={() => shareRecap(sessionSummary)}>{t("session_summary_share")}</button>
+            <button style={{...S.btnPrimary,flex:1,marginTop:0}} onClick={() => setSessionSummary(null)}>{t("session_summary_close")}</button>
+          </div>
+        </Sec>
       )}
 
+      {/* ── Player setup + score entry — hidden while results are showing ── */}
+      {!sessionSummary && (<>
       <Sec title={t("select_foursome")} theme={theme}>
         {savedGroups.length > 0 && (
           <div style={{marginBottom: 16*z}}>
@@ -525,6 +543,41 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
               <input style={S.input} placeholder="e.g. Really hot day, great rallies..." value={notes} onChange={e=>setNotes(e.target.value)}/>
             </div>
 
+            {/* Live preview — shows as scores are entered, before logging */}
+            {(() => {
+              const liveResults = matchups.map((m, i) => {
+                const s1 = parseInt(roundScores[i].t1), s2 = parseInt(roundScores[i].t2);
+                if (isNaN(s1) || isNaN(s2)) return null;
+                const r = validatePickleballScore(s1, s2, winTo, winBy);
+                if (!r) return null;
+                return {
+                  t1Name: `${getName(sessionIds[m.t1[0]])} / ${getName(sessionIds[m.t1[1]])}`,
+                  t2Name: `${getName(sessionIds[m.t2[0]])} / ${getName(sessionIds[m.t2[1]])}`,
+                  winner: r.winner, s1, s2, round: i + 1
+                };
+              }).filter(Boolean);
+              if (!liveResults.length) return null;
+              return (
+                <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:10*z, padding:10*z}}>
+                  <div style={{fontSize:11*z, fontWeight:700, color:theme.accent, marginBottom:8*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+                    📊 Score Preview
+                  </div>
+                  {liveResults.map(r => (
+                    <div key={r.round} style={{display:"flex", alignItems:"center", gap:6*z, fontSize:11*z, padding:`${4*z}px 0`, borderBottom:`1px solid ${theme.border}`}}>
+                      <span style={{color:theme.sub, fontWeight:700, flexShrink:0}}>R{r.round}</span>
+                      <span style={{flex:1, color: r.winner===0 ? theme.accent : theme.text, fontWeight: r.winner===0 ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                        {r.winner===0 && "✓ "}{r.t1Name}
+                      </span>
+                      <span style={{fontWeight:700, color:theme.text, flexShrink:0}}>{r.s1}–{r.s2}</span>
+                      <span style={{flex:1, textAlign:"right", color: r.winner===1 ? theme.accent : theme.text, fontWeight: r.winner===1 ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                        {r.t2Name}{r.winner===1 && " ✓"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
             {err && <Err msg={err} theme={theme}/>}
             <div style={{display:"flex", gap:8*z}}>
               <button
@@ -540,6 +593,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
           </div>
         </Sec>
       )}
+      </>)} {/* end !sessionSummary */}
     </div>
   );
 }
@@ -604,6 +658,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
     const matchesToLog = [];
     const baseTime = Date.now();
     for(let i=0; i<3; i++) {
+    const kotcNum = getSessionNum(state.matches, "King of the Court");
         const s1 = parseInt(roundScores[i].t1);
         const s2 = parseInt(roundScores[i].t2);
         if (isNaN(s1) || isNaN(s2)) return setErr(`Round ${i+1}: ${t("err_valid_scores")}`);
@@ -622,7 +677,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
           games: [{a:s1, b:s2, winner: winnerTeam}],
           teamNames: {t1:null, t2:null}, winTo, winBy,
           team1Wins: t1w, team2Wins: t2w, venue: null,
-          notes: `King of the Court: Match ${i+1} of 3${notes.trim() ? " — " + notes.trim() : ""}`,
+          notes: `King of the Court #${kotcNum}: Match ${i+1} of 3${notes.trim() ? " — " + notes.trim() : ""}`,
           loggedBy: user?.myPlayerId || "guest"
         });
     }
@@ -638,7 +693,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
         s1: parseInt(roundScores[i].t1), s2: parseInt(roundScores[i].t2),
       })),
     });
-    setSuccess(`✅ 3 Matches Logged. King Crowned: ${getName(kotcLeaderboard[0].id)}!`);
+    setSuccess(`✅ 3 Matches Logged.\nKing Crowned: ${getName(kotcLeaderboard[0].id)}`);
     // Clear persisted draft
     clearKotcScores();
     clearKotcIds();
@@ -648,7 +703,13 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
   return (
     <div style={S.view}>
       <MatchesSubNav active="kotc" nav={nav} theme={theme} />
-      {success && <div style={{background:"rgba(80,200,120,0.15)", color:"#50c878", padding:10*z, borderRadius:8*z, marginBottom:12*z, fontSize:13*z, fontWeight:"bold"}}>{success}</div>}
+      {success && (
+        <div style={{background:"rgba(80,200,120,0.15)", color:"#50c878", padding:`${10*z}px`, borderRadius:8*z, marginBottom:12*z, textAlign:"center"}}>
+          {success.split('\n').map((line, i) => (
+            <div key={i} style={{fontSize: i===0 ? 12*z : 16*z, fontWeight: i===0 ? 600 : 800, marginTop: i===0 ? 0 : 4*z}}>{line}</div>
+          ))}
+        </div>
+      )}
 
       {/* ── KOTC analysis panel — shows after matches are logged ───────────────
           Tells the story of why each player landed where they did. */}
@@ -718,6 +779,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
         </Sec>
       )}
       
+      {!kotcAnalysis && (
       <Sec title={t("kotc")} theme={theme}>
         <div style={{fontSize:12*z, color:theme.sub, marginBottom:12*z}}>{t("kotc_desc")}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z, marginBottom:16*z}}>
@@ -778,6 +840,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
           </div>
         )}
       </Sec>
+      )} {/* end !kotcAnalysis */}
     </div>
   );
 }
@@ -927,6 +990,11 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
     setBracket(b);
     setCollapsed({});
     setStep(1);
+    // Scroll the main container to top so user sees Round 1 immediately
+    setTimeout(() => {
+      const main = document.querySelector("main");
+      if (main) main.scrollTop = 0;
+    }, 50);
   }
 
   // ── Score input handlers ──────────────────────────────────────────────────
@@ -1083,6 +1151,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
     // 1-second increments are imperceptible to users but produce correct ordering.
     const baseTime = Date.now();
     const matchesToLog = [];
+    const tourneyNum = getSessionNum(state.matches, formatLabel);
     let mNum = 0;
     computedBracket.rounds.forEach((round, roundIdx) => {
       round.matches.forEach((m, matchIdx) => {
@@ -1106,7 +1175,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
           team1Wins: m.winner === 0 ? 1 : 0,
           team2Wins: m.winner === 1 ? 1 : 0,
           venue: null,
-          notes: `${formatLabel}: ${roundDisplay}${notes.trim() ? " — " + notes.trim() : ""}`,
+          notes: `${formatLabel} #${tourneyNum}: ${roundDisplay}${notes.trim() ? " — " + notes.trim() : ""}`,
           loggedBy: user?.myPlayerId || "guest",
         });
       });
@@ -1115,7 +1184,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
     set(s => ({ ...s, matches: [...(s.matches || []), ...matchesToLog] }));
     showUndo?.(matchesToLog.map(m => m.id), `${formatLabel} (${matchesToLog.length} matches)`);
     const champLabel = `${getName(computedBracket.champion[0])} & ${getName(computedBracket.champion[1])}`;
-    setSuccess(`🏆 ${formatLabel} Logged! Champions: ${champLabel}`);
+    setSuccess(`🏆 ${formatLabel} Logged!\n${champLabel}`);
     // Reset everything for the next tournament
     clearFormat(); clearPlayerCount(); clearTIds(); clearBracket(); clearTNotes();
     setStep(0);
@@ -1127,6 +1196,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
     setStep(0);
     setCollapsed({});
     setErr("");
+    setSuccess("");  // clear champion announcement so it doesn't linger into next tournament
   }
 
   // ── Render: Setup screen (step 0) ─────────────────────────────────────────
@@ -1211,7 +1281,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
             style={{...S.btnSecondary, marginTop:0, flexShrink:0, paddingLeft:16*z, paddingRight:16*z}}
             onClick={() => {
               clearFormat(); clearPlayerCount(); clearTIds(); clearBracket(); clearTNotes();
-              setErr("");
+              setErr(""); setSuccess("");
             }}>
             {t("reset_btn") || "🔄 Reset"}
           </button>
@@ -1413,8 +1483,12 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
       <MatchesSubNav active="tourney" nav={nav} theme={theme} />
 
       {success && (
-        <div style={{background:"rgba(80,200,120,0.15)", color:"#50c878", padding:10*z, borderRadius:8*z, marginBottom:12*z, fontSize:13*z, fontWeight:"bold"}}>
-          {success}
+        <div style={{background:"rgba(80,200,120,0.15)", border:"1px solid #50c87844", color:"#50c878", padding:`${12*z}px`, borderRadius:10*z, marginBottom:12*z, textAlign:"center"}}>
+          {success.split('\n').map((line, i) => (
+            <div key={i} style={{fontSize: i===0 ? 13*z : 16*z, fontWeight: i===0 ? 700 : 800, marginTop: i===0 ? 0 : 6*z}}>
+              {i===0 ? line : `🏆 Champions: ${line}`}
+            </div>
+          ))}
         </div>
       )}
 
