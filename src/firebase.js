@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { initializeFirestore } from "firebase/firestore"; 
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore"; 
 
 const firebaseConfig = {
   apiKey: "AIzaSyDPYQS7YLqTHbzowmXNX4oiGA8y5GeZzUM",
@@ -13,7 +13,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// This forces Firebase to bypass standard WebSocket blocks
+// Offline persistence via IndexedDB — writes queued offline survive app restarts.
+// persistentMultipleTabManager allows multiple browser tabs to share one cache.
+// Falls back gracefully if IndexedDB is unavailable (private browsing, etc.)
 export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
   experimentalForceLongPolling: true
 });

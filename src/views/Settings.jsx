@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { t, APP_MODES, APP_ACCENTS, APP_FONTS, processImage, APP_VERSION, APP_UPDATED, blankState } from '../engine.js';
+import { t, setLang, APP_MODES, APP_ACCENTS, APP_FONTS, processImage, APP_VERSION, APP_UPDATED, blankState } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Err, ConfirmInline, Sel, PinManager } from '../components/Shared.jsx';
 import { doc, setDoc } from "firebase/firestore";
@@ -27,6 +27,10 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
 
   // Helper to save setting exclusively to the logged-in user, or to the device if Guest/Admin
   const updateAppearance = (key, val) => {
+    // Apply language change synchronously so t() calls on the very next render
+    // use the correct language — without this, there's a one-render lag.
+    if (key === 'langId') setLang(val);
+
     if (user.myPlayerId) {
       setUser(prev => ({
         ...prev,
@@ -111,10 +115,21 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
       try {
         const data = JSON.parse(ev.target.result);
         if (!Array.isArray(data.players) || !Array.isArray(data.matches)) throw new Error("Invalid format.");
+
+        // Security: strip isAdminPlayer from imported players — this flag should only
+        // be set by an existing admin inside the app, not snuck in via a backup file.
+        // Without this, anyone could craft a JSON file with isAdminPlayer:true and
+        // import it to silently escalate privileges on their next PIN login.
+        const sanitizedPlayers = data.players.map(p => {
+          const { isAdminPlayer, ...safe } = p;
+          return user.isAdmin && isAdminPlayer
+            ? { ...safe, isAdminPlayer: true }  // preserve if current session is already admin
+            : safe;
+        });
         
         setShared(s => ({
           ...s, 
-          players: data.players, 
+          players: sanitizedPlayers, 
           matches: data.matches, 
           savedGroups: data.savedGroups || [], 
           logoText: data.logoText || "LS", 
@@ -124,7 +139,7 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
 
         const groupRef = doc(db, "picklerank", "main_group");
         await setDoc(groupRef, {
-          players: data.players,
+          players: sanitizedPlayers,
           matches: JSON.stringify(data.matches), 
           savedGroups: data.savedGroups || [],
           logoText: data.logoText || "LS",
@@ -147,26 +162,43 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
   return (
     <div style={S.view}>
 
-      {/* USER PROFILE LINKING & LOGOUT (HIDDEN FOR ADMIN) */}
-      {!user.isAdmin && (
+      {/* ── MY PROFILE + ADMIN (consolidated for isAdminPlayer users) ── */}
+      {user.myPlayerId ? (
+        /* Player is linked — show profile, PIN, admin badge if applicable, and ONE logout */
         <Sec title={t("my_profile_sec")} theme={theme}>
           <div style={{ fontSize: 12*z, color: theme.sub, marginBottom: 10*z }}>
             {t("link_device_desc")}
           </div>
-          <Sel 
-            value={user.myPlayerId || ""} 
-            onChange={v => setUser({myPlayerId: v})} 
+          <Sel
+            value={user.myPlayerId || ""}
+            onChange={v => setUser({myPlayerId: v})}
             opts={[
               { value: "", label: t("guest_not_linked") },
               ...[...(state.players || [])]
                   .sort((a,b) => a.name.localeCompare(b.name))
                   .map(p => ({ value: p.id, label: p.name }))
-            ]} 
-            theme={theme} 
+            ]}
+            theme={theme}
           />
 
-          {/* PIN management — shown when a player is linked */}
-          {user.myPlayerId && (() => {
+          {/* Admin badge — visible when this player has admin rights */}
+          {user.isAdmin && (
+            <div style={{
+              display:"flex", alignItems:"center", gap:8*z,
+              marginTop:10*z, padding:`${8*z}px ${10*z}px`,
+              background:"rgba(80,200,120,0.08)", border:"1px solid rgba(80,200,120,0.3)",
+              borderRadius:8*z, fontSize:12*z
+            }}>
+              <span style={{fontSize:14*z}}>🔑</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700, color:"#50c878"}}>{t("admin_mode")}</div>
+                <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>Full admin access active</div>
+              </div>
+            </div>
+          )}
+
+          {/* PIN management */}
+          {(() => {
             const linkedPlayer = state.players?.find(p => p.id === user.myPlayerId);
             const hasPIN = !!linkedPlayer?.pin;
             return (
@@ -186,22 +218,42 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
             );
           })()}
 
+          {/* Single logout for all linked players */}
           <div style={{marginTop: 16*z}}>
             <button style={{...S.btnSecondary, width: "100%", borderColor: "#e05050", color: "#e05050"}} onClick={handleLogout}>
               {t("logout_btn")}
             </button>
           </div>
         </Sec>
-      )}
 
-      {/* ADMIN CONTROLS (ONLY VISIBLE IF LOGGED IN AS ADMIN) */}
-      {user.isAdmin && (
+      ) : !user.isAdmin ? (
+        /* Guest — not linked, show link selector only */
+        <Sec title={t("my_profile_sec")} theme={theme}>
+          <div style={{ fontSize: 12*z, color: theme.sub, marginBottom: 10*z }}>
+            {t("link_device_desc")}
+          </div>
+          <Sel
+            value=""
+            onChange={v => setUser({myPlayerId: v})}
+            opts={[
+              { value: "", label: t("guest_not_linked") },
+              ...[...(state.players || [])]
+                  .sort((a,b) => a.name.localeCompare(b.name))
+                  .map(p => ({ value: p.id, label: p.name }))
+            ]}
+            theme={theme}
+          />
+        </Sec>
+      ) : null}
+
+      {/* GLOBAL ADMIN CONTROLS — only for pure admin (no player profile linked) */}
+      {user.isAdmin && !user.myPlayerId && (
         <Sec title={t("admin_sec")} theme={theme}>
           <div style={{marginBottom: 10*z, fontSize: 13*z, color: theme.text}}>
             {t("admin_status")}: <strong style={{color: "#50c878"}}>{t("admin_mode")}</strong>
           </div>
           <div style={{display:"flex", flexDirection:"column", gap: 10*z}}>
-            <button style={{...S.btnSecondary, borderColor: "#e05050", color: "#e05050"}} onClick={()=>setUser({isAdmin: false})}>{t("exit_admin_btn")}</button>
+            <button style={{...S.btnSecondary, borderColor: "#e05050", color: "#e05050"}} onClick={handleLogout}>{t("exit_admin_btn")}</button>
             <div style={{borderTop:`1px solid ${theme.border}`, margin:`${8*z}px 0`}} />
             <div style={{display:"flex", gap: 8*z}}>
               <input style={{...S.input, flex:1}} type="password" placeholder={t("new_passcode_placeholder")} value={newPass} onChange={e=>{setNewPass(e.target.value); setAdminErr("");}}/>
@@ -210,7 +262,20 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
               }}>{t("change_pass_btn")}</button>
             </div>
           </div>
-          
+          {adminErr && <div style={{color: adminErr === t("pass_updated") ? "#50c878" : "#e05050", fontSize: 12*z, marginTop: 8*z}}>{adminErr}</div>}
+        </Sec>
+      )}
+
+      {/* Passcode change for isAdminPlayer users — shown inside their profile section above,
+          but we also need to let them change the global passcode if they're isAdminPlayer */}
+      {user.isAdmin && user.myPlayerId && (
+        <Sec title={t("admin_sec")} theme={theme}>
+          <div style={{display:"flex", gap: 8*z}}>
+            <input style={{...S.input, flex:1}} type="password" placeholder={t("new_passcode_placeholder")} value={newPass} onChange={e=>{setNewPass(e.target.value); setAdminErr("");}}/>
+            <button style={S.btnPrimary} onClick={()=>{
+              if(newPass.trim()) { setShared({adminPass: newPass.trim()}); setNewPass(""); setAdminErr(t("pass_updated")); }
+            }}>{t("change_pass_btn")}</button>
+          </div>
           {adminErr && <div style={{color: adminErr === t("pass_updated") ? "#50c878" : "#e05050", fontSize: 12*z, marginTop: 8*z}}>{adminErr}</div>}
         </Sec>
       )}
@@ -276,41 +341,48 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
         </div>
       </Sec>
 
-      {/* LOGIN HISTORY (ADMIN ONLY) */}
+      {/* LOGIN ACTIVITY (ADMIN ONLY) — compact last-seen table */}
       {user.isAdmin && (
-        <Sec title="🔐 Player Login History" theme={theme}>
-          <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
-            Every login by each player — last 50 entries per player. Newest first.
+        <Sec title="🔐 Login Activity" theme={theme}>
+          <div style={{fontSize:11*z, color:theme.sub, marginBottom:10*z}}>
+            Most recent login per player.
           </div>
           {(state.players || [])
-            .filter(p => p.loginHistory?.length > 0)
-            .sort((a, b) => {
-              const aLast = a.loginHistory[a.loginHistory.length - 1]?.at || 0;
-              const bLast = b.loginHistory[b.loginHistory.length - 1]?.at || 0;
-              return bLast - aLast; // most recently logged-in player first
-            })
-            .map(p => (
-              <div key={p.id} style={{marginBottom:14*z, borderBottom:`1px solid ${theme.border}`, paddingBottom:10*z}}>
-                <div style={{fontSize:13*z, fontWeight:700, color:theme.accent, marginBottom:6*z}}>{p.name}</div>
-                <div style={{display:"flex", flexDirection:"column", gap:3*z}}>
-                  {[...(p.loginHistory || [])].reverse().map((entry, i) => (
-                    <div key={i} style={{display:"flex", justifyContent:"space-between", fontSize:11*z, color: i === 0 ? theme.text : theme.sub}}>
-                      <span style={{fontWeight: i===0 ? 700 : 400}}>
-                        {i === 0 ? "🟢 Latest: " : `#${p.loginHistory.length - i}: `}
-                      </span>
-                      <span>{new Date(entry.at).toLocaleString([], {
-                        weekday:"short", month:"short", day:"numeric",
-                        year:"numeric", hour:"2-digit", minute:"2-digit"
-                      })}</span>
-                    </div>
-                  ))}
+            .filter(p => p.lastLoginAt)
+            .sort((a, b) => (b.lastLoginAt || 0) - (a.lastLoginAt || 0))
+            .map(p => {
+              const lastAt = new Date(p.lastLoginAt);
+              const now = Date.now();
+              const diff = now - p.lastLoginAt;
+              const diffMin = Math.floor(diff / 60000);
+              const diffHr = Math.floor(diff / 3600000);
+              const diffDay = Math.floor(diff / 86400000);
+              const ago = diff < 60000 ? "just now"
+                        : diffMin < 60 ? `${diffMin}m ago`
+                        : diffHr < 24 ? `${diffHr}h ago`
+                        : diffDay < 7 ? `${diffDay}d ago`
+                        : lastAt.toLocaleDateString([], {month:"short", day:"numeric"});
+              const loginCount = p.loginHistory?.length || 1;
+              return (
+                <div key={p.id} style={{
+                  display:"flex", alignItems:"center", gap:8*z,
+                  padding:`${7*z}px 0`, borderBottom:`1px solid ${theme.border}`
+                }}>
+                  <div style={{width:8*z, height:8*z, borderRadius:"50%", flexShrink:0,
+                    background: diff < 300000 ? "#50c878" : diff < 86400000 ? theme.accent : theme.border
+                  }}/>
+                  <div style={{flex:1, fontSize:13*z, fontWeight:600, color:theme.text}}>{p.name}</div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:12*z, color:theme.text, fontWeight:600}}>{ago}</div>
+                    <div style={{fontSize:10*z, color:theme.sub}}>{loginCount} login{loginCount!==1?"s":""}</div>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           }
-          {(state.players || []).every(p => !p.loginHistory?.length) && (
+          {(state.players || []).every(p => !p.lastLoginAt) && (
             <div style={{fontSize:12*z, color:theme.sub, textAlign:"center", padding:16*z}}>
-              No login history yet. History is recorded when players verify their identity.
+              No login activity recorded yet.
             </div>
           )}
         </Sec>

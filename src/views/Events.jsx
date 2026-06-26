@@ -1,7 +1,25 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { makeS } from '../styles.js';
 import { Sec, ConfirmInline, usePersistentFormState } from '../components/Shared.jsx';
 import { t, genId } from '../engine.js';
+
+// Register service worker and schedule a notification for an event
+async function scheduleEventNotification(event) {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+  if (Notification.permission !== 'granted') return;
+  const reg = await navigator.serviceWorker.ready;
+  // Notify 1 hour before the event
+  const eventTime = new Date(event.date).getTime();
+  const notifyAt = eventTime - 60 * 60 * 1000;
+  if (notifyAt <= Date.now()) return;
+  reg.active?.postMessage({
+    type: 'SCHEDULE_NOTIFICATION',
+    title: `🥒 Pickleball in 1 hour: ${event.title}`,
+    body: `📍 ${event.venue || 'TBD'} · Tap to open PickleRank`,
+    tag: `pr-event-${event.id}`,
+    timestamp: notifyAt
+  });
+}
 
 const toYYYYMMDD = (d) => {
   const dt = new Date(d);
@@ -27,6 +45,27 @@ export default function Events({ state, set, theme, isAdmin, user }) {
   const [selectedDateStr, setSelectedDateStr] = useState(null);
   const [calendarMode, setCalendarMode] = useState("month");
   const [expandedEvents, setExpandedEvents] = useState({});
+  const [notifPerm, setNotifPerm] = useState(() =>
+    'Notification' in window ? Notification.permission : 'unsupported'
+  );
+
+  // Register service worker once on mount
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw-notifications.js').catch(() => {});
+    }
+  }, []);
+
+  const requestNotifPermission = async () => {
+    if (!('Notification' in window)) return;
+    const perm = await Notification.requestPermission();
+    setNotifPerm(perm);
+    if (perm === 'granted') {
+      // Schedule notifications for all upcoming events
+      const upcoming = (state.events || []).filter(e => new Date(e.date) > new Date());
+      upcoming.forEach(scheduleEventNotification);
+    }
+  };
 
   // ── Save / Edit / Delete ────────────────────────────────────────────────
   const saveEvent = () => {
@@ -40,12 +79,17 @@ export default function Events({ state, set, theme, isAdmin, user }) {
       return;
     }
     setFormError("");
+    const savedEvent = editingEvent
+      ? { ...newEvent, id: editingEvent.id }
+      : { ...newEvent, id: genId() };
     set(s => ({
       ...s,
       events: editingEvent
-        ? (s.events || []).map(e => e.id === editingEvent.id ? { ...newEvent, id: editingEvent.id } : e)
-        : [...(s.events || []), { ...newEvent, id: genId() }]
+        ? (s.events || []).map(e => e.id === editingEvent.id ? savedEvent : e)
+        : [...(s.events || []), savedEvent]
     }));
+    // Schedule push notification for the event (1h before)
+    scheduleEventNotification(savedEvent);
     setEditingEvent(null);
     clearNewEvent();
     setShowForm(false);
@@ -83,7 +127,11 @@ export default function Events({ state, set, theme, isAdmin, user }) {
   const todayStr = toYYYYMMDD(new Date());
   const firstDayOfWeek = new Date(cYear, cMonth, 1).getDay();
   const daysInMonth = new Date(cYear, cMonth + 1, 0).getDate();
-  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const monthNames = [
+    t("month_jan")||"Jan", t("month_feb")||"Feb", t("month_mar")||"Mar", t("month_apr")||"Apr",
+    t("month_may")||"May", t("month_jun")||"Jun", t("month_jul")||"Jul", t("month_aug")||"Aug",
+    t("month_sep")||"Sep", t("month_oct")||"Oct", t("month_nov")||"Nov", t("month_dec")||"Dec"
+  ];
 
   const prevCal = () => calendarMode === "year"
     ? setCursorDate(new Date(cYear - 1, cMonth, 1))
@@ -182,7 +230,7 @@ export default function Events({ state, set, theme, isAdmin, user }) {
         {calendarMode === "month" ? (
           <div>
             <div style={{display:"grid", gridTemplateColumns:"repeat(7, 1fr)", gap:4*z, marginBottom:8*z}}>
-              {['S','M','T','W','T','F','S'].map((d,i) => (
+              {[t("day_sun")||'S', t("day_mon")||'M', t("day_tue")||'T', t("day_wed")||'W', t("day_thu")||'T', t("day_fri")||'F', t("day_sat")||'S'].map((d,i) => (
                 <div key={i} style={{textAlign:"center", fontSize:11*z, fontWeight:700, color:theme.sub}}>{d}</div>
               ))}
             </div>
@@ -242,6 +290,31 @@ export default function Events({ state, set, theme, isAdmin, user }) {
           value={eventSearch}
           onChange={e => setEventSearch(e.target.value)} />
       </Sec>
+
+      {/* ── NOTIFICATION PERMISSION BANNER ──────────────────────────────── */}
+      {notifPerm === 'default' && (
+        <div style={{
+          background: theme.accent + "11", border: `1px solid ${theme.accent}44`,
+          borderRadius: 10*z, padding: `${10*z}px ${12*z}px`,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 10*z, marginBottom: 8*z
+        }}>
+          <div>
+            <div style={{fontSize:12*z, fontWeight:700, color:theme.accent}}>🔔 Event Reminders</div>
+            <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>Get notified 1 hour before each session</div>
+          </div>
+          <button onClick={requestNotifPermission} style={{
+            background: theme.accent, border: "none", borderRadius: 8*z,
+            color: "#fff", fontSize: 12*z, fontWeight:700, padding:`${6*z}px ${12*z}px`,
+            cursor:"pointer", flexShrink:0
+          }}>Enable</button>
+        </div>
+      )}
+      {notifPerm === 'granted' && (
+        <div style={{fontSize:11*z, color:"#50c878", marginBottom:8*z, textAlign:"center"}}>
+          🔔 Reminders on · you'll be notified 1h before each session
+        </div>
+      )}
 
       {/* ── 3. EVENT LIST ─────────────────────────────────────────────────── */}
       <Sec title={headerTitle} theme={theme}>
@@ -361,7 +434,7 @@ export default function Events({ state, set, theme, isAdmin, user }) {
                     )}
 
                     {/* Action buttons */}
-                    <div style={{display:"flex", gap:8*z, marginTop:12*z, alignItems:"center"}}>
+                    <div style={{display:"flex", gap:8*z, marginTop:12*z, alignItems:"center", flexWrap:"wrap"}}>
                       <button style={{background:theme.card, border:`1px solid ${theme.border}`,
                         borderRadius:6*z, color:theme.text, cursor:"pointer", padding:"6px 10px", fontSize:12*z}}
                         onClick={() => startEdit(ev)}>✏️ Edit</button>
@@ -374,6 +447,31 @@ export default function Events({ state, set, theme, isAdmin, user }) {
                           if (navigator.share) navigator.share({ title:"Pickleball", text });
                           else { navigator.clipboard.writeText(text); alert("Copied!"); }
                         }}>📤</button>
+
+                      {/* Notify attendees — sends a push notification to anyone who has enabled reminders */}
+                      {isAdmin && ev.invitees?.length > 0 && notifPerm === 'granted' && (
+                        <button style={{background:"transparent", border:`1px solid ${theme.accent}`,
+                          borderRadius:6*z, color:theme.accent, cursor:"pointer", padding:"6px 10px", fontSize:12*z, fontWeight:600}}
+                          onClick={async () => {
+                            if (!('serviceWorker' in navigator)) { alert("Notifications not supported."); return; }
+                            const reg = await navigator.serviceWorker.ready;
+                            const goingIds = ev.invitees?.filter(id => ev.rsvps?.[id] === "going") || ev.invitees || [];
+                            const names = goingIds.map(id => state.players.find(p=>p.id===id)?.name?.split(" ")[0]).filter(Boolean).join(", ");
+                            const eventDate = new Date(ev.date);
+                            const body = `📅 ${eventDate.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}\n📍 ${ev.venue || "TBD"}${names ? `\n✅ Going: ${names}` : ""}`;
+                            reg.active?.postMessage({
+                              type: 'SCHEDULE_NOTIFICATION',
+                              title: `🥒 Reminder: ${ev.title}`,
+                              body,
+                              tag: `pr-remind-${ev.id}-${Date.now()}`,
+                              timestamp: Date.now() + 1000 // fire in 1 second
+                            });
+                            alert(`Notification sent! ${goingIds.length} attendee${goingIds.length!==1?"s":""} will be notified.`);
+                          }}>
+                          🔔 Notify
+                        </button>
+                      )}
+
                       {isAdmin && pendingDelete !== ev.id && (
                         <button style={{background:"transparent", border:"none", color:"#e05050",
                           cursor:"pointer", fontSize:11*z, textDecoration:"underline", marginLeft:"auto"}}

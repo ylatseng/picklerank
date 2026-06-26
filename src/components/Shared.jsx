@@ -369,6 +369,7 @@ export function LeaderboardRow({player:p,rank,onClick,theme,format}) {
       <div style={S.lbInfo}>
         <div style={{display:"flex",alignItems:"center",gap:6*z}}>
           <span style={S.lbName}>{p.name}</span>
+          {p.isAdminPlayer && <span title="Admin" style={{fontSize:11*z, lineHeight:1}}>🔑</span>}
           {streakIcon && <span style={{fontSize:12*z}} title={`${p.streak} Game Streak`}>{streakIcon}{p.streak}</span>}
           <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background: isProv ? "rgba(245,158,11,0.12)" : "rgba(80,200,120,0.12)", color: isProv ? "#f59e0b" : "#50c878", fontWeight:700}}>
              {isProv ? "P" : "C"}

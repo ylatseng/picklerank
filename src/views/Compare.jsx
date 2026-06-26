@@ -157,6 +157,7 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
           <Sec title={`${t("compare")} (${h2h.total})`} theme={theme}>
             {h2h.total===0?<div style={{color:theme.sub,fontSize:13*z,textAlign:"center",padding:"12px 0"}}>{t("no_matches")}</div>:(
               <>
+                {/* W/L Bar */}
                 <div style={{marginBottom:14*z}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:6*z}}>
                     <span style={{fontSize:18*z,fontWeight:800,color:"#50c878"}}>{h2h.t1w}</span>
@@ -171,17 +172,78 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
                     <span>{t1Name}</span><span>{t2Name}</span>
                   </div>
                 </div>
-                {h2h.matches.slice(0,8).map(m=>{
+
+                {/* Momentum strip — last 5 results as dots */}
+                {h2h.total >= 2 && (() => {
+                  const last5 = h2h.matches.slice(0, 5);
+                  // Streak detection
+                  let streak = 0, streakTeam = null;
+                  for (const m of h2h.matches) {
+                    const winner = m.t1won ? "t1" : "t2";
+                    if (streakTeam === null) { streakTeam = winner; streak = 1; }
+                    else if (winner === streakTeam) streak++;
+                    else break;
+                  }
+                  return (
+                    <div style={{marginBottom:14*z}}>
+                      <div style={{fontSize:10*z,color:theme.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6*z}}>
+                        Last {Math.min(5, h2h.total)} Meetings
+                      </div>
+                      <div style={{display:"flex",gap:6*z,alignItems:"center"}}>
+                        {last5.map((m, i) => (
+                          <div key={m.id} style={{
+                            flex:1, height:28*z, borderRadius:6*z, display:"flex", alignItems:"center", justifyContent:"center",
+                            background: m.t1won ? "#50c87833" : "#40a0e033",
+                            border: `2px solid ${m.t1won ? "#50c878" : "#40a0e0"}`,
+                            fontSize:10*z, fontWeight:800,
+                            color: m.t1won ? "#50c878" : "#40a0e0"
+                          }}>
+                            {m.t1won ? "T1" : "T2"}
+                          </div>
+                        ))}
+                        {h2h.total > 5 && <div style={{fontSize:10*z,color:theme.sub,flexShrink:0}}>+{h2h.total-5}</div>}
+                      </div>
+                      {streak >= 2 && (
+                        <div style={{marginTop:6*z,fontSize:11*z,color:theme.sub}}>
+                          🔥 <strong style={{color:streakTeam==="t1"?"#50c878":"#40a0e0"}}>{streakTeam==="t1"?t1Name:t2Name}</strong> on {streak}-match winning streak
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Match timeline */}
+                <div style={{fontSize:10*z,color:theme.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6*z}}>
+                  Match History
+                </div>
+                {h2h.matches.slice(0,8).map((m, idx) => {
                   const m_t1n=m.teamNames?.t1||m.teams?.[0]?.map(getName).join(" & ")||t("tbd");
                   const m_t2n=m.teamNames?.t2||m.teams?.[1]?.map(getName).join(" & ")||t("tbd");
+                  const scoreStr = (m.games||[]).map(g=>`${g.a}–${g.b}`).join("  ");
+                  const winnerColor = m.t1won ? "#50c878" : "#40a0e0";
                   return (
-                    <div key={m.id} style={{...S.lbRow,cursor:"default"}}>
-                      <div style={{fontSize:20*z}}>{m.t1won?"✅":"❌"}</div>
-                      <div style={S.lbInfo}>
-                        <div style={{fontSize:12*z,fontWeight:600}}>{m_t1n} <span style={{color:theme.sub, fontSize:10*z, fontWeight:400}}>vs</span> {m_t2n}</div>
-                        <div style={{fontSize:11*z,color:theme.sub}}>{fmtDate(m.date)} · {(m.games||[]).map(g=>`${g.a}-${g.b}`).join(", ")}</div>
+                    <div key={m.id} style={{
+                      display:"flex", alignItems:"center", gap:8*z,
+                      padding:`${7*z}px 0`,
+                      borderBottom: idx < Math.min(h2h.matches.length,8)-1 ? `1px solid ${theme.border}` : "none"
+                    }}>
+                      <div style={{
+                        width:3*z, alignSelf:"stretch", borderRadius:2*z,
+                        background: winnerColor, flexShrink:0
+                      }}/>
+                      <div style={{flex:1, minWidth:0}}>
+                        <div style={{fontSize:12*z, fontWeight:700, color:theme.text}}>
+                          {m.t1won ? t1Name : t2Name} wins
+                        </div>
+                        <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
+                          {scoreStr} · {fmtDate(m.date)}
+                        </div>
                       </div>
-                      <div style={{fontSize:12*z,color:m.t1won?"#50c878":"#40a0e0",fontWeight:700}}>{m.t1won?t1Name:t2Name}</div>
+                      <div style={{
+                        fontSize:11*z, fontWeight:800, color:winnerColor,
+                        background:winnerColor+"22", borderRadius:6*z,
+                        padding:`${2*z}px ${6*z}px`, flexShrink:0
+                      }}>{m.t1won ? "W" : "L"}</div>
                     </div>
                   );
                 })}

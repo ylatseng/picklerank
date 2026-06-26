@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { t, fmtDate, sortOptionsAlpha, detectRematches } from '../engine.js';
+import { t, fmtDate, sortOptionsAlpha, detectRematches, getLang } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, ConfirmInline, Sel, MatchCard, MatchEditModal } from '../components/Shared.jsx';
 
@@ -94,7 +94,7 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
     let current = null;
     finalViewMatches.forEach(m => {
       const d = new Date(m.date);
-      const key = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      const key = d.toLocaleDateString(getLang() === "zh-TW" ? "zh-TW" : getLang() === "zh-CN" ? "zh-CN" : "en-US", { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
       if (!current || current.key !== key) {
         current = { key, matches: [] };
         groups.push(current);
@@ -113,7 +113,11 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
   // Calendar Logic
   const daysInMonth = new Date(cYear, cMonth + 1, 0).getDate();
   const firstDayOfWeek = new Date(cYear, cMonth, 1).getDay();
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthNames = [
+    t("month_jan")||"Jan", t("month_feb")||"Feb", t("month_mar")||"Mar", t("month_apr")||"Apr",
+    t("month_may")||"May", t("month_jun")||"Jun", t("month_jul")||"Jul", t("month_aug")||"Aug",
+    t("month_sep")||"Sep", t("month_oct")||"Oct", t("month_nov")||"Nov", t("month_dec")||"Dec"
+  ];
 
   function prevCal() {
     if (calendarMode === "year") setCursorDate(new Date(cYear - 1, cMonth, 1));
@@ -176,7 +180,7 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
         {calendarMode === "month" ? (
           <div>
             <div style={{display:"grid", gridTemplateColumns:"repeat(7, 1fr)", gap:4*z, marginBottom:8*z}}>
-              {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} style={{textAlign:"center", fontSize:11*z, fontWeight:700, color:theme.sub}}>{d}</div>)}
+              {[t("day_sun")||'S', t("day_mon")||'M', t("day_tue")||'T', t("day_wed")||'W', t("day_thu")||'T', t("day_fri")||'F', t("day_sat")||'S'].map((d, i) => <div key={i} style={{textAlign:"center", fontSize:11*z, fontWeight:700, color:theme.sub}}>{d}</div>)}
             </div>
             <div style={{display:"grid", gridTemplateColumns:"repeat(7, 1fr)", gap:4*z}}>
               {Array.from({length: firstDayOfWeek}).map((_, i) => <div key={`empty-${i}`} />)}
@@ -239,23 +243,23 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
         {/* Type + Mode dropdowns side by side */}
         <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8*z}}>
           <div>
-            <label style={{...S.label, marginBottom:4*z}}>Match Type</label>
+            <label style={{...S.label, marginBottom:4*z}}>{t("match_type_label")||"Match Type"}</label>
             <Sel theme={theme} value={typeFilter} onChange={setTypeFilter} opts={[
-              {value:"all",    label:"All Types"},
-              {value:"singles",label:"Singles"},
-              {value:"doubles",label:"Doubles"},
+              {value:"all",    label:t("all_types")||"All Types"},
+              {value:"singles",label:t("match_type_singles")||"Singles"},
+              {value:"doubles",label:t("match_type_doubles")||"Doubles"},
             ]} />
           </div>
           <div>
-            <label style={{...S.label, marginBottom:4*z}}>Match Mode</label>
+            <label style={{...S.label, marginBottom:4*z}}>{t("match_mode_label")||"Match Mode"}</label>
             <Sel theme={theme} value={modeFilter} onChange={setModeFilter} opts={[
-              {value:"all",    label:"All Modes"},
-              {value:"custom", label:"Custom"},
-              {value:"session",label:"Session"},
-              {value:"kotc",   label:"King of Court"},
-              {value:"se",     label:"Single Elim"},
-              {value:"de",     label:"Double Elim"},
-              {value:"rr",     label:"Round Robin"},
+              {value:"all",    label:t("all_modes")||"All Modes"},
+              {value:"custom", label:t("mode_custom")||"Custom"},
+              {value:"session",label:t("mode_session")||"Session"},
+              {value:"kotc",   label:t("mode_kotc")||"King of Court"},
+              {value:"se",     label:t("mode_se")||"Single Elim"},
+              {value:"de",     label:t("mode_de")||"Double Elim"},
+              {value:"rr",     label:t("mode_rr")||"Round Robin"},
             ]} />
           </div>
         </div>

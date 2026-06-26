@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS, suggestBalancedTeams, computeSessionSummary, getRecentForm, shortName, isLargeZoom, getSessionNum } from '../engine.js';
+import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS, suggestBalancedTeams, computeSessionSummary, getRecentForm, shortName, isLargeZoom, getSessionNum, calcExpected, DEFAULT_RATING } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Empty, Err, Sel, MatchEloBreakdown, ConfirmInline, MatchEditModal, MatchCard, usePersistentFormState } from '../components/Shared.jsx';
 import { MatchesSubNav } from '../components/Navigation.jsx';
@@ -129,14 +129,103 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
         <div style={S.successBox}>
           <div style={{fontWeight:800,fontSize:15*z,marginBottom:8*z}}>{t("match_logged_ok")}</div>
           <MatchEloBreakdown match={result.match} players={result.players} theme={theme} />
-          <button style={{...S.btnSecondary,marginTop:10*z}} onClick={()=>nav("history")}>{t("see_history_btn")}</button>
+          <div style={{display:"flex", gap:8*z, marginTop:10*z}}>
+            <button style={{...S.btnSecondary, flex:1, marginTop:0}} onClick={()=>nav("history")}>{t("see_history_btn")}</button>
+            <button style={{...S.btnSecondary, flex:1, marginTop:0, borderColor:theme.accent, color:theme.accent}}
+              onClick={() => {
+                const m = result.match;
+                const ps = result.players;
+                const getName = id => ps.find(p=>p.id===id)?.name ?? "?";
+                const t1ids = m.teams?.[0] || [];
+                const t2ids = m.teams?.[1] || [];
+                const t1 = m.teamNames?.t1 || t1ids.map(getName).join(" & ") || "T1";
+                const t2 = m.teamNames?.t2 || t2ids.map(getName).join(" & ") || "T2";
+                const score = m.games?.map(g=>`${g.a}–${g.b}`).join("  ") || "";
+                const winner = m.winnerTeam === 0 ? t1 : t2;
+                const isUpset = (m.upsetFactor||0) > 0.2;
+                const dateStr = m.date ? new Date(m.date).toLocaleDateString() : "";
+                const accentHex = theme.accent || "#50c878";
+                const bg = theme.mode === "dark" ? "#1a1a2e" : "#f0f8ff";
+                const cardBg = theme.mode === "dark" ? "#16213e" : "#ffffff";
+                const txt = theme.mode === "dark" ? "#e8eaf6" : "#1a1a2e";
+                const sub = theme.mode === "dark" ? "#8892b0" : "#64748b";
+
+                // Build delta rows for each player
+                const allIds = [...t1ids, ...t2ids];
+                const deltaLines = allIds.map(id => {
+                  const d = m.ratingDeltas?.[id] ?? 0;
+                  const name = getName(id);
+                  const sign = d >= 0 ? "+" : "";
+                  const color = d >= 0 ? "#50c878" : "#e05050";
+                  return { name: name.split(" ")[0], delta: `${sign}${d.toFixed(3)}`, color };
+                });
+
+                const svgW = 480, svgH = 280;
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${accentHex}22"/>
+      <stop offset="100%" stop-color="${bg}"/>
+    </linearGradient>
+  </defs>
+  <rect width="${svgW}" height="${svgH}" fill="url(#bg)" rx="16"/>
+  <rect x="1" y="1" width="${svgW-2}" height="${svgH-2}" fill="none" stroke="${accentHex}" stroke-width="2" rx="15"/>
+
+  <!-- Header -->
+  <text x="240" y="32" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="${accentHex}" text-anchor="middle" letter-spacing="2">PICKLERANK · ${dateStr}</text>
+
+  <!-- Team names and score -->
+  <text x="110" y="80" font-family="system-ui,sans-serif" font-size="18" font-weight="800" fill="${txt}" text-anchor="middle">${t1.length > 14 ? t1.slice(0,14)+"…" : t1}</text>
+  <text x="240" y="80" font-family="system-ui,sans-serif" font-size="22" font-weight="900" fill="${accentHex}" text-anchor="middle">VS</text>
+  <text x="370" y="80" font-family="system-ui,sans-serif" font-size="18" font-weight="800" fill="${txt}" text-anchor="middle">${t2.length > 14 ? t2.slice(0,14)+"…" : t2}</text>
+
+  <!-- Score -->
+  <rect x="160" y="95" width="160" height="50" rx="10" fill="${accentHex}22"/>
+  <text x="240" y="128" font-family="system-ui,monospace" font-size="26" font-weight="900" fill="${accentHex}" text-anchor="middle">${score || "–"}</text>
+
+  <!-- Winner line -->
+  <text x="240" y="168" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="${txt}" text-anchor="middle">🏆 ${winner.length > 20 ? winner.slice(0,20)+"…" : winner} wins${isUpset ? " 🎉 Upset!" : ""}</text>
+
+  <!-- Rating deltas -->
+  ${deltaLines.map((dl, i) => {
+    const col = i < t1ids.length ? 0 : 1;
+    const row = i < t1ids.length ? i : i - t1ids.length;
+    const x = col === 0 ? 60 : 300;
+    const y = 195 + row * 22;
+    return `<text x="${x}" y="${y}" font-family="system-ui,sans-serif" font-size="12" fill="${sub}">${dl.name}</text>
+  <text x="${x + 120}" y="${y}" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="${dl.color}" text-anchor="end">${dl.delta}</text>`;
+  }).join("\n  ")}
+
+  <!-- Footer -->
+  <text x="240" y="${svgH - 12}" font-family="system-ui,sans-serif" font-size="10" fill="${sub}" text-anchor="middle">PickleRank · Private Group Rating Tracker</text>
+</svg>`;
+
+                const blob = new Blob([svg], {type:"image/svg+xml"});
+                const url = URL.createObjectURL(blob);
+
+                if (navigator.share && navigator.canShare?.({files:[new File([blob],"match.svg",{type:"image/svg+xml"})]})) {
+                  const file = new File([blob], "picklerank-match.svg", {type:"image/svg+xml"});
+                  navigator.share({title:"PickleRank Match", files:[file]}).catch(()=>{});
+                } else {
+                  // Fallback: open in new tab so user can screenshot/save
+                  const win = window.open(url, "_blank");
+                  if (!win) {
+                    // If popup blocked, copy share text instead
+                    const text = `🥒 PickleRank\n${t1} vs ${t2}\n${score}\n🏆 ${winner} wins${isUpset?" 🎉":""}`;
+                    navigator.clipboard?.writeText(text).then(()=>alert("Result text copied!"));
+                  }
+                }
+              }}>
+              📸 Share Card
+            </button>
+          </div>
         </div>
       )}
       <Sec title={t("match_type_sec")} theme={theme}>
         <div style={S.toggle}>
           {["singles","doubles"].map(tType=>(
             <button key={tType} style={{...S.toggleBtn,...(type===tType?{...S.toggleOn,background:theme.card,borderColor:theme.accent,color:theme.accent}:{})}} onClick={()=>setType(tType)}>
-              {tType.charAt(0).toUpperCase()+tType.slice(1)}
+              {tType === "singles" ? t("match_type_singles") : t("match_type_doubles")}
             </button>
           ))}
         </div>
@@ -181,6 +270,52 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
         </Sec>
       )}
 
+      {/* ── MATCH PREDICTOR ────────────────────────────────────────────── */}
+      {(() => {
+        const ids = type === "singles"
+          ? [sp.s1, sp.s2]
+          : [sp.d1a, sp.d1b, sp.d2a, sp.d2b];
+        const allFilled = type === "singles" ? (sp.s1 && sp.s2) : (sp.d1a && sp.d1b && sp.d2a && sp.d2b);
+        if (!allFilled) return null;
+        const getR = id => players.find(p => p.id === id)?.[type === "singles" ? "ratingSingles" : "ratingDoubles"] ?? DEFAULT_RATING;
+        const team1Avg = type === "singles" ? getR(sp.s1) : (getR(sp.d1a) + getR(sp.d1b)) / 2;
+        const team2Avg = type === "singles" ? getR(sp.s2) : (getR(sp.d2a) + getR(sp.d2b)) / 2;
+        const t1Win = Math.round(calcExpected(team1Avg, team2Avg) * 100);
+        const t2Win = 100 - t1Win;
+        const t1Name = type === "singles" ? players.find(p=>p.id===sp.s1)?.name?.split(" ")[0] : (tnames.t1 || `${t("team_abbr_1")||"T1"}`);
+        const t2Name = type === "singles" ? players.find(p=>p.id===sp.s2)?.name?.split(" ")[0] : (tnames.t2 || `${t("team_abbr_2")||"T2"}`);
+        const favColor = "#50c878"; const undColor = "#f0a830";
+        const [fav, favPct, und, undPct] = t1Win >= t2Win
+          ? [t1Name, t1Win, t2Name, t2Win] : [t2Name, t2Win, t1Name, t1Win];
+        return (
+          <div style={{background:theme.card, border:`1px solid ${theme.accent}33`, borderRadius:10*z, padding:`${10*z}px ${12*z}px`, marginBottom:12*z}}>
+            <div style={{fontSize:11*z, fontWeight:700, color:theme.accent, textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:8*z}}>
+              🔮 {t("match_predictor")||"Match Predictor"}
+            </div>
+            <div style={{display:"flex", alignItems:"center", gap:8*z}}>
+              <span style={{fontSize:12*z, color:theme.text, fontWeight:700, minWidth:50*z, textAlign:"right"}}>{t1Name}</span>
+              <div style={{flex:1, height:8*z, borderRadius:4*z, overflow:"hidden", background:theme.bg, display:"flex"}}>
+                <div style={{width:`${t1Win}%`, background: t1Win>=t2Win ? favColor : undColor, transition:"width 0.4s"}}/>
+                <div style={{flex:1, background: t2Win>t1Win ? favColor : undColor}}/>
+              </div>
+              <span style={{fontSize:12*z, color:theme.text, fontWeight:700, minWidth:50*z}}>{t2Name}</span>
+            </div>
+            <div style={{display:"flex", justifyContent:"space-between", marginTop:4*z}}>
+              <span style={{fontSize:11*z, color: t1Win>=t2Win ? "#50c878" : "#f0a830", fontWeight:700}}>{t1Win}% {t("prob_win")||"win"}</span>
+              <span style={{fontSize:10*z, color:theme.sub}}>
+                {Math.abs(t1Win-t2Win) < 10
+                  ? "⚖️ Balanced"
+                  : t1Win < t2Win
+                    ? `${t1Name} 🐓 underdog`
+                    : `${t2Name} 🐓 underdog`
+                }
+              </span>
+              <span style={{fontSize:11*z, color: t2Win>t1Win ? "#50c878" : "#f0a830", fontWeight:700}}>{t2Win}% {t("prob_win")||"win"}</span>
+            </div>
+          </div>
+        );
+      })()}
+
       <Sec title={t("game_scores_sec")} theme={theme}>
         <div style={{fontSize:12*z,color:theme.sub,marginBottom:10*z}}>{t("score_win_by_2").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>
         {games.map((g,i)=>{
@@ -190,10 +325,12 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           return (
           <div key={i}>
             <div style={S.gameRow}>
-              <span style={{color:theme.sub,fontSize:12*z,minWidth:50*z}}>Game {i+1}</span>
-              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder="T1" value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
+              <span style={{color:theme.sub,fontSize:12*z,minWidth:50*z}}>
+                {t("game_lbl") === "第" ? `第${i+1}局` : `${t("game_lbl")||"Game"} ${i+1}`}
+              </span>
+              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder={t("team_abbr_1")||"T1"} value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
               <span style={{color:theme.sub}}>–</span>
-              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder="T2" value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
+              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder={t("team_abbr_2")||"T2"} value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
               {games.length>1&&<button style={S.btnDanger} onClick={()=>rmGame(i)}>✕</button>}
             </div>
             {isIllegal && <div style={{fontSize:11*z,color:"#e05050",marginTop:-4*z,marginBottom:8*z}}>{t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>}
@@ -341,7 +478,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
       <MatchesSubNav active="session" nav={nav} theme={theme} />
       <div style={{paddingTop:4*z, paddingBottom:2*z, paddingLeft:12*z, paddingRight:12*z}}>
         <div style={{fontSize:10*z, color:theme.sub, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.5px"}}>
-          Session — 4-Player Round Robin
+          {t("session")||"Session"} — 4-{t("player_n")||"Player"} {t("format_rr")||"Round Robin"}
         </div>
       </div>
 
@@ -413,7 +550,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
             const form = pid ? getRecentForm(pid, state.matches) : [];
             return (
               <div key={i}>
-                <Sel opts={opts} value={pid} onChange={v=>upP(i,v)} placeholder={`Player ${i+1}`} theme={theme}/>
+                <Sel opts={opts} value={pid} onChange={v=>upP(i,v)} placeholder={`${t("player_n")||"Player"} ${i+1}`} theme={theme}/>
                 {form.length > 0 && (
                   <div style={{display:"flex",gap:3*z,marginTop:3*z,justifyContent:"center"}}>
                     {form.map((r,j) => (
@@ -783,7 +920,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
       <Sec title={t("kotc")} theme={theme}>
         <div style={{fontSize:12*z, color:theme.sub, marginBottom:12*z}}>{t("kotc_desc")}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z, marginBottom:16*z}}>
-          {[0,1,2,3].map(i=><Sel key={i} opts={opts} value={sessionIds[i]} onChange={v=>upP(i,v)} placeholder={`Player ${i+1}`} theme={theme}/>)}
+          {[0,1,2,3].map(i=><Sel key={i} opts={opts} value={sessionIds[i]} onChange={v=>upP(i,v)} placeholder={`${t("player_n")||"Player"} ${i+1}`} theme={theme}/>)}
         </div>
 
         {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
@@ -1142,9 +1279,9 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
     if (!allComplete) return setErr(t("err_finish_all_matches") || "Please finish all matches before logging.");
     if (!computedBracket.champion) return setErr(t("err_finish_all_matches") || "Cannot determine champion.");
 
-    const formatLabel = computedBracket.format === "se" ? "Single Elimination"
-                      : computedBracket.format === "de" ? "Double Elimination"
-                      : "Round Robin";
+    const formatLabel = computedBracket.format === "se" ? (t("format_se")||"Single Elimination")
+                      : computedBracket.format === "de" ? (t("format_de")||"Double Elimination")
+                      : (t("format_rr")||"Round Robin");
 
     // Stagger match timestamps so reverse-chronological History naturally
     // shows Final on top, then SF2, then SF1 (later round = newer timestamp).
@@ -1202,9 +1339,9 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
   // ── Render: Setup screen (step 0) ─────────────────────────────────────────
   function renderSetup() {
     const formatOptions = [
-      { id: "se", label: "Single Elimination", desc: "Lose once, you're out. 4 teams (8 players) → 2 semifinals → final." },
-      { id: "de", label: "Double Elimination", desc: "Lose twice, you're out. Includes a losers bracket so an early loss isn't fatal." },
-      { id: "rr", label: "Round Robin",        desc: "Every team plays every other team once. Winner = most wins (ties: point differential)." },
+      { id: "se", label: t("format_se")||"Single Elimination", desc: t("legend_tf_se_desc")||"Lose once, you're out. 4 teams → 2 semifinals → final." },
+      { id: "de", label: t("format_de")||"Double Elimination", desc: t("legend_tf_de_desc")||"Lose twice, you're out. Includes a losers bracket so an early loss isn't fatal." },
+      { id: "rr", label: t("format_rr")||"Round Robin",        desc: t("legend_tf_rr_desc")||"Every team plays every other team once. Winner = most wins (ties: point differential)." },
     ];
     return (
       <Sec title={t("tourney_setup") || "Tournament Setup"} theme={theme}>
@@ -1357,7 +1494,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
                      : round.name === "wb_sf" ? "Winners Bracket Semifinals"
                      : round.name === "wb_final_and_lb_final" ? "Bracket Finals"
                      : round.name === "grand_final" ? "🏆 Grand Final"
-                     : round.name === "all" ? "Round Robin Matches"
+                     : round.name === "all" ? `${t("format_rr")||"Round Robin"} Matches`
                      : round.name;
 
     // Upcoming rounds: don't render at all (they appear once active)
@@ -1406,7 +1543,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
         <Sec theme={theme}>
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z}}>
             <div style={{fontSize:13*z, fontWeight:700, color:theme.accent, textTransform:"uppercase", letterSpacing:"0.5px"}}>
-              {b.format === "se" ? "Single Elimination" : b.format === "de" ? "Double Elimination" : "Round Robin"}
+              {b.format === "se" ? (t("format_se")||"Single Elimination") : b.format === "de" ? (t("format_de")||"Double Elimination") : (t("format_rr")||"Round Robin")}
             </div>
             <button onClick={cancelTournament} style={{
               background:"transparent", border:`1px solid ${theme.border}`,

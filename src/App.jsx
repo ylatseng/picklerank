@@ -19,7 +19,7 @@ import { Sel, Err } from './components/Shared.jsx';
 
 // Engine & Components
 import {
-  APP_MODES, APP_ACCENTS, APP_FONTS, setLang, t, replayAllMatches, computeStats, 
+  APP_MODES, APP_ACCENTS, APP_FONTS, setLang, t, replayAllMatches, computeStats, APP_VERSION, 
   loadState, saveState, blankState, pingPresence, clearPresence, genId, DEFAULT_RATING
 } from './engine.js';
 
@@ -36,6 +36,36 @@ function PinVerification({ player, onVerify, onCancel, onAdminLogin, theme }) {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [adminErr, setAdminErr] = useState(false);
+
+  // Brute-force protection: 3 wrong attempts → 30-second lockout per player
+  const lockKey = `pr_pin_lock_${player?.id}`;
+  const attKey = `pr_pin_att_${player?.id}`;
+  const getLockout = () => {
+    const until = parseInt(sessionStorage.getItem(lockKey) || "0");
+    return until > Date.now() ? Math.ceil((until - Date.now()) / 1000) : 0;
+  };
+  const [lockedSecs, setLockedSecs] = useState(() => getLockout());
+  useEffect(() => {
+    if (lockedSecs <= 0) return;
+    const t = setInterval(() => {
+      const remaining = getLockout();
+      setLockedSecs(remaining);
+      if (remaining <= 0) clearInterval(t);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [lockedSecs]);
+
+  const recordWrongAttempt = () => {
+    const attempts = parseInt(sessionStorage.getItem(attKey) || "0") + 1;
+    sessionStorage.setItem(attKey, String(attempts));
+    if (attempts >= 3) {
+      sessionStorage.setItem(lockKey, String(Date.now() + 30000));
+      sessionStorage.setItem(attKey, "0");
+      setLockedSecs(30);
+    }
+    setError(true);
+    setPin("");
+  };
   
   if (!player) {
     return <div style={{position:"fixed", inset:0, background:theme.bg, zIndex:9999}} />; 
@@ -83,14 +113,22 @@ function PinVerification({ player, onVerify, onCancel, onAdminLogin, theme }) {
                 onKeyDown={e => { if (e.key === "Enter" && pin.length === 4 && pin === player.pin) onVerify(pin); }}
               />
               {error && <Err msg={t("incorrect_pin")} theme={theme} />}
+              {lockedSecs > 0 && (
+                <div style={{marginTop:8*z, padding:`${6*z}px`, background:"rgba(224,80,80,0.1)", borderRadius:8*z, fontSize:12*z, color:"#e05050", fontWeight:600}}>
+                  🔒 Too many wrong attempts. Try again in {lockedSecs}s.
+                </div>
+              )}
               <button 
-                style={{...S.btnPrimary, width:"100%", padding:"12px 0", marginTop:10*z}} 
-                disabled={pin.length !== 4}
+                style={{...S.btnPrimary, width:"100%", padding:"12px 0", marginTop:10*z, opacity: (pin.length !== 4 || lockedSecs > 0) ? 0.5 : 1}} 
+                disabled={pin.length !== 4 || lockedSecs > 0}
                 onClick={() => { 
-                  if (pin === player.pin) { onVerify(pin); }
-                  else { setError(true); setPin(""); }
+                  if (pin === player.pin) {
+                    sessionStorage.removeItem(attKey);
+                    sessionStorage.removeItem(lockKey);
+                    onVerify(pin);
+                  } else { recordWrongAttempt(); }
                 }}>
-                {t("unlock")}
+                {lockedSecs > 0 ? `Wait ${lockedSecs}s` : t("unlock")}
               </button>
 
               {/* Admin login link */}
@@ -297,6 +335,16 @@ export default function App() {
   const [undoToast, setUndoToast] = useState(null); // {label, matchIds, timer}
   const undoTimerRef = useRef(null);
 
+  // Offline indicator — tracks network connectivity
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
+  }, []);
+
   // 1. Local User Settings (Isolated to browser)
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem("user_settings");
@@ -367,6 +415,21 @@ export default function App() {
     return user.verifiedHash === hashPin(user.myPlayerId, player.pin);
   }, [user, state.players]);
 
+  // Auto-elevate players who have been granted isAdminPlayer but are already verified.
+  // Also de-elevate if the flag was revoked by admin (handles both directions).
+  useEffect(() => {
+    if (!user.myPlayerId || !isCurrentlyVerified) return;
+    const p = state.players?.find(pl => pl.id === user.myPlayerId);
+    if (!p) return;
+    if (p.isAdminPlayer && !user.isAdmin) {
+      // Grant admin — player has the flag and verified PIN
+      setUserSettings(s => ({ ...s, isAdmin: true }));
+    } else if (!p.isAdminPlayer && user.isAdmin && user.myPlayerId) {
+      // Revoke admin — flag was removed but they're still marked admin locally
+      setUserSettings(s => ({ ...s, isAdmin: false }));
+    }
+  }, [user.myPlayerId, user.isAdmin, isCurrentlyVerified, state.players]);
+
   const setShared = useCallback((updater) => {
     setState(prev => {
       const next = typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
@@ -414,9 +477,10 @@ export default function App() {
   useEffect(() => {
     if (!user.myPlayerId) return;
     const pid = user.myPlayerId;
-    // Ping Firebase AND update local state immediately so the dot appears
-    // without needing a full page reload (loadState is one-time, not realtime).
+    // Battery optimization: only ping Firebase when the page is visible.
+    // Skipping pings in background prevents unnecessary radio wake-ups on mobile.
     const ping = () => {
+      if (document.visibilityState === "hidden") return;
       pingPresence(pid);
       setState(prev => ({ ...prev, presence: { ...(prev.presence || {}), [pid]: Date.now() } }));
     };
@@ -435,12 +499,16 @@ export default function App() {
   const activeFontId = pref?.fontId || user.fontId || "heiti";
   const activeZoomLevel = pref?.zoomLevel || user.zoomLevel || 1.0;
 
-  setLang(activeLangId); 
+  // setLang is called in a useEffect below to avoid running on every render
   
   const activeMode = APP_MODES.find(m => m.id === activeModeId) || APP_MODES[0];
   const activeAccent = APP_ACCENTS.find(a => a.id === activeAccentId) || APP_ACCENTS[0];
   const activeFont = APP_FONTS.find(f => f.id === activeFontId) || APP_FONTS[0];
   const theme = { ...activeMode, accent: activeAccent.hex, zoom: activeZoomLevel, logoText: state.logoText, logoData: state.logoData, format: state.leaderboardFormat };
+
+  // Apply language change in effect to avoid calling module-level setLang on every render cycle
+  // (was previously called directly in render body — caused unnecessary re-renders and battery drain)
+  useEffect(() => { setLang(activeLangId); }, [activeLangId]);
 
   useEffect(() => { 
     document.documentElement.style.background = theme.bg;
@@ -480,7 +548,16 @@ export default function App() {
   },[stats, state.leaderboardFormat]);
 
   const profilePlayer = profileId ? stats.find(p=>p.id===profileId) : null;
-  const nav = (view,extra={}) => setShared(s=>({...s,activeView:view,...extra}));
+  const nav = (view,extra={}) => {
+    setShared(s=>({...s,activeView:view,...extra}));
+  };
+
+  // Scroll to top after every view change — targets the last <main> which is the app content container
+  useEffect(() => {
+    const mains = document.querySelectorAll("main");
+    const main = mains[mains.length - 1]; // last main = the full-app content container
+    if (main) main.scrollTop = 0;
+  }, [activeView]);
 
   if (isLoading) {
     return (
@@ -589,6 +666,19 @@ export default function App() {
               {activeView==="events"    && <Events state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} />}
             </main>
             <BottomNav active={activeView} nav={nav} theme={theme}/>
+
+            {/* ── Offline banner — shows when device loses network ── */}
+            {!isOnline && (
+              <div style={{
+                position:"fixed", top:0, left:0, right:0,
+                background:"#e05050", color:"#fff",
+                padding:"6px 16px", textAlign:"center",
+                fontSize:12, fontWeight:700, zIndex:2000,
+                display:"flex", alignItems:"center", justifyContent:"center", gap:6
+              }}>
+                📶 Offline — changes saved locally, will sync when reconnected
+              </div>
+            )}
 
             {/* ── Undo toast — floats above bottom nav for 30 seconds after any match log ── */}
             {undoToast && (

@@ -103,14 +103,18 @@ export default function StatsView({ players, matches, nav, theme }) {
 
       {/* ── Venues ────────────────────────────────────────────────────── */}
       {venues.length > 0 && (
-        <CollapseSec title={t("venues_lbl")} theme={theme} defaultOpen={false}>
+        <CollapseSec title={`📍 ${t("venues_lbl")}`} theme={theme} defaultOpen={false}>
           {venues.map(v => {
             const count = matches.filter(m => m.venue === v).length;
+            const pct = Math.round((count / matches.length) * 100);
             return (
               <div key={v} style={{ ...S.lbRow, cursor: "default" }}>
-                <div style={{ fontSize: 18 * z }}>📍</div>
+                <div style={{ fontSize: 18 * z }}>🏟️</div>
                 <div style={S.lbInfo}><div style={{ fontSize: 13 * z }}>{v}</div></div>
-                <div style={{ fontSize: 12 * z, color: theme.sub }}>{count} {t("matches_tab").toLowerCase()}{count !== 1 ? "s" : ""}</div>
+                <div style={{ fontSize: 12 * z, color: theme.sub, textAlign: "right" }}>
+                  <div>{count} {t("matches_tab").toLowerCase()}{count !== 1 ? "s" : ""}</div>
+                  <div style={{ fontSize: 10 * z }}>{pct}% of total</div>
+                </div>
               </div>
             );
           })}
@@ -155,24 +159,25 @@ export default function StatsView({ players, matches, nav, theme }) {
           <CollapseSec title={t("partner_matrix_sec")} theme={theme} defaultOpen={true}>
             <div style={{ fontSize: 11 * z, color: theme.sub, marginBottom: 12 * z }}>{t("partner_matrix_desc")}</div>
 
-            {/* Player picker */}
-            <div style={{ display: "flex", gap: 6 * z, flexWrap: "wrap", marginBottom: 16 * z }}>
-              {activePlayers.map(p => {
-                const isSelected = p.id === selectedPlayer.id;
-                return (
-                  <button key={p.id} onClick={() => setSelectedPartnerId(p.id)} style={{
-                    display: "flex", alignItems: "center", gap: 6 * z,
-                    padding: `${5 * z}px ${10 * z}px`, borderRadius: 20 * z,
-                    border: `2px solid ${isSelected ? theme.accent : theme.border}`,
-                    background: isSelected ? theme.accent + "22" : "transparent",
-                    color: isSelected ? theme.accent : theme.sub,
-                    fontWeight: isSelected ? 700 : 400, fontSize: 12 * z, cursor: "pointer"
-                  }}>
-                    <Avatar name={p.name} size={20} />
-                    {p.name.split(' ')[0]}
-                  </button>
-                );
-              })}
+            {/* Player picker — compact dropdown instead of pill buttons */}
+            <div style={{ marginBottom: 16 * z }}>
+              <select
+                value={selectedPlayer.id}
+                onChange={e => setSelectedPartnerId(e.target.value)}
+                style={{
+                  width: "100%", padding: `${8 * z}px ${10 * z}px`,
+                  borderRadius: 8 * z, border: `1px solid ${theme.accent}`,
+                  background: theme.card, color: theme.text,
+                  fontSize: 13 * z, fontWeight: 600, cursor: "pointer",
+                  appearance: "none", WebkitAppearance: "none",
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center",
+                  paddingRight: 28 * z
+                }}>
+                {activePlayers.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
             </div>
 
             {partnerStats.length === 0 ? (
