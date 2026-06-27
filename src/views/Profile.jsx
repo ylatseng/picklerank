@@ -201,7 +201,7 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
         <div style={{display:"flex",alignItems:"center",gap:14*z,marginBottom:16*z}}>
           <Avatar name={p.name} url={p.avatar} size={60}/>
           <div style={{flex:1}}>
-            <div style={{fontSize:22*z,fontWeight:800}}>{p.name}</div>
+            <div style={{fontSize:22*z,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}}>{p.name}</div>
 
             {/* Doubles rating + confidence */}
             <div style={{display:"flex", gap:6*z, marginTop:6*z, alignItems:"center"}}>

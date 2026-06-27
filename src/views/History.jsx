@@ -9,15 +9,18 @@ const toYYYYMMDD = (d) => {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 };
 
-export default function History({matches,players,nav,set,theme,isAdmin,initialPlayerId,state,user}) {
+export default function History({matches,players,nav,set,theme,isAdmin,initialPlayerId,state,user,lang}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   
   // Basic Filters
-  const [search,setSearch]=useState("");
-  const [typeFilter,setTypeFilter]=useState("all");   // all | singles | doubles
-  const [modeFilter,setModeFilter]=useState("all");   // all | custom | session | kotc | se | de | rr
+  const [search,setSearch]=useState(()=>{ try{return sessionStorage.getItem("h_search")||""}catch{return""} });
+  const [typeFilter,setTypeFilter]=useState(()=>{ try{return sessionStorage.getItem("h_type")||"all"}catch{return"all"} });
+  const [modeFilter,setModeFilter]=useState(()=>{ try{return sessionStorage.getItem("h_mode")||"all"}catch{return"all"} });
   const [playerFilter, setPlayerFilter] = useState(initialPlayerId || "");
+  const _setSearch=(v)=>{ setSearch(v); try{sessionStorage.setItem("h_search",v)}catch{} };
+  const _setTypeFilter=(v)=>{ setTypeFilter(v); try{sessionStorage.setItem("h_type",v)}catch{} };
+  const _setModeFilter=(v)=>{ setModeFilter(v); try{sessionStorage.setItem("h_mode",v)}catch{} };
 
   // Derive match mode from notes field (set by each match mode at log time)
   function getMatchMode(m) {
@@ -31,6 +34,8 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
   }
   
   // Action States
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+  const toggleGroup = (key) => setCollapsedGroups(prev => ({ ...prev, [key]: !prev[key] }));
   const [pendingDelete,setPendingDelete]=useState(null);
   const [editingMatch,setEditingMatch]=useState(null);
 
@@ -88,13 +93,24 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
     });
   }, [baseFiltered, selectedDateStr, cYear, cMonth]);
 
+  // Use lang prop (from App's activeLangId) for reactive date formatting
+  const activeLang = lang || getLang();
+
   // Group final matches by Day for a clean list
   const groupedMatches = useMemo(() => {
     const groups = [];
     let current = null;
+    const dayKeysCN = ["日","一","二","三","四","五","六"];
     finalViewMatches.forEach(m => {
       const d = new Date(m.date);
-      const key = d.toLocaleDateString(getLang() === "zh-TW" ? "zh-TW" : getLang() === "zh-CN" ? "zh-CN" : "en-US", { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      let key;
+      if (activeLang === "zh-TW" || activeLang === "zh-CN") {
+        // Manually construct Chinese date string — reliable across all browsers/PWA
+        const dayName = dayKeysCN[d.getDay()];
+        key = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${dayName}）`;
+      } else {
+        key = d.toLocaleDateString("en-US", { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      }
       if (!current || current.key !== key) {
         current = { key, matches: [] };
         groups.push(current);
@@ -102,7 +118,7 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
       current.matches.push(m);
     });
     return groups;
-  }, [finalViewMatches]);
+  }, [finalViewMatches, activeLang]);
 
   // Rematch detection: separate memo so it doesn't break groupedMatches scope
   const rematchIds = useMemo(() => {
@@ -270,16 +286,25 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
         {finalViewMatches.length === 0 ? <Empty text={t("no_matches")} theme={theme}/> : 
           groupedMatches.map(group => (
             <div key={group.key} style={{marginBottom: 16*z}}>
-              <div style={{
-                position: "sticky", top: 0, zIndex: 10,
-                background: theme.bg, color: theme.sub, fontSize: 12*z, fontWeight: 800,
-                padding: "8px 0", marginBottom: 12*z, borderBottom: `1px solid ${theme.border}`,
-                textTransform: "uppercase", letterSpacing: "1px"
-              }}>
-                {group.key}
+              <div
+                onClick={() => toggleGroup(group.key)}
+                style={{
+                  position: "sticky", top: 0, zIndex: 10,
+                  background: theme.bg, color: theme.sub, fontSize: 12*z, fontWeight: 800,
+                  padding: "8px 0", marginBottom: collapsedGroups[group.key] ? 0 : 12*z,
+                  borderBottom: `1px solid ${theme.border}`,
+                  textTransform: activeLang.startsWith("zh") ? "none" : "uppercase",
+                  letterSpacing: activeLang.startsWith("zh") ? "0" : "1px",
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  cursor: "pointer", userSelect: "none"
+                }}>
+                <span>{group.key}</span>
+                <span style={{fontSize:10*z, color:theme.sub, fontWeight:500, textTransform:"none", letterSpacing:"0"}}>
+                  {collapsedGroups[group.key] ? `${group.matches.length} ▶` : "▼"}
+                </span>
               </div>
 
-              {group.matches.map(m => {
+              {!collapsedGroups[group.key] && group.matches.map(m => {
                 // SECURITY FIX: User is Admin OR User actually played in this specific match
                 const isParticipant = user?.myPlayerId && m.teams?.flat()?.includes(user?.myPlayerId);
                 const canEditMatch = isAdmin || isParticipant;
@@ -293,7 +318,7 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
                         {t("rematch_badge")}
                       </div>
                     )}
-                    <MatchCard match={m} players={players} theme={theme} isAdmin={canEditMatch} 
+                    <MatchCard match={m} players={players} theme={theme} isAdmin={canEditMatch} lang={activeLang}
                       onEdit={canEditMatch ? setEditingMatch : undefined} onShare={share} onDelete={canDeleteMatch ? () => setPendingDelete(m.id) : undefined} />
                     {pendingDelete===m.id&&(
                       <ConfirmInline msg={t("delete_match_q")} note={t("ratings_recalculated")}

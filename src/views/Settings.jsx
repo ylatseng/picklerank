@@ -5,6 +5,35 @@ import { Sec, Err, ConfirmInline, Sel, PinManager } from '../components/Shared.j
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../engine";
 
+// Collapsible section for Settings — starts open, user can collapse
+function CSec({ title, theme, defaultOpen = true, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const z = theme.zoom || 1.0;
+  return (
+    <div style={{
+      background: theme.card, border: `1px solid ${theme.border}`,
+      borderRadius: 12*z, marginBottom: 12*z, overflow: "hidden"
+    }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: "100%", background: "transparent", border: "none", cursor: "pointer",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: `${12*z}px ${14*z}px`, textAlign: "left", gap: 8*z
+      }}>
+        <span style={{fontSize: 12*z, fontWeight: 700, color: theme.accent,
+          textTransform: "uppercase", letterSpacing: "0.8px"}}>{title}</span>
+        <span style={{fontSize: 12*z, color: theme.sub, flexShrink: 0,
+          transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s"}}>▾</span>
+      </button>
+      {open && (
+        <div style={{padding: `0 ${14*z}px ${14*z}px`,
+          borderTop: `1px solid ${theme.border}`, paddingTop: 12*z}}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Settings({state, user, setShared, setUser, nav, theme, matchCount=0, isLargeDataset=false}) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
@@ -165,7 +194,7 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
       {/* ── MY PROFILE + ADMIN (consolidated for isAdminPlayer users) ── */}
       {user.myPlayerId ? (
         /* Player is linked — show profile, PIN, admin badge if applicable, and ONE logout */
-        <Sec title={t("my_profile_sec")} theme={theme}>
+        <CSec title={t("my_profile_sec")} theme={theme}>
           <div style={{ fontSize: 12*z, color: theme.sub, marginBottom: 10*z }}>
             {t("link_device_desc")}
           </div>
@@ -224,11 +253,11 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
               {t("logout_btn")}
             </button>
           </div>
-        </Sec>
+        </CSec>
 
       ) : !user.isAdmin ? (
         /* Guest — not linked, show link selector only */
-        <Sec title={t("my_profile_sec")} theme={theme}>
+        <CSec title={t("my_profile_sec")} theme={theme}>
           <div style={{ fontSize: 12*z, color: theme.sub, marginBottom: 10*z }}>
             {t("link_device_desc")}
           </div>
@@ -243,12 +272,12 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
             ]}
             theme={theme}
           />
-        </Sec>
+        </CSec>
       ) : null}
 
       {/* GLOBAL ADMIN CONTROLS — only for pure admin (no player profile linked) */}
       {user.isAdmin && !user.myPlayerId && (
-        <Sec title={t("admin_sec")} theme={theme}>
+        <CSec title={t("admin_sec")} theme={theme}>
           <div style={{marginBottom: 10*z, fontSize: 13*z, color: theme.text}}>
             {t("admin_status")}: <strong style={{color: "#50c878"}}>{t("admin_mode")}</strong>
           </div>
@@ -263,13 +292,13 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
             </div>
           </div>
           {adminErr && <div style={{color: adminErr === t("pass_updated") ? "#50c878" : "#e05050", fontSize: 12*z, marginTop: 8*z}}>{adminErr}</div>}
-        </Sec>
+        </CSec>
       )}
 
       {/* Passcode change for isAdminPlayer users — shown inside their profile section above,
           but we also need to let them change the global passcode if they're isAdminPlayer */}
       {user.isAdmin && user.myPlayerId && (
-        <Sec title={t("admin_sec")} theme={theme}>
+        <CSec title={t("admin_sec")} theme={theme}>
           <div style={{display:"flex", gap: 8*z}}>
             <input style={{...S.input, flex:1}} type="password" placeholder={t("new_passcode_placeholder")} value={newPass} onChange={e=>{setNewPass(e.target.value); setAdminErr("");}}/>
             <button style={S.btnPrimary} onClick={()=>{
@@ -277,10 +306,10 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
             }}>{t("change_pass_btn")}</button>
           </div>
           {adminErr && <div style={{color: adminErr === t("pass_updated") ? "#50c878" : "#e05050", fontSize: 12*z, marginTop: 8*z}}>{adminErr}</div>}
-        </Sec>
+        </CSec>
       )}
 
-      <Sec title={t("appearance_sec")} theme={theme}>
+      <CSec title={t("appearance_sec")} theme={theme}>
         <div style={{display:"flex", flexDirection:"column", gap: 14*z}}>
           
           <div style={{display:"flex", alignItems:"center", gap:10*z}}>
@@ -339,11 +368,36 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
           </div>
 
         </div>
-      </Sec>
+      </CSec>
 
-      {/* LOGIN ACTIVITY (ADMIN ONLY) — compact last-seen table */}
+      {/* QUICK LOG TOGGLE */}
+      <CSec title={`⚡ ${t("quick_log_floater")||"Quick Log Button"}`} theme={theme}>
+        {(() => {
+          const isEnabled = (pref?.quickLogEnabled ?? user.quickLogEnabled) ?? true;
+          return (
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:13*z, color:theme.text}}>{t("quick_log_floater")||"Quick Log Button"}</div>
+              <div style={{fontSize:11*z, color:theme.sub, marginTop:3*z}}>
+                Show the ⚡ floating button for rapid score entry
+              </div>
+            </div>
+            <button onClick={() => updateAppearance("quickLogEnabled", !isEnabled)} style={{
+              width:44*z, height:26*z, borderRadius:13*z, border:"none", cursor:"pointer",
+              background: isEnabled ? theme.accent : theme.border,
+              position:"relative", transition:"background 0.2s", flexShrink:0
+            }}>
+              <div style={{
+                position:"absolute", top:3*z, left: isEnabled ? (44-20)*z : 3*z,
+                width:20*z, height:20*z, borderRadius:"50%", background:"#fff", transition:"left 0.2s"
+              }}/>
+            </button>
+          </div>
+          );
+        })()}
+      </CSec>
       {user.isAdmin && (
-        <Sec title="🔐 Login Activity" theme={theme}>
+        <CSec title={t("login_activity_sec")||"🔐 Login Activity"} theme={theme}>
           <div style={{fontSize:11*z, color:theme.sub, marginBottom:10*z}}>
             Most recent login per player.
           </div>
@@ -357,10 +411,10 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
               const diffMin = Math.floor(diff / 60000);
               const diffHr = Math.floor(diff / 3600000);
               const diffDay = Math.floor(diff / 86400000);
-              const ago = diff < 60000 ? "just now"
-                        : diffMin < 60 ? `${diffMin}m ago`
-                        : diffHr < 24 ? `${diffHr}h ago`
-                        : diffDay < 7 ? `${diffDay}d ago`
+              const ago = diff < 60000 ? (t("time_just_now")||"just now")
+                        : diffMin < 60 ? `${diffMin}${t("time_min_ago")||"m ago"}`
+                        : diffHr < 24 ? `${diffHr}${t("time_hr_ago")||"h ago"}`
+                        : diffDay < 7 ? `${diffDay}${t("time_day_ago")||"d ago"}`
                         : lastAt.toLocaleDateString([], {month:"short", day:"numeric"});
               const loginCount = p.loginHistory?.length || 1;
               return (
@@ -385,12 +439,12 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
               No login activity recorded yet.
             </div>
           )}
-        </Sec>
+        </CSec>
       )}
 
       {/* BRANDING (ADMIN ONLY) */}
       {user.isAdmin && (
-        <Sec title={t("branding_sec")} theme={theme}>
+        <CSec title={t("branding_sec")} theme={theme}>
           <div style={{display: "flex", alignItems: "center", gap: 12*z}}>
             <div 
               style={{width: 48*z, height: 48*z, borderRadius: 10*z, cursor: "pointer", position: "relative", flexShrink: 0, background: theme.card, border: `1px dashed ${theme.border}`, display:"flex", alignItems:"center", justifyContent:"center", overflow:"visible"}}
@@ -418,12 +472,12 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
             </div>
           </div>
           <input type="file" accept="image/*" ref={logoRef} style={{display:"none"}} onChange={handleLogoUpload} />
-        </Sec>
+        </CSec>
       )}
       
       {/* BACKUP & RESTORE (ADMIN ONLY) */}
       {user.isAdmin && (
-        <Sec title={t("backup_restore_sec")} theme={theme}>
+        <CSec title={t("backup_restore_sec")} theme={theme}>
           <div style={{display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8*z}}>
             <button style={{...S.btnPrimary, margin: 0, padding: "10px 4px", fontSize: 12*z}} onClick={exportData}>💾 JSON</button>
             <button style={{...S.btnPrimary, margin: 0, padding: "10px 4px", fontSize: 12*z, background:theme.card, color:theme.accent, border:`1px solid ${theme.accent}`}} onClick={exportCSV}>📊 CSV</button>
@@ -431,12 +485,12 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
           </div>
           <input ref={fileRef} type="file" accept=".json" style={{display:"none"}} onChange={importData}/>
           {importErr&&<Err msg={importErr} theme={theme}/>}
-        </Sec>
+        </CSec>
       )}
       
       {/* DANGER ZONE (ADMIN ONLY) */}
       {user.isAdmin && (
-        <Sec title={t("danger_zone_sec")} theme={theme}>
+        <CSec title={t("danger_zone_sec")} theme={theme}>
           <p style={{fontSize:12*z,color:theme.sub,marginBottom:10*z}}>{t("danger_desc")}</p>
           {pendingClear?(
             <ConfirmInline msg="Delete ALL data?" note="This cannot be undone."
@@ -446,10 +500,10 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
               {t("clear_all_btn")}
             </button>
           )}
-        </Sec>
+        </CSec>
       )}
 
-      <Sec title={t("about_sec")} theme={theme}>
+      <CSec title={t("about_sec")} theme={theme}>
         <div style={{ fontSize: 13*z, lineHeight: 1.5, color: theme.text }}>
           {t("about_desc")}
         </div>
@@ -477,7 +531,7 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
             }
           </div>
         )}
-      </Sec>
+      </CSec>
     </div>
   );
 }

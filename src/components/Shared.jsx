@@ -2,7 +2,8 @@ import React, { useState, useEffect, useContext } from 'react';
 import { 
   t, ratingColor, ratingLabel, avatarColor, initials, fmtDate, fmtDelta,
   isoToDatetimeLocal, K_FACTOR, calcExpected, 
-  validatePickleballScore, DEFAULT_RATING, WIN_TO_OPTIONS
+  validatePickleballScore, DEFAULT_RATING, WIN_TO_OPTIONS,
+  smartName, isLargeZoom
 } from '../engine.js';
 import { makeS } from '../styles.js';
 import { ThemeCtx } from '../context.js';
@@ -110,7 +111,7 @@ export function MatchEloBreakdown({match, players, theme}) {
 }
 
 // ─── Match Cards ──────────────────────────────────────────────────────────────
-export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, onDelete, highlightPlayerId}) {
+export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, onDelete, highlightPlayerId, lang}) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
   const [expanded, setExpanded] = useState(false);
@@ -128,9 +129,14 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:12*z}}>
         <div style={{display:"flex",gap:6*z,alignItems:"center"}}>
           <span style={S.typePill}>{typeTag}</span>
+          {(m.loggedBy === "quick" || m.loggedBy === "quick-session") && (
+            <span style={{fontSize:10*z, background:theme.accent+"22", color:theme.accent,
+              border:`1px solid ${theme.accent}66`, borderRadius:4*z,
+              padding:`${1*z}px ${5*z}px`, fontWeight:700}}>⚡</span>
+          )}
           {m.venue&&<span style={{fontSize:11*z,color:theme.sub}}>📍{m.venue}</span>}
         </div>
-        <span style={{fontSize:12*z,color:theme.sub}}>{fmtDate(m.date)}</span>
+        <span style={{fontSize:12*z,color:theme.sub}}>{fmtDate(m.date, lang)}</span>
       </div>
 
       {/* Modern Horizontal Scoreboard Layout */}
@@ -366,9 +372,9 @@ export function LeaderboardRow({player:p,rank,onClick,theme,format}) {
     <div style={S.lbRow} onClick={onClick}>
       <div style={S.lbRank}>{medal||<span style={{fontSize:13*z,color:theme.sub}}>#{rank}</span>}</div>
       <Avatar name={p.name} url={p.avatar} size={36}/>
-      <div style={S.lbInfo}>
-        <div style={{display:"flex",alignItems:"center",gap:6*z}}>
-          <span style={S.lbName}>{p.name}</span>
+      <div style={{...S.lbInfo, minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:6*z, minWidth:0}}>
+          <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{smartName(p.name, theme.zoom)}</span>
           {p.isAdminPlayer && <span title="Admin" style={{fontSize:11*z, lineHeight:1}}>🔑</span>}
           {streakIcon && <span style={{fontSize:12*z}} title={`${p.streak} Game Streak`}>{streakIcon}{p.streak}</span>}
           <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background: isProv ? "rgba(245,158,11,0.12)" : "rgba(80,200,120,0.12)", color: isProv ? "#f59e0b" : "#50c878", fontWeight:700}}>

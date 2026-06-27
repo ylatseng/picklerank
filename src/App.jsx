@@ -14,6 +14,68 @@ import Trash from './views/Trash.jsx';
 import Legends from './views/Legends.jsx';
 import Changelog from './views/Changelog.jsx'; 
 import Events from './views/Events.jsx';
+import QuickLog from './views/QuickLog.jsx';
+
+// ── Draggable Quick Log Floater — proper component so hooks are valid ────────
+function DraggableFloater({ theme, onOpen }) {
+  const z = theme.zoom || 1;
+  const btnSize = 50 * z;
+  const STORAGE_KEY = "ql_pos";
+  const defaultPos = { right: 16, bottom: 76 };
+
+  const [pos, setPos] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultPos; }
+    catch { return defaultPos; }
+  });
+  const dragging = React.useRef(false);
+  const startTouch = React.useRef(null);
+  const moved = React.useRef(false);
+
+  const posRef = React.useRef(pos);
+  posRef.current = pos;
+
+  const onTouchStart = (e) => {
+    dragging.current = true;
+    moved.current = false;
+    const touch = e.touches[0];
+    startTouch.current = { x: touch.clientX, y: touch.clientY, right: posRef.current.right, bottom: posRef.current.bottom };
+  };
+  const onTouchMove = (e) => {
+    if (!dragging.current || !startTouch.current) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - startTouch.current.x;
+    const dy = touch.clientY - startTouch.current.y;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved.current = true;
+    const newRight = Math.max(4, Math.min(window.innerWidth - btnSize - 4, startTouch.current.right - dx));
+    const newBottom = Math.max(70, Math.min(window.innerHeight - btnSize - 4, startTouch.current.bottom - dy));
+    setPos({ right: newRight, bottom: newBottom });
+  };
+  const onTouchEnd = () => {
+    dragging.current = false;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(posRef.current)); } catch {}
+    if (!moved.current) onOpen();
+  };
+
+  return (
+    <div
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onClick={() => { if (!moved.current) onOpen(); }}
+      style={{
+        position:"fixed", bottom:pos.bottom, right:pos.right, zIndex:500,
+        width:btnSize, height:btnSize, borderRadius:"50%",
+        background:theme.accent, boxShadow:"0 3px 12px rgba(0,0,0,0.35)",
+        fontSize:22*z, cursor:"pointer",
+        display:"flex", alignItems:"center", justifyContent:"center",
+        color:"#fff", userSelect:"none", touchAction:"none"
+      }}
+      title="Quick Log (drag to move)"
+    >
+      ⚡
+    </div>
+  );
+}
 import { LogMatch, SessionMode, KingOfCourt, TournamentMode } from './views/MatchModes.jsx';
 import { Sel, Err } from './components/Shared.jsx';
 
@@ -334,6 +396,7 @@ export default function App() {
   // an undo toast visible for 30 seconds. Undo removes those matches by ID.
   const [undoToast, setUndoToast] = useState(null); // {label, matchIds, timer}
   const undoTimerRef = useRef(null);
+  const [showQuickLog, setShowQuickLog] = useState(false);
 
   // Offline indicator — tracks network connectivity
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
@@ -430,6 +493,24 @@ export default function App() {
     }
   }, [user.myPlayerId, user.isAdmin, isCurrentlyVerified, state.players]);
 
+  // Track login when a player is auto-verified from cached credentials.
+  // Without this, players who are remembered from their last session (isCurrentlyVerified=true
+  // on mount) never trigger the Welcome or PIN screens — so their login goes unrecorded.
+  const didTrackAutoLogin = useRef(false);
+  useEffect(() => {
+    if (!isCurrentlyVerified || !user.myPlayerId || didTrackAutoLogin.current || isLoading) return;
+    didTrackAutoLogin.current = true;
+    setShared(s => ({
+      ...s,
+      players: (s.players || []).map(p => {
+        if (p.id !== user.myPlayerId) return p;
+        const entry = { at: Date.now() };
+        const history = [...(p.loginHistory || []), entry].slice(-50);
+        return { ...p, loginHistory: history, lastLoginAt: Date.now() };
+      })
+    }));
+  }, [isCurrentlyVerified, user.myPlayerId, isLoading]);
+
   const setShared = useCallback((updater) => {
     setState(prev => {
       const next = typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
@@ -498,6 +579,7 @@ export default function App() {
   const activeAccentId = pref?.accentId || user.accentId || "green";
   const activeFontId = pref?.fontId || user.fontId || "heiti";
   const activeZoomLevel = pref?.zoomLevel || user.zoomLevel || 1.0;
+  const quickLogEnabled = (pref?.quickLogEnabled ?? user.quickLogEnabled) ?? true; // default on; reads pref for linked players, user root for global admin
 
   // setLang is called in a useEffect below to avoid running on every render
   
@@ -656,7 +738,7 @@ export default function App() {
               {activeView==="kotc"      && <KingOfCourt players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} showUndo={showUndo} />}
               {activeView==="tourney"   && <TournamentMode players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} showUndo={showUndo} />}
               {activeView==="compare"   && <Compare players={stats} matches={derivedMatches} compareIds={state.compareIds || []} set={setShared} nav={nav} theme={theme} state={appState} user={user}/>}
-              {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} initialPlayerId={historyPlayerId} state={appState} user={user}/>}
+              {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} initialPlayerId={historyPlayerId} state={appState} user={user} lang={activeLangId}/>}
               {activeView==="profile"   && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} setUser={setUserSettings}/>}
               {activeView==="stats"     && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme} user={user}/>}
               {activeView==="settings"  && <Settings state={appState} user={user} setShared={setShared} setUser={setUserSettings} nav={nav} theme={theme} matchCount={matches.length} isLargeDataset={isLargeDataset}/>}
@@ -666,6 +748,23 @@ export default function App() {
               {activeView==="events"    && <Events state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} />}
             </main>
             <BottomNav active={activeView} nav={nav} theme={theme}/>
+
+            {/* ── Quick Log floating button — draggable ── */}
+            {quickLogEnabled && (user.isAdmin || isCurrentlyVerified) && !showQuickLog && (
+              <DraggableFloater theme={theme} onOpen={() => setShowQuickLog(true)} />
+            )}
+
+            {/* ── Quick Log modal ── */}
+            {showQuickLog && (
+              <QuickLog
+                players={stats}
+                state={appState}
+                set={setShared}
+                theme={theme}
+                showUndo={showUndo}
+                onClose={() => setShowQuickLog(false)}
+              />
+            )}
 
             {/* ── Offline banner — shows when device loses network ── */}
             {!isOnline && (
@@ -692,14 +791,14 @@ export default function App() {
                 boxShadow:"0 4px 20px rgba(0,0,0,0.3)", zIndex:1000, gap:10
               }}>
                 <div style={{fontSize:12, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                  ✅ {undoToast.label} logged
+                  ✅ {undoToast.label}
                 </div>
                 <div style={{display:"flex", gap:8, flexShrink:0}}>
                   <button onClick={doUndo} style={{
                     background:"#e05050", color:"#fff", border:"none",
                     borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer"
                   }}>
-                    ↩ Undo
+                    {t("undo")||"↩ Undo"}
                   </button>
                   <button onClick={() => { if(undoTimerRef.current) clearTimeout(undoTimerRef.current); setUndoToast(null); }} style={{
                     background:"transparent", border:`1px solid ${theme.border}`,

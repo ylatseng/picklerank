@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { makeS } from '../styles.js';
 import { Sec, ConfirmInline, usePersistentFormState } from '../components/Shared.jsx';
-import { t, genId } from '../engine.js';
+import { t, genId, getLang } from '../engine.js';
 
 // Register service worker and schedule a notification for an event
 async function scheduleEventNotification(event) {
@@ -26,6 +26,25 @@ const toYYYYMMDD = (d) => {
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 };
 
+
+// Format event date respecting app language
+function fmtEventDate(iso, opts = {}) {
+  const lang = getLang();
+  const d = new Date(iso);
+  if (lang === "zh-TW" || lang === "zh-CN") {
+    const dayNames = ["日","一","二","三","四","五","六"];
+    const pad = n => String(n).padStart(2, "0");
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    const hour = d.getHours();
+    const min = pad(d.getMinutes());
+    const ampm = hour < 12 ? "上午" : "下午";
+    const hr = hour % 12 || 12;
+    return `${d.getFullYear()}年${month}月${day}日（${dayNames[d.getDay()]}）${ampm}${hr}:${min}`;
+  }
+  const defaultOpts = {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'};
+  return d.toLocaleString([], {...defaultOpts, ...opts});
+}
 export default function Events({ state, set, theme, isAdmin, user }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
@@ -45,9 +64,10 @@ export default function Events({ state, set, theme, isAdmin, user }) {
   const [selectedDateStr, setSelectedDateStr] = useState(null);
   const [calendarMode, setCalendarMode] = useState("month");
   const [expandedEvents, setExpandedEvents] = useState({});
-  const [notifPerm, setNotifPerm] = useState(() =>
-    'Notification' in window ? Notification.permission : 'unsupported'
-  );
+  const [notifPerm, setNotifPerm] = useState(() => {
+    try { if (localStorage.getItem("ql_notif_suppressed")) return "suppressed"; } catch {}
+    return 'Notification' in window ? Notification.permission : 'unsupported';
+  });
 
   // Register service worker once on mount
   useEffect(() => {
@@ -311,8 +331,45 @@ export default function Events({ state, set, theme, isAdmin, user }) {
         </div>
       )}
       {notifPerm === 'granted' && (
-        <div style={{fontSize:11*z, color:"#50c878", marginBottom:8*z, textAlign:"center"}}>
-          🔔 Reminders on · you'll be notified 1h before each session
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          background:"rgba(80,200,120,0.1)", border:"1px solid rgba(80,200,120,0.3)",
+          borderRadius:8*z, padding:`${8*z}px ${12*z}px`, marginBottom:8*z
+        }}>
+          <div style={{fontSize:11*z, color:"#50c878", fontWeight:600}}>
+            🔔 {t("reminders_on")||"Reminders on"}
+          </div>
+          <button onClick={async () => {
+            // Can't revoke Notification permission via JS (browser security).
+            // Store user preference to suppress notification scheduling.
+            try { localStorage.setItem("ql_notif_suppressed","1"); } catch {}
+            setNotifPerm("suppressed");
+          }} style={{
+            fontSize:11*z, background:"transparent",
+            border:"1px solid rgba(80,200,120,0.4)", borderRadius:6*z,
+            color:"#50c878", cursor:"pointer", padding:`${3*z}px ${8*z}px`
+          }}>
+            {t("reminders_off")||"Turn off"}
+          </button>
+        </div>
+      )}
+      {notifPerm === 'suppressed' && (
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          background:theme.card, border:`1px solid ${theme.border}`,
+          borderRadius:8*z, padding:`${8*z}px ${12*z}px`, marginBottom:8*z
+        }}>
+          <div style={{fontSize:11*z, color:theme.sub}}>🔕 Reminders off</div>
+          <button onClick={async () => {
+            try { localStorage.removeItem("ql_notif_suppressed"); } catch {}
+            setNotifPerm(Notification.permission);
+          }} style={{
+            fontSize:11*z, background:"transparent",
+            border:`1px solid ${theme.border}`, borderRadius:6*z,
+            color:theme.accent, cursor:"pointer", padding:`${3*z}px ${8*z}px`
+          }}>
+            {t("enable")||"Turn on"}
+          </button>
         </div>
       )}
 
@@ -345,15 +402,17 @@ export default function Events({ state, set, theme, isAdmin, user }) {
             };
 
             const rsvpOptions = [
-              { status: "going",    emoji: "✅", label: "Going" },
-              { status: "maybe",    emoji: "❓", label: "Maybe" },
-              { status: "declined", emoji: "❌", label: "Can't" },
+              { status: "going",    emoji: "✅", label: t("going")||"Going" },
+              { status: "maybe",    emoji: "❓", label: t("maybe")||"Maybe" },
+              { status: "declined", emoji: "❌", label: t("cant")||"Can't" },
             ];
 
+            const isPast = new Date(ev.date) < new Date();
             return (
               <div key={ev.id} style={{
                 borderBottom:`1px solid ${theme.border}`,
-                paddingBottom:10*z, marginBottom:2*z
+                paddingBottom:10*z, marginBottom:2*z,
+                opacity: isPast ? 0.7 : 1
               }}>
                 {/* ── Collapsed header — always visible ── */}
                 <div
@@ -361,12 +420,21 @@ export default function Events({ state, set, theme, isAdmin, user }) {
                   style={{display:"flex", alignItems:"center", justifyContent:"space-between",
                     padding:`${10*z}px 0`, cursor:"pointer", gap:8*z}}>
                   <div style={{flex:1, minWidth:0}}>
-                    <div style={{fontWeight:800, fontSize:14*z, color:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                      {ev.title}
+                    <div style={{display:"flex", alignItems:"center", gap:6*z}}>
+                      <div style={{fontWeight:800, fontSize:14*z, color: isPast ? theme.sub : theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                        {ev.title}
+                      </div>
+                      {isPast && (
+                        <span style={{fontSize:9*z, fontWeight:700, color:theme.sub,
+                          border:`1px solid ${theme.border}`, borderRadius:4*z,
+                          padding:`${1*z}px ${4*z}px`, flexShrink:0, textTransform:"uppercase"}}>
+                          {t("event_past")||"Past"}
+                        </span>
+                      )}
                     </div>
-                    <div style={{fontSize:11*z, color:theme.accent, marginTop:2*z, fontWeight:600}}>
-                      📅 {new Date(ev.date).toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}
-                      {rsvpCounts.going > 0 && <span style={{marginLeft:8*z, color:"#50c878"}}>· {rsvpCounts.going} going</span>}
+                    <div style={{fontSize:11*z, color: isPast ? theme.sub : theme.accent, marginTop:2*z, fontWeight:600}}>
+                      📅 {fmtEventDate(ev.date)}
+                      {rsvpCounts.going > 0 && <span style={{marginLeft:8*z, color:"#50c878"}}>· {rsvpCounts.going} {t("going")||"going"}</span>}
                     </div>
                   </div>
                   <span style={{fontSize:12*z, color:theme.sub, transform: isExpanded?"rotate(180deg)":"none", transition:"transform 0.2s", flexShrink:0}}>▾</span>
@@ -407,7 +475,7 @@ export default function Events({ state, set, theme, isAdmin, user }) {
                     {ev.invitees?.length > 0 && (
                       <div style={{marginTop:8*z}}>
                         <div style={{fontSize:10*z, color:theme.sub, fontWeight:700, marginBottom:6*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>
-                          Invited ({ev.invitees.length})
+                          {t("invited")||"Invited"} ({ev.invitees.length})
                         </div>
                         <div style={{display:"flex", flexWrap:"wrap", gap:4*z}}>
                           {ev.invitees.map(id => {
@@ -443,7 +511,7 @@ export default function Events({ state, set, theme, isAdmin, user }) {
                         fontSize:12*z, fontWeight:"bold"}}
                         onClick={() => {
                           const goingNames = ev.invitees?.filter(id => ev.rsvps?.[id] === "going").map(id => state.players.find(p=>p.id===id)?.name).filter(Boolean).join(", ");
-                          const text = `🥒 Pickleball: ${ev.title}\n📅 ${new Date(ev.date).toLocaleString()}\n📍 ${ev.venue || "TBD"}${goingNames ? `\n✅ Going: ${goingNames}` : ""}${ev.notes ? `\n📝 ${ev.notes}` : ""}`;
+                          const text = `🥒 Pickleball: ${ev.title}\n📅 ${fmtEventDate(ev.date)}\n📍 ${ev.venue || "TBD"}${goingNames ? `\n✅ Going: ${goingNames}` : ""}${ev.notes ? `\n📝 ${ev.notes}` : ""}`;
                           if (navigator.share) navigator.share({ title:"Pickleball", text });
                           else { navigator.clipboard.writeText(text); alert("Copied!"); }
                         }}>📤</button>
@@ -458,7 +526,7 @@ export default function Events({ state, set, theme, isAdmin, user }) {
                             const goingIds = ev.invitees?.filter(id => ev.rsvps?.[id] === "going") || ev.invitees || [];
                             const names = goingIds.map(id => state.players.find(p=>p.id===id)?.name?.split(" ")[0]).filter(Boolean).join(", ");
                             const eventDate = new Date(ev.date);
-                            const body = `📅 ${eventDate.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}\n📍 ${ev.venue || "TBD"}${names ? `\n✅ Going: ${names}` : ""}`;
+                            const body = `📅 ${fmtEventDate(eventDate.toISOString())}\n📍 ${ev.venue || "TBD"}${names ? `\n✅ Going: ${names}` : ""}`;
                             reg.active?.postMessage({
                               type: 'SCHEDULE_NOTIFICATION',
                               title: `🥒 Reminder: ${ev.title}`,

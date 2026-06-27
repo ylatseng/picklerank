@@ -110,7 +110,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
     const { derivedPlayers, derivedMatches } = replayAllMatches(state.players, newMatchArray);
     setResult({ match: derivedMatches.find(m => m.id === match.id), players: derivedPlayers });
     set(s => ({...s, matches: newMatchArray}));
-    showUndo?.([match.id], "Match");
+    showUndo?.([match.id], t("undo_match")||"Match logged");
     // Clear all persisted form state — fresh start for next log
     clearSp(); clearGames(); clearTnames(); clearVenue(); clearNotes();
     // Reset date to NOW so the next match logged always gets a fresh timestamp.
@@ -325,7 +325,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           return (
           <div key={i}>
             <div style={S.gameRow}>
-              <span style={{color:theme.sub,fontSize:12*z,minWidth:50*z}}>
+              <span style={{color:theme.sub,fontSize:11*z,minWidth:36*z,flexShrink:0}}>
                 {t("game_lbl") === "第" ? `第${i+1}局` : `${t("game_lbl")||"Game"} ${i+1}`}
               </span>
               <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder={t("team_abbr_1")||"T1"} value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
@@ -346,7 +346,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
         <label style={S.label}>{t("venue_opt")}</label>
         <input style={{...S.input,marginBottom:12*z}} placeholder="e.g. Riverside Courts, Court 3" value={venue} onChange={e=>setVenue(e.target.value)}/>
         
-        <label style={S.label}>Match Notes (Optional)</label>
+        <label style={S.label}>{t("match_notes_sec")||"Match Notes (Optional)"}</label>
         <input style={S.input} placeholder="e.g. Crazy wind, paddle testing..." value={notes} onChange={e=>setNotes(e.target.value)}/>
       </Sec>
       
@@ -449,7 +449,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
     setSessionSummary(summary);
 
     set(s => ({...s, matches: allMatchesAfter}));
-    showUndo?.(matchesToLog.map(m => m.id), `Session (${matchesToLog.length} matches)`);
+    showUndo?.(matchesToLog.map(m => m.id), t("undo_session")||"Session logged");
     clearRoundScores(); clearSessionIds(); setChosenSplit(null); clearSessionNotes();
   }
 
@@ -465,7 +465,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
       lines.push(`Game ${i+1}: ${m.t1} vs ${m.t2} → ${m.score} (${m.winnerLabel} wins)`);
     });
     lines.push('');
-    lines.push(`🏆 MVP: ${summary.mvp?.name} (${summary.mvp?.wins}W ${summary.mvp?.losses}L, ${summary.mvp?.delta >= 0 ? '+' : ''}${summary.mvp?.delta.toFixed(3)})`);
+    lines.push(`🏆 MVP: ${summary.mvp?.name} (${summary.mvp?.wins}${t("w_abbr")||"W"} ${summary.mvp?.losses}${t("l_abbr")||"L"}, ${summary.mvp?.delta >= 0 ? '+' : ''}${summary.mvp?.delta.toFixed(3)})`);
     lines.push(`📈 Most Improved: ${summary.mostImproved?.name} (${summary.mostImproved?.delta >= 0 ? '+' : ''}${summary.mostImproved?.delta.toFixed(3)})`);
     lines.push(`🎯 Total points: ${summary.totalPts}`);
     const text = lines.join('\n');
@@ -490,7 +490,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
             {sessionSummary.playerStats.map(ps => (
               <div key={ps.id} style={{background:theme.bg,border:`1px solid ${theme.border}`,borderRadius:10*z,padding:10*z}}>
                 <div style={{fontWeight:700,fontSize:12*z,color:theme.text,marginBottom:3*z}}>{ps.name}</div>
-                <div style={{fontSize:11*z,color:theme.sub}}>{ps.wins}W {ps.losses}L</div>
+                <div style={{fontSize:11*z,color:theme.sub}}>{ps.wins}{t("w_abbr")||"W"} {ps.losses}{t("l_abbr")||"L"}</div>
                 <div style={{fontSize:12*z,fontWeight:700,color:ps.delta>=0?"#50c878":"#e05050",marginTop:2*z}}>
                   {ps.delta>=0?"+":""}{ps.delta.toFixed(3)}
                 </div>
@@ -501,7 +501,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
           <div style={{display:"flex",flexDirection:"column",gap:8*z,marginBottom:16*z}}>
             <div style={{background:"rgba(80,200,120,0.1)",border:"1px solid #50c87844",borderRadius:10*z,padding:10*z}}>
               <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>🏆 {t("session_summary_mvp")}</div>
-              <div style={{fontWeight:700,color:"#50c878"}}>{sessionSummary.mvp?.name} — {sessionSummary.mvp?.wins}W {sessionSummary.mvp?.losses}L</div>
+              <div style={{fontWeight:700,color:"#50c878"}}>{sessionSummary.mvp?.name} — {sessionSummary.mvp?.wins}{t("w_abbr")||"W"} {sessionSummary.mvp?.losses}{t("l_abbr")||"L"}</div>
             </div>
             <div style={{background:"rgba(64,160,224,0.1)",border:"1px solid #40a0e044",borderRadius:10*z,padding:10*z}}>
               <div style={{fontSize:10*z,color:theme.sub,marginBottom:2*z}}>📈 {t("session_summary_improved")}</div>
@@ -584,7 +584,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
                 }}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span style={{fontSize:11*z, fontWeight:700, color: isBest ? "#50c878" : theme.sub}}>
-                      {isBest ? `✅ ${t("team_fairest")}` : `Option ${i+1}`}
+                      {isBest ? `✅ ${t("team_fairest")}` : `${t("option_lbl")||"Option"} ${i+1}`}
                     </span>
                     <span style={{fontSize:10*z, color:theme.sub}}>{t("team_balance_label")} {s.gap.toFixed(3)}</span>
                   </div>
@@ -676,7 +676,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
             })}
             
             <div>
-              <label style={S.label}>Session Notes (Optional)</label>
+              <label style={S.label}>{t("session_notes_sec")||"Session Notes (Optional)"}</label>
               <input style={S.input} placeholder="e.g. Really hot day, great rallies..." value={notes} onChange={e=>setNotes(e.target.value)}/>
             </div>
 
@@ -819,7 +819,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
         });
     }
     set(s => ({...s, matches: [...(s.matches||[]), ...matchesToLog]}));
-    showUndo?.(matchesToLog.map(m => m.id), "King of the Court (3 matches)");
+    showUndo?.(matchesToLog.map(m => m.id), t("undo_kotc")||"KOTC logged");
     // Capture analysis snapshot so the panel can render after state clears
     setKotcAnalysis({
       leaderboard: kotcLeaderboard.slice(),
@@ -881,7 +881,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
                       </span>
                     </div>
                     <div style={{fontSize:11*z, color:theme.sub, flexShrink:0}}>
-                      {entry.wins}W · {entry.diff >= 0 ? '+' : ''}{entry.diff} pts
+                      {entry.wins}{t("w_abbr")||"W"} · {entry.diff >= 0 ? '+' : ''}{entry.diff} pts
                     </div>
                   </div>
                   <div style={{fontSize:11*z, color:theme.sub, lineHeight:1.5}}>{reason}</div>
@@ -958,7 +958,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
             ))}
             
             <div>
-              <label style={S.label}>Event Notes (Optional)</label>
+              <label style={S.label}>{t("event_notes_sec")||"Event Notes (Optional)"}</label>
               <input style={S.input} placeholder="e.g. Epic comebacks..." value={notes} onChange={e=>setNotes(e.target.value)}/>
             </div>
 
@@ -1126,6 +1126,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
     else b = buildRRBracket();
     setBracket(b);
     setCollapsed({});
+    setSuccess(""); // clear previous tournament result when starting new one
     setStep(1);
     // Scroll the main container to top so user sees Round 1 immediately
     setTimeout(() => {
@@ -1298,7 +1299,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
         const roundDisplay = round.name === "semifinal" ? "Semifinal"
                            : round.name === "final" ? "Final"
                            : round.name === "wb_sf" ? "Winners SF"
-                           : round.name === "wb_final_and_lb_final" ? (m.label || "Bracket Final")
+                           : round.name === "wb_final_and_lb_final" ? (m.label ? t(`${m.label.toLowerCase().replace(/ /g,"_")}`) || m.label : t("bracket_finals")||"Bracket Final")
                            : round.name === "grand_final" ? "Grand Final"
                            : round.name === "all" ? `Match ${mNum}`
                            : round.name;
@@ -1319,7 +1320,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
     });
 
     set(s => ({ ...s, matches: [...(s.matches || []), ...matchesToLog] }));
-    showUndo?.(matchesToLog.map(m => m.id), `${formatLabel} (${matchesToLog.length} matches)`);
+    showUndo?.(matchesToLog.map(m => m.id), t("undo_tourney")||"Tournament logged");
     const champLabel = `${getName(computedBracket.champion[0])} & ${getName(computedBracket.champion[1])}`;
     setSuccess(`🏆 ${formatLabel} Logged!\n${champLabel}`);
     // Reset everything for the next tournament
@@ -1413,20 +1414,29 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
         {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
         {err && !hasDupes && <Err msg={err} theme={theme}/>}
 
-        <div style={{display:"flex", gap:8*z, marginTop:16*z}}>
+        <div style={{marginTop:16*z}}>
           <button
-            style={{...S.btnSecondary, marginTop:0, flexShrink:0, paddingLeft:16*z, paddingRight:16*z}}
+            style={{
+              ...S.btnPrimary, width:"100%", marginTop:0,
+              opacity: (hasDupes || !allFilled) ? 0.5 : 1,
+              cursor: (hasDupes || !allFilled) ? "not-allowed" : "pointer"
+            }}
+            disabled={hasDupes || !allFilled}
+            onClick={startTournament}>
+            {t("start_tournament")}
+          </button>
+          <button
+            style={{
+              display:"block", width:"100%", marginTop:8*z,
+              background:"transparent", border:"none",
+              color:theme.sub, fontSize:11*z, cursor:"pointer",
+              textAlign:"center", padding:`${6*z}px`
+            }}
             onClick={() => {
               clearFormat(); clearPlayerCount(); clearTIds(); clearBracket(); clearTNotes();
               setErr(""); setSuccess("");
             }}>
             {t("reset_btn") || "🔄 Reset"}
-          </button>
-          <button
-            style={{...S.btnPrimary, marginTop:0, flex:1, opacity: (hasDupes || !allFilled) ? 0.5 : 1, cursor: (hasDupes || !allFilled) ? "not-allowed" : "pointer"}}
-            disabled={hasDupes || !allFilled}
-            onClick={startTournament}>
-            {t("start_tournament")}
           </button>
         </div>
       </Sec>
@@ -1489,12 +1499,12 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
     const upcoming = isRoundUpcoming(b.rounds, idx);
     const isCollapsed = collapsed[idx];
 
-    const roundTitle = round.name === "semifinal" ? "Semifinals"
-                     : round.name === "final" ? "🏆 Final"
-                     : round.name === "wb_sf" ? "Winners Bracket Semifinals"
-                     : round.name === "wb_final_and_lb_final" ? "Bracket Finals"
-                     : round.name === "grand_final" ? "🏆 Grand Final"
-                     : round.name === "all" ? `${t("format_rr")||"Round Robin"} Matches`
+    const roundTitle = round.name === "semifinal" ? (t("semifinals")||"Semifinals")
+                     : round.name === "final" ? `🏆 ${t("finals")||"Final"}`
+                     : round.name === "wb_sf" ? (t("winners_bracket_sf")||"Winners Bracket Semifinals")
+                     : round.name === "wb_final_and_lb_final" ? (t("bracket_finals")||"Bracket Finals")
+                     : round.name === "grand_final" ? `🏆 ${t("grand_final")||"Grand Final"}`
+                     : round.name === "all" ? `${t("format_rr")||"Round Robin"} ${t("matches_label")||"Matches"}`
                      : round.name;
 
     // Upcoming rounds: don't render at all (they appear once active)
@@ -1517,7 +1527,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
             </div>
             {complete && isCollapsed && (
               <div style={{fontSize:10*z, color:theme.sub, marginTop:2*z}}>
-                {round.matches.filter(m => m.winner !== null).length} matches complete · tap to expand
+                {round.matches.filter(m => m.winner !== null).length} {t("matches_complete")||"matches complete"} · {t("tap_to_expand")||"tap to expand"}
               </div>
             )}
           </div>
@@ -1557,7 +1567,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
           {/* RR standings table — show whenever bracket has standings */}
           {b.format === "rr" && b.standings && (
             <div style={{marginTop:14*z, background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:10*z, padding:10*z}}>
-              <div style={{fontSize:12*z, fontWeight:800, color:theme.accent, marginBottom:8*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>Standings</div>
+              <div style={{fontSize:12*z, fontWeight:800, color:theme.accent, marginBottom:8*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>{t("standings")||"Standings"}</div>
               {b.standings.map((s, i) => (
                 <div key={i} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:`${4*z}px 0`, borderBottom: i < b.standings.length - 1 ? `1px solid ${theme.border}` : "none"}}>
                   <div style={{display:"flex", alignItems:"center", gap:8*z, flex:1, overflow:"hidden"}}>
@@ -1569,7 +1579,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
                     </span>
                   </div>
                   <div style={{fontSize:11*z, color:theme.sub, flexShrink:0}}>
-                    {s.wins}W · {s.matches - s.wins}L · {s.pointDiff >= 0 ? "+" : ""}{s.pointDiff} pts
+                    {s.wins}{t("w_abbr")||"W"} · {s.matches - s.wins}{t("l_abbr")||"L"} · {s.pointDiff >= 0 ? "+" : ""}{s.pointDiff} pts
                   </div>
                 </div>
               ))}
@@ -1585,7 +1595,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
             }}>
               <div style={{fontSize:24*z, marginBottom:6*z}}>🏆</div>
               <div style={{fontSize:11*z, fontWeight:700, color:"#f0c040", textTransform:"uppercase", letterSpacing:"1px", marginBottom:4*z}}>
-                Champions
+                {t("champions")||"Champions"}
               </div>
               <div style={{fontSize:16*z, fontWeight:800, color:theme.text}}>
                 {getTeamLabel(b.champion)}
@@ -1621,11 +1631,24 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
 
       {success && (
         <div style={{background:"rgba(80,200,120,0.15)", border:"1px solid #50c87844", color:"#50c878", padding:`${12*z}px`, borderRadius:10*z, marginBottom:12*z, textAlign:"center"}}>
-          {success.split('\n').map((line, i) => (
-            <div key={i} style={{fontSize: i===0 ? 13*z : 16*z, fontWeight: i===0 ? 700 : 800, marginTop: i===0 ? 0 : 6*z}}>
-              {i===0 ? line : `🏆 Champions: ${line}`}
-            </div>
-          ))}
+          {(() => {
+            const parts = success.split('\n');
+            return (
+              <>
+                <div style={{fontSize:13*z, fontWeight:700}}>{parts[0]}</div>
+                {parts[1] && (
+                  <div style={{marginTop:6*z}}>
+                    <div style={{fontSize:11*z, fontWeight:700, color:"#f0c040", textTransform:"uppercase", letterSpacing:"1px"}}>
+                      🏆 {t("champions")||"Champions"}
+                    </div>
+                    <div style={{fontSize:16*z, fontWeight:800, color:theme.text, marginTop:3*z, lineHeight:1.3}}>
+                      {parts[1].replace(/^🏆 [^:]+: /, "")}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 

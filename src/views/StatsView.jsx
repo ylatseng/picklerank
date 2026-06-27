@@ -112,7 +112,7 @@ export default function StatsView({ players, matches, nav, theme }) {
                 <div style={{ fontSize: 18 * z }}>🏟️</div>
                 <div style={S.lbInfo}><div style={{ fontSize: 13 * z }}>{v}</div></div>
                 <div style={{ fontSize: 12 * z, color: theme.sub, textAlign: "right" }}>
-                  <div>{count} {t("matches_tab").toLowerCase()}{count !== 1 ? "s" : ""}</div>
+                  <div>{count} {t("matches_label")||"matches"}</div>
                   <div style={{ fontSize: 10 * z }}>{pct}% of total</div>
                 </div>
               </div>
@@ -128,7 +128,12 @@ export default function StatsView({ players, matches, nav, theme }) {
 
         if (activePlayers.length < 2 || Object.keys(matrix).length === 0) return (
           <CollapseSec title={t("partner_matrix_sec")} theme={theme} defaultOpen={false}>
-            <div style={{ color: theme.sub, fontSize: 12 * z, textAlign: "center", padding: 16 * z }}>{t("partner_matrix_no_data")}</div>
+            <div style={{ color: theme.sub, fontSize: 12 * z, textAlign: "center", padding: 16 * z }}>
+              {t("partner_matrix_no_data")}
+              <div style={{fontSize:11*z, marginTop:6*z, color:theme.sub, opacity:0.7}}>
+                {t("requires_min_games")||"Log at least 2 doubles matches with a partner to see stats."}
+              </div>
+            </div>
           </CollapseSec>
         );
 

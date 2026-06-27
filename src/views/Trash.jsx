@@ -82,15 +82,31 @@ export default function Trash({state, set, theme, isAdmin}) {
 
   const MatchCard = ({ item }) => {
     const m = item.data;
-    const score = (m.games||[]).map(g=>`${g.a}–${g.b}`).join(', ');
+    const score = (m.games||[]).map(g=>`${g.a}–${g.b}`).join('  ');
     const typeLabel = t(m.type==='singles'?'match_type_singles':m.type==='doubles'?'match_type_doubles':m.type);
+    const getName = id => state.players?.find(p=>p.id===id)?.name?.split(" ")[0] || "?";
+    const t1 = m.teams?.[0]?.map(getName).join(" & ") || "?";
+    const t2 = m.teams?.[1]?.map(getName).join(" & ") || "?";
+    const winner = m.winnerTeam === 0 ? t1 : t2;
+    const modeLabel = m.loggedBy === "quick" || m.loggedBy === "quick-session" ? "⚡" :
+      m.mode === "session" ? t("mode_session") : m.mode === "kotc" ? t("kotc") :
+      m.mode === "se" || m.mode === "de" || m.mode === "rr" ? t("tournament") : "";
     return (
       <div>
-        <div style={{fontWeight:700, fontSize:13*z, color:theme.text}}>
-          🎮 {t("match_label")} · {typeLabel}
+        <div style={{fontWeight:700, fontSize:13*z, color:theme.text, marginBottom:4*z}}>
+          🎮 {typeLabel}{modeLabel ? ` · ${modeLabel}` : ""}
         </div>
-        {m.date && <div style={{fontSize:10*z, color:theme.sub}}>{fmtDate(m.date)}{score ? ` · ${score}` : ''}</div>}
-        {m.venue && <div style={{fontSize:10*z, color:theme.sub}}>📍 {m.venue}</div>}
+        <div style={{fontSize:12*z, color:theme.text}}>
+          <span style={{color:m.winnerTeam===0?"#50c878":theme.sub, fontWeight:m.winnerTeam===0?700:400}}>{t1}</span>
+          <span style={{color:theme.sub, margin:`0 ${4*z}px`}}>vs</span>
+          <span style={{color:m.winnerTeam===1?"#50c878":theme.sub, fontWeight:m.winnerTeam===1?700:400}}>{t2}</span>
+        </div>
+        {score && <div style={{fontSize:11*z, color:theme.accent, fontWeight:600, marginTop:2*z}}>📊 {score}</div>}
+        <div style={{fontSize:10*z, color:theme.sub, marginTop:2*z}}>
+          🏆 {winner}
+          {m.date && <span style={{marginLeft:6*z}}> · {fmtDate(m.date)}</span>}
+          {m.venue && <span style={{marginLeft:6*z}}>· 📍 {m.venue}</span>}
+        </div>
       </div>
     );
   };

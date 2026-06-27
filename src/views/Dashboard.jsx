@@ -4,71 +4,6 @@ import { makeS } from '../styles.js';
 import { Sec, Empty, Avatar, LeaderboardRow } from '../components/Shared.jsx';
 import Players from './Players.jsx'; // Bring in the heavy lifting!
 
-// ── Group Insights — must be a real component so useState is valid ─────────
-function GroupInsights({ matches, theme }) {
-  const z = theme.zoom || 1.0;
-  const [open, setOpen] = useState(false);
-  const insights = useMemo(() => {
-    const dayKeys = ["day_sun","day_mon","day_tue","day_wed","day_thu","day_fri","day_sat"];
-    const dayLabels = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    const dayCounts = [0,0,0,0,0,0,0];
-    const venueCounts = {};
-    matches.forEach(m => {
-      if (m.date) dayCounts[new Date(m.date).getDay()]++;
-      if (m.venue) venueCounts[m.venue] = (venueCounts[m.venue] || 0) + 1;
-    });
-    const favDayIdx = dayCounts.indexOf(Math.max(...dayCounts));
-    const favDay = t(dayKeys[favDayIdx]) || dayLabels[favDayIdx];
-    const topVenueEntry = Object.entries(venueCounts).sort((a,b) => b[1] - a[1])[0];
-    return {
-      favDay,
-      topVenue: topVenueEntry?.[0] || null,
-      topVenueCount: topVenueEntry?.[1] || 0,
-      estHours: Math.round(matches.length * 0.25),
-    };
-  }, [matches]);
-
-  return (
-    <div style={{background:"var(--card,#fff)", border:`1px solid ${theme.border}`, borderRadius:10*z, marginBottom:8*z, overflow:"hidden"}}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        width:"100%", background:"transparent", border:"none", cursor:"pointer",
-        display:"flex", justifyContent:"space-between", alignItems:"center",
-        padding:`${8*z}px ${12*z}px`, textAlign:"left"
-      }}>
-        <div style={{display:"flex", alignItems:"center", gap:8*z}}>
-          <span style={{fontSize:14*z}}>📊</span>
-          <span style={{fontSize:11*z, fontWeight:700, color:theme.accent, textTransform:"uppercase", letterSpacing:"0.5px"}}>
-            {t("group_insights") || "Group Insights"}
-          </span>
-        </div>
-        <span style={{fontSize:12*z, color:theme.sub, transform: open?"rotate(180deg)":"none", transition:"transform 0.2s"}}>▾</span>
-      </button>
-      {open && (
-        <div style={{padding:`0 ${12*z}px ${10*z}px`, borderTop:`1px solid ${theme.border}`, paddingTop:10*z, background:theme.card}}>
-          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8*z}}>
-            {[
-              {icon:"🎮", val:matches.length, label:t("insights_matches") || "Matches"},
-              {icon:"📅", val:insights.favDay, label:t("insights_fav_day") || "Fav Day"},
-              {icon:"⏱️", val:`~${insights.estHours}h`, label:t("insights_est_time") || "Est. Time"},
-            ].map(({icon,val,label}) => (
-              <div key={label} style={{background:theme.bg, borderRadius:8*z, padding:`${8*z}px ${6*z}px`, textAlign:"center"}}>
-                <div style={{fontSize:18*z, marginBottom:3*z}}>{icon}</div>
-                <div style={{fontSize:16*z, fontWeight:800, color:theme.text}}>{val}</div>
-                <div style={{fontSize:10*z, color:theme.sub, marginTop:2*z}}>{label}</div>
-              </div>
-            ))}
-          </div>
-          {insights.topVenue && (
-            <div style={{marginTop:8*z, fontSize:11*z, color:theme.sub, textAlign:"center"}}>
-              📍 {t("insights_most_at") || "Most played at"} <strong style={{color:theme.text}}>{insights.topVenue}</strong> ({insights.topVenueCount} {t("insights_matches") || "matches"})
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Dashboard({players, rawStats, state, matches, nav, theme, set, format, user, setUser}) {
   const [view, setView] = useState("rank");
   const [motdExpanded, setMotdExpanded] = useState(false);
@@ -223,61 +158,7 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
         </div>
       )}
 
-      {/* ── SESSION INSIGHTS — extracted to component so Hooks are valid ── */}
-      {matches.length >= 5 && <GroupInsights matches={matches} theme={theme} />}
 
-      {/* ── WEEKLY RECAP SHARE ──────────────────────────────────────────── */}
-      {matches.length >= 3 && (() => {
-        const now = Date.now();
-        const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-        const weekMatches = matches.filter(m => new Date(m.date).getTime() >= weekAgo);
-        if (weekMatches.length === 0) return null;
-        // Top mover this week
-        const ratingGains = {};
-        players.forEach(p => { ratingGains[p.id] = 0; });
-        weekMatches.forEach(m => {
-          if (!m.ratingChanges) return;
-          Object.entries(m.ratingChanges).forEach(([id, delta]) => {
-            if (ratingGains[id] !== undefined) ratingGains[id] += delta;
-          });
-        });
-        const topMover = players.reduce((best, p) => (!best || ratingGains[p.id] > ratingGains[best.id]) ? p : best, null);
-        const shareWeekly = () => {
-          const lines = [`🥒 PickleRank Weekly Recap`, `📅 Last 7 days: ${weekMatches.length} matches`];
-          if (topMover && ratingGains[topMover.id] > 0) {
-            lines.push(`📈 Top Mover: ${topMover.name} (+${ratingGains[topMover.id].toFixed(3)})`);
-          }
-          // Biggest upset
-          let bestUpset = null, bestDelta = 0;
-          weekMatches.forEach(m => {
-            if (!m.ratingSnaps || !m.teams) return;
-            const winT = m.teams[m.winnerTeam], loseT = m.teams[m.winnerTeam===0?1:0];
-            if (!winT||!loseT) return;
-            const winAvg = winT.reduce((s,id)=>s+(m.ratingSnaps[id]||3),0)/Math.max(1,winT.length);
-            const loseAvg = loseT.reduce((s,id)=>s+(m.ratingSnaps[id]||3),0)/Math.max(1,loseT.length);
-            const d = loseAvg - winAvg;
-            if (d > bestDelta) { bestDelta = d; bestUpset = m; }
-          });
-          if (bestUpset && bestDelta > 0.1) {
-            const getName = id => players.find(p=>p.id===id)?.name || "?";
-            const winner = bestUpset.teams[bestUpset.winnerTeam].map(getName).join(" & ");
-            lines.push(`🎉 Biggest Upset: ${winner} beat a higher-rated team`);
-          }
-          const text = lines.join("\n");
-          if (navigator.share) navigator.share({ title: "PickleRank Recap", text });
-          else { navigator.clipboard.writeText(text); alert("Recap copied!"); }
-        };
-        return (
-          <button onClick={shareWeekly} style={{
-            width:"100%", padding:`${10*z}px`, borderRadius:10*z, marginBottom:8*z,
-            border:`1px solid ${theme.accent}55`, background:theme.accent+"0d",
-            color:theme.accent, fontSize:12*z, fontWeight:700, cursor:"pointer",
-            display:"flex", alignItems:"center", justifyContent:"center", gap:8*z
-          }}>
-            📤 Share This Week's Recap · {weekMatches.length} matches
-          </button>
-        );
-      })()}
 
       {/* Unified Hub Toggle */}
       <div style={{display:"flex", gap:8*z, marginBottom:16*z}}>

@@ -214,7 +214,7 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
 
                 {/* Match timeline */}
                 <div style={{fontSize:10*z,color:theme.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6*z}}>
-                  Match History
+                  {t("match_history")||"Match History"}
                 </div>
                 {h2h.matches.slice(0,8).map((m, idx) => {
                   const m_t1n=m.teamNames?.t1||m.teams?.[0]?.map(getName).join(" & ")||t("tbd");

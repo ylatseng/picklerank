@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { t, RELEASES } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec } from '../components/Shared.jsx';
@@ -12,11 +12,25 @@ export default function Changelog({ theme }) {
 
   const toggle = (i) => setExpanded(prev => ({ ...prev, [i]: !prev[i] }));
 
+  // Force scroll to top when this component mounts — belt-and-suspenders alongside
+  // the App-level useEffect, which can fire before the Changelog DOM is ready.
+  useEffect(() => {
+    const mains = document.querySelectorAll("main");
+    const main = mains[mains.length - 1];
+    if (main) { main.scrollTop = 0; main.scrollTo({ top: 0, behavior: "instant" }); }
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, []);
+
+  // Get the lang note — only show if non-empty (EN value is "" which we skip)
+  const langNote = t("changelog_lang_note");
+  const showLangNote = langNote && langNote !== "changelog_lang_note" && langNote.length > 0;
+
   return (
     <div style={S.view}>
-      <Sec title="📜 Changelog" theme={theme}>
+      <Sec title={`📜 ${t("changelog_title")||"Changelog"}`} theme={theme}>
         <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
-          Tap any version to expand or collapse its details.
+          {t("changelog_hint")||"Tap any version to see details."}
+          {showLangNote && <span style={{marginLeft:4}}>{langNote}</span>}
         </div>
         {RELEASES.map((rel, index) => {
           const open = !!expanded[index];
