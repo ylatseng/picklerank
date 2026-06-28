@@ -45,6 +45,36 @@ function PlayerPill({ player, selected, color, onToggle, z }) {
   );
 }
 
+// ── How-to Hint Banner (collapsible) ─────────────────────────────────────────
+function QuickLogHint({ theme }) {
+  const z = theme.zoom || 1.0;
+  const [showHint, setShowHint] = React.useState(false);
+  return (
+    <div style={{marginBottom:12*z, background:theme.accent+"0d", border:`1px solid ${theme.accent}33`, borderRadius:8*z, overflow:"hidden"}}>
+      <button onClick={()=>setShowHint(h=>!h)} style={{
+        width:"100%", background:"transparent", border:"none", cursor:"pointer",
+        display:"flex", justifyContent:"space-between", alignItems:"center",
+        padding:`${7*z}px ${10*z}px`
+      }}>
+        <span style={{fontSize:11*z, fontWeight:700, color:theme.accent}}>💡 {t("how_to_use_ql")||"How to use Quick Log"}</span>
+        <span style={{fontSize:10*z, color:theme.sub, transform:showHint?"rotate(180deg)":"none", transition:"transform 0.2s"}}>▾</span>
+      </button>
+      {showHint && (
+        <div style={{padding:`0 ${10*z}px ${8*z}px`, fontSize:11*z, color:theme.sub, lineHeight:1.6}}>
+          <div>1. {t("ql_step1")||"Select today's players from the checklist"}</div>
+          <div>2. {t("ql_step2")||"Pick teams (T1 / T2) from your Today's Players"}</div>
+          <div>3. {t("ql_step3")||"Tap + / − to set scores, or use preset buttons"}</div>
+          <div>4. {t("ql_step4")||"Tap ⚡ Log Match — form resets for the next game"}</div>
+          <div>5. {t("ql_step5")||"Tap ✕ when done for the session"}</div>
+          <div style={{marginTop:6*z, color:theme.accent, fontSize:10*z}}>
+            {t("ql_settings_hint")||"To hide the ⚡ button: Settings → 🎨 Appearance → Quick Log Button"}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Quick Log Modal ───────────────────────────────────────────────────────────
 export default function QuickLog({ players, state, set, theme, onClose, showUndo, prefill }) {
   const z = theme.zoom || 1.0;
@@ -162,7 +192,7 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
       const matchTime = new Date(now.getTime() + i * 60000).toISOString();
       return { id: genId(), type: "doubles", date: matchTime, teams: [t1Ids, t2Ids], winnerTeam,
         games: [{a, b, winner: winnerTeam}], teamNames:{t1:null,t2:null}, winTo:11, winBy:2,
-        venue: null, notes: null, loggedBy: "quick-session" };
+        venue: null, notes: null, loggedBy: user?.myPlayerId || "quick-session" };
     });
     set(s => ({ ...s, matches: [...(s.matches || []), ...matchesToLog] }));
     showUndo?.(matchesToLog.map(m => m.id), t("undo_session")||"Session logged");
@@ -195,7 +225,7 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
       teamNames: { t1: null, t2: null },
       winTo: 11, winBy: 2,
       venue: null, notes: null,
-      loggedBy: "quick"
+      loggedBy: state.players ? (user?.myPlayerId || "quick") : "quick"
     };
     const newMatchArray = [...(state.matches || []), match];
     const { derivedMatches } = replayAllMatches(state.players, newMatchArray);
@@ -244,6 +274,9 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
           </div>
         )}
         {(<>
+
+          {/* Collapsible how-to hint */}
+          <QuickLogHint theme={theme} />
 
           {/* Custom / Session mode tabs */}
           <div style={{display:"flex", gap:8*z, marginBottom:14*z}}>

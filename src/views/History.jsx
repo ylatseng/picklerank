@@ -305,10 +305,12 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
               </div>
 
               {!collapsedGroups[group.key] && group.matches.map(m => {
-                // SECURITY FIX: User is Admin OR User actually played in this specific match
-                const isParticipant = user?.myPlayerId && m.teams?.flat()?.includes(user?.myPlayerId);
-                const canEditMatch = isAdmin || isParticipant;
-                const canDeleteMatch = isAdmin; // FIX 5: only admin can delete match history
+                // Edit permission: admin, participant, or the player who logged this match
+                const myId = user?.myPlayerId;
+                const isParticipant = myId && m.teams?.flat()?.includes(myId);
+                const isAuthor = myId && m.loggedBy === myId;
+                const canEditMatch = isAdmin || isParticipant || isAuthor;
+                const canDeleteMatch = isAdmin;
 
                 return (
                   <React.Fragment key={m.id}>

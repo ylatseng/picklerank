@@ -22,6 +22,25 @@ function FormDots({ pid, matches, z = 1 }) {
   );
 }
 
+// ── Collapsible Section for Custom Match ─────────────────────────────────────
+function CollapsibleSec({ title, theme, defaultOpen = true, children }) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  const z = theme.zoom || 1.0;
+  return (
+    <div style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:12*z, marginBottom:12*z, overflow:"hidden"}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        width:"100%", background:"transparent", border:"none", cursor:"pointer",
+        display:"flex", justifyContent:"space-between", alignItems:"center",
+        padding:`${10*z}px ${14*z}px`, textAlign:"left"
+      }}>
+        <span style={{fontSize:12*z, fontWeight:700, color:theme.accent, textTransform:"uppercase", letterSpacing:"0.8px"}}>{title}</span>
+        <span style={{fontSize:12*z, color:theme.sub, transform:open?"rotate(180deg)":"none", transition:"transform 0.2s"}}>▾</span>
+      </button>
+      {open && <div style={{padding:`0 ${14*z}px ${14*z}px`, borderTop:`1px solid ${theme.border}`, paddingTop:12*z}}>{children}</div>}
+    </div>
+  );
+}
+
 export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
@@ -110,6 +129,8 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
     const newMatchArray = [...(state.matches||[]), match];
     const { derivedPlayers, derivedMatches } = replayAllMatches(state.players, newMatchArray);
     setResult({ match: derivedMatches.find(m => m.id === match.id), players: derivedPlayers });
+    // Scroll to top so user sees ELO breakdown and success card
+    setTimeout(() => { const mains = document.querySelectorAll("main"); const m = mains[mains.length-1]; if(m) m.scrollTop=0; window.scrollTo({top:0,behavior:"instant"}); }, 50);
     set(s => ({...s, matches: newMatchArray}));
     showUndo?.([match.id], t("undo_match")||"Match logged");
     // Clear all persisted form state — fresh start for next log
@@ -121,7 +142,8 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
   }
   
   const rawOpts=players.map(p=>({value:p.id,label:shortName(p.name, isLargeZoom(z) ? "always" : "auto")}));
-  const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
+  const myId = user?.myPlayerId || "";
+  const opts = sortOptionsAlpha(rawOpts, [myId, ...(state.favoredPlayerIds||[])].filter(Boolean));
 
   return (
     <div style={S.view}>
@@ -222,7 +244,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           </div>
         </div>
       )}
-      <Sec title={t("match_type_sec")} theme={theme}>
+      <CollapsibleSec title={t("match_type_sec")} theme={theme}>
         <div style={S.toggle}>
           {["singles","doubles"].map(tType=>(
             <button key={tType} style={{...S.toggleBtn,...(type===tType?{...S.toggleOn,background:theme.card,borderColor:theme.accent,color:theme.accent}:{})}} onClick={()=>setType(tType)}>
@@ -240,10 +262,10 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
             <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
           </div>
         </div>
-      </Sec>
+      </CollapsibleSec>
       
       {type==="singles"?(
-        <Sec title={t("players")} theme={theme}>
+        <CollapsibleSec title={t("players")} theme={theme}>
           <label style={S.label}>{t("player_1")}</label>
           <Sel opts={opts} value={sp.s1} onChange={v=>upSp("s1",v)} placeholder={t("select_prompt")} theme={theme}/>
           {sp.s1 && <FormDots pid={sp.s1} matches={state.matches} z={z}/>}
@@ -251,9 +273,9 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           <Sel opts={opts} value={sp.s2} onChange={v=>upSp("s2",v)} placeholder={t("select_prompt")} theme={theme}/>
           {sp.s2 && <FormDots pid={sp.s2} matches={state.matches} z={z}/>}
           {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
-        </Sec>
+        </CollapsibleSec>
       ):(
-        <Sec title={t("teams")} theme={theme}>
+        <CollapsibleSec title={t("teams")} theme={theme}>
           <label style={S.label}>{t("team_name_opt")}</label>
           <input style={S.input} value={tnames.t1} onChange={e=>upTn("t1",e.target.value)} placeholder="e.g. The Bangers"/>
           <div style={{display:"flex",gap:8*z,marginTop:8*z}}>
@@ -268,7 +290,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
             <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><Sel opts={opts} value={sp.d2b} onChange={v=>upSp("d2b",v)} placeholder={t("select_prompt")} theme={theme}/>{sp.d2b&&<FormDots pid={sp.d2b} matches={state.matches} z={z}/>}</div>
           </div>
           {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
-        </Sec>
+        </CollapsibleSec>
       )}
 
       {/* ── MATCH PREDICTOR ────────────────────────────────────────────── */}
@@ -317,17 +339,25 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
         );
       })()}
 
-      <Sec title={t("game_scores_sec")} theme={theme}>
+      <CollapsibleSec title={t("game_scores_sec")} theme={theme}>
         {/* Best-of-N series toggle */}
         <div style={{display:"flex", alignItems:"center", gap:8*z, marginBottom:10*z}}>
           <span style={{fontSize:12*z, color:theme.sub}}>Series:</span>
           {[1,3,5].map(n => (
-            <button key={n} onClick={() => { setBestOf(n); if (n > games.length) { setGames(g => [...g, ...Array(n-g.length).fill({a:"",b:""})]); } }}
+            <button key={n} onClick={() => {
+              setBestOf(n);
+              setGames(g => {
+                if (n === 1) return [{a:"",b:""}];
+                if (n > g.length) return [...g, ...Array(n-g.length).fill({a:"",b:""})];
+                if (n < g.length) return g.slice(0, n);
+                return g;
+              });
+            }}
               style={{padding:`${3*z}px ${10*z}px`, borderRadius:8*z, fontSize:11*z, fontWeight:700, cursor:"pointer",
                 border:`1px solid ${bestOf===n ? theme.accent : theme.border}`,
                 background: bestOf===n ? theme.accent+"22" : "transparent",
                 color: bestOf===n ? theme.accent : theme.sub}}>
-              {n === 1 ? "Single" : `Best of ${n}`}
+              {n === 1 ? t("series_single")||"Single" : `Best of ${n}`}
             </button>
           ))}
         </div>
@@ -357,9 +387,9 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
               <span style={{color:theme.sub,fontSize:11*z,minWidth:36*z,flexShrink:0}}>
                 {t("game_lbl") === "第" ? `第${i+1}局` : `${t("game_lbl")||"Game"} ${i+1}`}
               </span>
-              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder={t("team_abbr_1")||"T1"} value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
+              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder="P1" value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
               <span style={{color:theme.sub}}>–</span>
-              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder={t("team_abbr_2")||"T2"} value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
+              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder="P2" value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
               {games.length>1&&<button style={S.btnDanger} onClick={()=>rmGame(i)}>✕</button>}
             </div>
             {isIllegal && <div style={{fontSize:11*z,color:"#e05050",marginTop:-4*z,marginBottom:8*z}}>{t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>}
@@ -367,9 +397,9 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           );
         })}
         <button style={S.btnSecondary} onClick={addGame}>{t("add_game_btn")}</button>
-      </Sec>
+      </CollapsibleSec>
       
-      <Sec title={t("date_venue_sec")} theme={theme}>
+      <CollapsibleSec title={t("date_venue_sec")} theme={theme} defaultOpen={false}>
         <label style={S.label}>{t("date_time_lbl")}</label>
         <input style={{...S.input,marginBottom:12*z}} type="datetime-local" value={matchDate} onChange={e=>setMatchDate(e.target.value)}/>
         <label style={S.label}>{t("venue_opt")}</label>
@@ -377,7 +407,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
         
         <label style={S.label}>{t("match_notes_sec")||"Match Notes (Optional)"}</label>
         <input style={S.input} placeholder="e.g. Crazy wind, paddle testing..." value={notes} onChange={e=>setNotes(e.target.value)}/>
-      </Sec>
+      </CollapsibleSec>
       
       {err && !hasDupes && <Err msg={err} theme={theme}/>}
       
@@ -1185,8 +1215,8 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
           { teams: [teams[2], teams[3]], scoreA: "", scoreB: "", winner: null },
         ]},
         { name: "wb_final_and_lb_final", matches: [
-          { label: "Winners Bracket Final", teams: [null, null], scoreA: "", scoreB: "", winner: null },
-          { label: "Losers Bracket Final",  teams: [null, null], scoreA: "", scoreB: "", winner: null },
+          { label: t("winners_bracket_final")||"Winners Bracket Final", teams: [null, null], scoreA: "", scoreB: "", winner: null },
+          { label: t("losers_bracket_final")||"Losers Bracket Final",  teams: [null, null], scoreA: "", scoreB: "", winner: null },
         ]},
         { name: "grand_final", matches: [
           { teams: [null, null], scoreA: "", scoreB: "", winner: null },
@@ -1562,14 +1592,14 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
           <span style={{flex:1, fontSize:12*z, fontWeight: winner === 0 ? 800 : 600,
             color: winner === 0 ? theme.accent : (hasTeams ? theme.text : theme.sub),
             overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-            {hasTeams ? teamA : (m.label ? "Awaiting prior round" : "TBD")}
+            {hasTeams ? teamA : (m.label ? t("awaiting_prior_round")||"Awaiting prior round" : "TBD")}
             {winner === 0 && " ✓"}
           </span>
           <span style={{fontSize:10*z, color:theme.sub}}>vs</span>
           <span style={{flex:1, fontSize:12*z, fontWeight: winner === 1 ? 800 : 600,
             color: winner === 1 ? theme.accent : (hasTeams ? theme.text : theme.sub),
             textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-            {hasTeams ? teamB : (m.label ? "Awaiting prior round" : "TBD")}
+            {hasTeams ? teamB : (m.label ? t("awaiting_prior_round")||"Awaiting prior round" : "TBD")}
             {winner === 1 && " ✓"}
           </span>
         </div>

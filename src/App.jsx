@@ -450,6 +450,18 @@ export default function App() {
       parsed.preferences = {};
       localStorage.setItem("user_settings", JSON.stringify(parsed));
     }
+    // Migration v1: quickLogEnabled was accidentally stored as false for some players.
+    // Remove it from all player prefs so it defaults to true for everyone.
+    // Only runs once (guarded by migration flag).
+    if (!parsed._migQLReset) {
+      Object.keys(parsed.preferences || {}).forEach(pid => {
+        if (parsed.preferences[pid]?.quickLogEnabled === false) {
+          delete parsed.preferences[pid].quickLogEnabled;
+        }
+      });
+      parsed._migQLReset = true;
+      localStorage.setItem("user_settings", JSON.stringify(parsed));
+    }
     return parsed;
   });
 
@@ -582,7 +594,9 @@ export default function App() {
   const activeAccentId = pref?.accentId || user.accentId || "green";
   const activeFontId = pref?.fontId || user.fontId || "heiti";
   const activeZoomLevel = pref?.zoomLevel || user.zoomLevel || 1.0;
-  const quickLogEnabled = (pref?.quickLogEnabled ?? user.quickLogEnabled) ?? true; // default on; reads pref for linked players, user root for global admin
+  const quickLogEnabled = user.myPlayerId
+    ? (pref?.quickLogEnabled ?? true)   // linked player: only their pref, default true
+    : (user.quickLogEnabled ?? true);    // global admin: their root setting, default true
 
   // setLang is called in a useEffect below to avoid running on every render
   
@@ -634,6 +648,11 @@ export default function App() {
 
   const profilePlayer = profileId ? stats.find(p=>p.id===profileId) : null;
   const nav = (view,extra={}) => {
+    // Scroll to top immediately when changing views — belt-and-suspenders with the useEffect below
+    const mains = document.querySelectorAll("main");
+    const main = mains[mains.length - 1];
+    if (main) main.scrollTop = 0;
+    window.scrollTo({ top: 0, behavior: "instant" });
     setShared(s=>({...s,activeView:view,...extra}));
   };
 
@@ -781,7 +800,7 @@ export default function App() {
             <BottomNav active={activeView} nav={nav} theme={theme}/>
 
             {/* ── Quick Log floating button — draggable ── */}
-            {quickLogEnabled && (user.isAdmin || isCurrentlyVerified) && !showQuickLog && (
+            {quickLogEnabled && (user.isAdmin || isCurrentlyVerified || (user.myPlayerId && !user.pendingAutoLink)) && !showQuickLog && (
               <DraggableFloater theme={theme} onOpen={() => setShowQuickLog(true)} />
             )}
 

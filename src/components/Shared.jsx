@@ -211,7 +211,7 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
           <textarea
             value={noteText}
             onChange={e=>setNoteText(e.target.value)}
-            placeholder="Add your personal note..."
+            placeholder={t("personal_note_placeholder")||"Add your personal note..."}
             style={{flex:1, fontSize:11*z, padding:`${6*z}px`, borderRadius:6*z,
               border:`1px solid ${theme.accent}66`, background:theme.bg, color:theme.text,
               resize:"none", height:52*z, outline:"none"}}

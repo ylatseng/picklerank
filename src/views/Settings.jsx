@@ -6,6 +6,45 @@ import { doc, setDoc } from "firebase/firestore";
 import { db } from "../engine";
 import { runAllTests } from '../tests/runner.js';
 
+// ── Proper component for inline name editing (avoids Hook-in-IIFE) ────────────
+function NameEditor({ player, myPlayerId, theme, z, S, setShared, t }) {
+  const [editingName, setEditingName] = useState(false);
+  const [nameVal, setNameVal] = useState(player?.name || "");
+  const saveName = () => {
+    const trimmed = nameVal.trim();
+    if (!trimmed || trimmed === player?.name) { setEditingName(false); return; }
+    setShared(s => ({
+      ...s,
+      players: (s.players||[]).map(p => p.id === myPlayerId ? {...p, name: trimmed} : p)
+    }));
+    setEditingName(false);
+  };
+  return (
+    <div>
+      <div style={{fontSize:12*z, color:theme.sub, marginBottom:10*z}}>{t("link_device_desc")}</div>
+      <div style={{display:"flex", alignItems:"center", gap:8*z, marginBottom:10*z}}>
+        {editingName ? (
+          <>
+            <input value={nameVal} onChange={e=>setNameVal(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&saveName()}
+              style={{...S.input, flex:1, margin:0}} autoFocus />
+            <button onClick={saveName} style={{...S.btnPrimary, margin:0, padding:`${6*z}px ${12*z}px`, fontSize:12*z}}>{t("save")||"Save"}</button>
+            <button onClick={()=>setEditingName(false)} style={{...S.btnSecondary, margin:0, padding:`${6*z}px ${10*z}px`, fontSize:12*z}}>✕</button>
+          </>
+        ) : (
+          <>
+            <div style={{flex:1, fontSize:15*z, fontWeight:700, color:theme.text}}>{player?.name || "?"}</div>
+            <button onClick={()=>{ setNameVal(player?.name||""); setEditingName(true); }}
+              style={{...S.btnSecondary, margin:0, padding:`${5*z}px ${10*z}px`, fontSize:11*z}}>
+              ✏️ {t("edit")||"Edit"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Built-in Test Runner — proper component so useState is valid ──────────────
 function TestRunner({ theme }) {
   const z = theme.zoom || 1.0;
@@ -263,21 +302,13 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
 
       {/* ── MY PROFILE + ADMIN (consolidated for isAdminPlayer users) ── */}
       {user.myPlayerId ? (
-        /* Player is linked — show profile, PIN, admin badge if applicable, and ONE logout */
+        /* Player is linked — show editable name, PIN, admin badge, and logout */
         <CSec title={t("my_profile_sec")} theme={theme}>
-          <div style={{ fontSize: 12*z, color: theme.sub, marginBottom: 10*z }}>
-            {t("link_device_desc")}
-          </div>
-          <Sel
-            value={user.myPlayerId || ""}
-            onChange={v => setUser({myPlayerId: v})}
-            opts={[
-              { value: "", label: t("guest_not_linked") },
-              ...[...(state.players || [])]
-                  .sort((a,b) => a.name.localeCompare(b.name))
-                  .map(p => ({ value: p.id, label: p.name }))
-            ]}
-            theme={theme}
+          <NameEditor
+            player={state.players?.find(p => p.id === user.myPlayerId)}
+            myPlayerId={user.myPlayerId}
+            theme={theme} z={z} S={S}
+            setShared={setShared} t={t}
           />
 
           {/* Admin badge — visible when this player has admin rights */}
@@ -291,7 +322,7 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
               <span style={{fontSize:14*z}}>🔑</span>
               <div style={{flex:1}}>
                 <div style={{fontWeight:700, color:"#50c878"}}>{t("admin_mode")}</div>
-                <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>Full admin access active</div>
+                <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>{t("admin_mode_active")||"Full admin access active"}</div>
               </div>
             </div>
           )}
@@ -443,13 +474,13 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
       {/* QUICK LOG TOGGLE */}
       <CSec title={`⚡ ${t("quick_log_floater")||"Quick Log Button"}`} theme={theme}>
         {(() => {
-          const isEnabled = (pref?.quickLogEnabled ?? user.quickLogEnabled) ?? true;
+          const isEnabled = user.myPlayerId ? (pref?.quickLogEnabled ?? true) : (user.quickLogEnabled ?? true);
           return (
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
             <div>
               <div style={{fontSize:13*z, color:theme.text}}>{t("quick_log_floater")||"Quick Log Button"}</div>
               <div style={{fontSize:11*z, color:theme.sub, marginTop:3*z}}>
-                Show the ⚡ floating button for rapid score entry
+                {t("ql_floater_desc")||"Show the ⚡ floating button for rapid score entry"}
               </div>
             </div>
             <button onClick={() => updateAppearance("quickLogEnabled", !isEnabled)} style={{
@@ -468,8 +499,18 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
       </CSec>
       {user.isAdmin && (
         <CSec title={t("login_activity_sec")||"🔐 Login Activity"} theme={theme}>
-          <div style={{fontSize:11*z, color:theme.sub, marginBottom:10*z}}>
-            Most recent login per player.
+          <div style={{fontSize:11*z, color:theme.sub, marginBottom:10*z, display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+            <span>{t("most_recent_login")||"Most recent login per player."}</span>
+            <button onClick={() => {
+              if (!window.confirm(window.confirm ? undefined : t("clear_all_confirm")||"Clear ALL login history?")) return;
+              setShared(s => ({
+                ...s,
+                players: (s.players||[]).map(p => ({...p, loginHistory: [], lastLoginAt: null}))
+              }));
+            }} style={{fontSize:10*z, color:"#e05050", background:"transparent", border:"1px solid #e0505066",
+              borderRadius:6*z, padding:`${2*z}px ${8*z}px`, cursor:"pointer"}}>
+              Clear All
+            </button>
           </div>
           {(state.players || [])
             .filter(p => p.lastLoginAt)
@@ -500,6 +541,15 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
                     <div style={{fontSize:12*z, color:theme.text, fontWeight:600}}>{ago}</div>
                     <div style={{fontSize:10*z, color:theme.sub}}>{loginCount} login{loginCount!==1?"s":""}</div>
                   </div>
+                  <button onClick={() => {
+                    setShared(s => ({
+                      ...s,
+                      players: (s.players||[]).map(pl => pl.id !== p.id ? pl : {...pl, loginHistory:[], lastLoginAt:null})
+                    }));
+                  }} style={{fontSize:10*z, color:theme.sub, background:"transparent", border:`1px solid ${theme.border}`,
+                    borderRadius:6*z, padding:`${2*z}px ${6*z}px`, cursor:"pointer", flexShrink:0}}>
+                    ✕
+                  </button>
                 </div>
               );
             })

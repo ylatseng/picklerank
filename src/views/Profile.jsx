@@ -360,15 +360,15 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
       {isAdmin && (
         <Sec title="🔑 Admin Role" theme={theme}>
           <div style={{fontSize:12*z, color:theme.sub, marginBottom:12*z}}>
-            When enabled, this player will receive full admin access automatically after verifying their PIN. They can log in as themselves and still have admin powers — no separate admin passcode needed.
+            {t("admin_role_desc")||"When enabled, this player will receive full admin access automatically after verifying their PIN."}
           </div>
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
             <div>
               <div style={{fontSize:13*z, fontWeight:700, color: p.isAdminPlayer ? theme.accent : theme.text}}>
-                {p.isAdminPlayer ? "✅ Admin access granted" : "Regular player"}
+                {p.isAdminPlayer ? (t("admin_granted")||"✅ Admin access granted") : (t("admin_regular")||"Regular player")}
               </div>
               <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
-                {p.isAdminPlayer ? "Logs in with PIN → gets admin access" : "Logs in with PIN → regular access"}
+                {p.isAdminPlayer ? (t("admin_login_admin")||"Logs in with PIN → gets admin access") : (t("admin_login_regular")||"Logs in with PIN → regular access")}
               </div>
             </div>
             <button
@@ -382,7 +382,7 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
                 background:"transparent", color: p.isAdminPlayer ? "#e05050" : theme.accent,
                 flexShrink: 0
               }}>
-              {p.isAdminPlayer ? "Revoke Admin" : "Grant Admin"}
+              {p.isAdminPlayer ? (t("revoke_admin")||"Revoke Admin") : (t("grant_admin")||"Grant Admin")}
             </button>
           </div>
         </Sec>

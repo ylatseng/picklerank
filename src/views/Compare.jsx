@@ -5,12 +5,12 @@ import { Sec, Sel, Avatar, Err } from '../components/Shared.jsx';
 import { MatchesSubNav } from '../components/Navigation.jsx';
 import { dynamicKFactor } from '../engine.js';
 
-export default function Compare({players,matches,compareIds,set,nav,theme,state}) {
+export default function Compare({players,matches,compareIds,set,nav,theme,state,user}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   const [format, setFormat] = useState("doubles");
   
-  const [t1p1, setT1p1] = useState(compareIds?.[0]||"");
+  const [t1p1, setT1p1] = useState(compareIds?.[0] || user?.myPlayerId || "");
   const [t2p1, setT2p1] = useState(compareIds?.[1]||"");
   const [t1p2, setT1p2] = useState("");
   const [t2p2, setT2p2] = useState("");
@@ -173,7 +173,7 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
               return <path d={d} stroke={color} strokeWidth="2" fill="none" strokeLinejoin="round"/>;
             };
             return (
-              <Sec title={t("rating_history_sec")||"Rating Trajectory"} theme={theme}>
+              <Sec title={t("rating_trajectory_sec")||"Rating Trajectory"} theme={theme}>
                 <div style={{fontSize:11*z,color:theme.sub,marginBottom:8*z}}>
                   {t("overview_doubles")||format} {t("rating_history_sec")||"trend overlay"}
                 </div>
