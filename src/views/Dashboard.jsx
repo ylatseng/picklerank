@@ -4,12 +4,34 @@ import { makeS } from '../styles.js';
 import { Sec, Empty, Avatar, LeaderboardRow } from '../components/Shared.jsx';
 import Players from './Players.jsx'; // Bring in the heavy lifting!
 
+// Rating tier constants — defined outside component to avoid effect re-runs
+const MILESTONE_TIERS = [2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5];
+const MILESTONE_NAMES = {2.5:"Recreational",3.0:"Intermediate",3.5:"Mid-Intermediate",4.0:"Advanced",4.5:"Mid-Advanced",5.0:"Elite",5.5:"Pro"};
+
 export default function Dashboard({players, rawStats, state, matches, nav, theme, set, format, user, setUser}) {
   const [view, setView] = useState("rank");
   const [motdExpanded, setMotdExpanded] = useState(false);
   const [potmExpanded, setPotmExpanded] = useState(false);
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
+
+  // Rating milestone detection — checks if the linked player just crossed a tier
+  const [milestone, setMilestone] = useState(null);
+  useEffect(() => {
+    if (!user?.myPlayerId || !matches.length) return;
+    const myPlayer = (rawStats||players).find(p => p.id === user.myPlayerId);
+    if (!myPlayer) return;
+    const history = myPlayer.ratingHistoryDoubles || myPlayer.ratingHistorySingles || [];
+    if (history.length < 2) return;
+    const prev = history[history.length - 2];
+    const curr = history[history.length - 1];
+    const crossed = MILESTONE_TIERS.find(t => prev < t && curr >= t);
+    if (!crossed) return;
+    const seenKey = `milestone_seen_${user.myPlayerId}_${crossed}`;
+    if (sessionStorage.getItem(seenKey)) return;
+    sessionStorage.setItem(seenKey, "1");
+    setMilestone({ tier: crossed, name: MILESTONE_NAMES[crossed], rating: curr.toFixed(3) });
+  }, [matches.length, user?.myPlayerId]);
 
   // Migration hook to split old baseRating into singles/doubles ratings
   useEffect(() => {
@@ -27,6 +49,30 @@ export default function Dashboard({players, rawStats, state, matches, nav, theme
 
   return (
     <div style={S.view}>
+
+      {/* ── RATING MILESTONE CELEBRATION ──────────────────────────────── */}
+      {milestone && (
+        <div style={{
+          background:"linear-gradient(135deg, rgba(240,192,64,0.2), rgba(80,200,120,0.15))",
+          border:"2px solid rgba(240,192,64,0.5)", borderRadius:14*z,
+          padding:`${14*z}px ${16*z}px`, marginBottom:8*z, textAlign:"center", position:"relative"
+        }}>
+          <button onClick={()=>setMilestone(null)} style={{
+            position:"absolute", top:8*z, right:8*z, background:"transparent", border:"none",
+            color:theme.sub, cursor:"pointer", fontSize:14*z, padding:4*z
+          }}>✕</button>
+          <div style={{fontSize:28*z}}>🎉</div>
+          <div style={{fontSize:16*z, fontWeight:800, color:"#f0c040", marginTop:4*z}}>
+            Rating Milestone!
+          </div>
+          <div style={{fontSize:13*z, color:theme.text, marginTop:4*z}}>
+            You crossed <strong>{milestone.tier.toFixed(1)}</strong> — <em>{milestone.name}</em>!
+          </div>
+          <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
+            Current rating: {milestone.rating}
+          </div>
+        </div>
+      )}
 
       {/* ── MATCH OF THE DAY — compact teaser, expandable ─────────────── */}
       {motd && (() => {

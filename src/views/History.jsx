@@ -9,7 +9,7 @@ const toYYYYMMDD = (d) => {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 };
 
-export default function History({matches,players,nav,set,theme,isAdmin,initialPlayerId,state,user,lang}) {
+export default function History({matches,players,nav,set,theme,isAdmin,initialPlayerId,state,user,lang,onReplay,onSaveNote}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   
@@ -94,7 +94,7 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
   }, [baseFiltered, selectedDateStr, cYear, cMonth]);
 
   // Use lang prop (from App's activeLangId) for reactive date formatting
-  const activeLang = lang || getLang();
+  const activeLang = lang || getLang() || "en";
 
   // Group final matches by Day for a clean list
   const groupedMatches = useMemo(() => {
@@ -104,7 +104,7 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
     finalViewMatches.forEach(m => {
       const d = new Date(m.date);
       let key;
-      if (activeLang === "zh-TW" || activeLang === "zh-CN") {
+      if (activeLang === "zh_tw" || activeLang === "zh_cn") {
         // Manually construct Chinese date string — reliable across all browsers/PWA
         const dayName = dayKeysCN[d.getDay()];
         key = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${dayName}）`;
@@ -319,7 +319,10 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
                       </div>
                     )}
                     <MatchCard match={m} players={players} theme={theme} isAdmin={canEditMatch} lang={activeLang}
-                      onEdit={canEditMatch ? setEditingMatch : undefined} onShare={share} onDelete={canDeleteMatch ? () => setPendingDelete(m.id) : undefined} />
+                      myPlayerId={user?.myPlayerId}
+                      onSaveNote={onSaveNote}
+                      onEdit={canEditMatch ? setEditingMatch : undefined} onShare={share} onDelete={canDeleteMatch ? () => setPendingDelete(m.id) : undefined}
+                      onReplay={onReplay ? () => onReplay(m) : undefined} />
                     {pendingDelete===m.id&&(
                       <ConfirmInline msg={t("delete_match_q")} note={t("ratings_recalculated")}
                         onConfirm={()=>moveToTrash(m)} onCancel={()=>setPendingDelete(null)} theme={theme}/>

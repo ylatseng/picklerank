@@ -39,6 +39,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
   const [tnames,setTnames,clearTnames]=usePersistentFormState("logMatch:tnames", {t1:"",t2:""});
   const [venue,setVenue,clearVenue]=usePersistentFormState("logMatch:venue", "");
   const [notes,setNotes,clearNotes]=usePersistentFormState("logMatch:notes", "");
+  const [bestOf,setBestOf]=useState(1); // 1=no series, 3=best-of-3, 5=best-of-5
   const [err,setErr]=useState(""), [result,setResult]=useState(null);
   const [matchDate,setMatchDate]=useState(()=>isoToDatetimeLocal(new Date().toISOString()));
 
@@ -112,7 +113,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
     set(s => ({...s, matches: newMatchArray}));
     showUndo?.([match.id], t("undo_match")||"Match logged");
     // Clear all persisted form state — fresh start for next log
-    clearSp(); clearGames(); clearTnames(); clearVenue(); clearNotes();
+    clearSp(); clearGames(); clearTnames(); clearVenue(); clearNotes(); setBestOf(1);
     // Reset date to NOW so the next match logged always gets a fresh timestamp.
     // Without this, consecutive matches on the same session get the same stale
     // datetime from when the form was first opened — causing wrong History order.
@@ -317,6 +318,34 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
       })()}
 
       <Sec title={t("game_scores_sec")} theme={theme}>
+        {/* Best-of-N series toggle */}
+        <div style={{display:"flex", alignItems:"center", gap:8*z, marginBottom:10*z}}>
+          <span style={{fontSize:12*z, color:theme.sub}}>Series:</span>
+          {[1,3,5].map(n => (
+            <button key={n} onClick={() => { setBestOf(n); if (n > games.length) { setGames(g => [...g, ...Array(n-g.length).fill({a:"",b:""})]); } }}
+              style={{padding:`${3*z}px ${10*z}px`, borderRadius:8*z, fontSize:11*z, fontWeight:700, cursor:"pointer",
+                border:`1px solid ${bestOf===n ? theme.accent : theme.border}`,
+                background: bestOf===n ? theme.accent+"22" : "transparent",
+                color: bestOf===n ? theme.accent : theme.sub}}>
+              {n === 1 ? "Single" : `Best of ${n}`}
+            </button>
+          ))}
+        </div>
+        {/* Series score display when in series mode */}
+        {bestOf > 1 && (() => {
+          const t1Wins = games.filter((g,i) => { const r = validatePickleballScore(parseInt(g.a)||0, parseInt(g.b)||0, winTo, winBy); return r?.winner === 0; }).length;
+          const t2Wins = games.filter((g,i) => { const r = validatePickleballScore(parseInt(g.a)||0, parseInt(g.b)||0, winTo, winBy); return r?.winner === 1; }).length;
+          const needed = Math.ceil(bestOf/2);
+          const seriesWinner = t1Wins >= needed ? (tnames.t1 || t("team_abbr_1")||"T1") : t2Wins >= needed ? (tnames.t2 || t("team_abbr_2")||"T2") : null;
+          return (
+            <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:12*z, marginBottom:10*z, padding:`${8*z}px`, background:theme.bg, borderRadius:8*z}}>
+              <span style={{fontSize:16*z, fontWeight:800, color:theme.accent}}>{t1Wins}</span>
+              <span style={{fontSize:11*z, color:theme.sub}}>Series</span>
+              <span style={{fontSize:16*z, fontWeight:800, color:"#e05050"}}>{t2Wins}</span>
+              {seriesWinner && <span style={{fontSize:11*z, color:"#50c878", fontWeight:700, marginLeft:4*z}}>🏆 {seriesWinner}</span>}
+            </div>
+          );
+        })()}
         <div style={{fontSize:12*z,color:theme.sub,marginBottom:10*z}}>{t("score_win_by_2").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>
         {games.map((g,i)=>{
           const ga=parseInt(g.a), gb=parseInt(g.b);
@@ -357,7 +386,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           style={{...S.btnSecondary, marginTop:0, flexShrink:0, paddingLeft:16*z, paddingRight:16*z}}
           onClick={() => {
             // Clear all draft fields — fresh form. Doesn't touch saved matches.
-            clearSp(); clearGames(); clearTnames(); clearVenue(); clearNotes();
+            clearSp(); clearGames(); clearTnames(); clearVenue(); clearNotes(); setBestOf(1);
             setType("singles"); setWinTo(11); setWinBy(2);
             setMatchDate(isoToDatetimeLocal(new Date().toISOString()));
             setErr(""); setResult(null);
@@ -485,6 +514,42 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
       {/* ── Inline session summary — replaces the old modal overlay ─── */}
       {sessionSummary && (
         <Sec title={t("session_summary_title")} theme={theme}>
+          {/* Session streak — how many consecutive sessions these 4 players have played */}
+          {(() => {
+            const playerSet = new Set(sessionSummary.playerStats.map(p => p.id));
+            // Sort matches chronologically first — Firestore order is not guaranteed
+            const sorted = [...(state.matches || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+            // Walk backwards through sorted matches looking for sessions with same 4 players
+            const sessions = [];
+            let i = sorted.length - 1;
+            while (i >= 0) {
+              if (i >= 2) {
+                const trio = sorted.slice(i-2, i+1);
+                if (trio.every(m => m.type === "doubles")) {
+                  const trioPlayers = new Set(trio.flatMap(m => m.teams?.flat() || []));
+                  if (trioPlayers.size === 4 && [...playerSet].every(id => trioPlayers.has(id))) {
+                    sessions.push(trio);
+                    i -= 3;
+                    continue;
+                  }
+                }
+              }
+              i--;
+            }
+            if (sessions.length < 2) return null;
+            return (
+              <div style={{background:"rgba(240,192,64,0.12)", border:"1px solid rgba(240,192,64,0.3)",
+                borderRadius:10*z, padding:10*z, marginBottom:12*z, textAlign:"center"}}>
+                <div style={{fontSize:18*z}}>🔥</div>
+                <div style={{fontSize:13*z, fontWeight:700, color:"#f0c040", marginTop:2*z}}>
+                  {sessions.length} Sessions in a Row!
+                </div>
+                <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
+                  Same group playing together
+                </div>
+              </div>
+            );
+          })()}
           {/* 2×2 player stats grid */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8*z,marginBottom:16*z}}>
             {sessionSummary.playerStats.map(ps => (
@@ -521,6 +586,37 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
               <span style={{fontWeight:700,color:"#50c878"}}>{m.score}</span>
             </div>
           ))}
+
+          {/* ── Court Rotation Suggestion ── */}
+          {(() => {
+            const stats = sessionSummary.playerStats;
+            if (stats.length !== 4) return null;
+            // Sort players: lowest wins first (they need fresh matchups most)
+            const sorted = [...stats].sort((a, b) => a.wins - b.wins || a.delta - b.delta);
+            // Suggest: pair players who played together least recently
+            // Simple approach: bottom 2 players together, top 2 together
+            const nextT1 = [sorted[0], sorted[3]]; // spread skill gap
+            const nextT2 = [sorted[1], sorted[2]];
+            const getName = p => p.name?.split(" ")[0] || "?";
+            return (
+              <div style={{
+                background: theme.accent+"11", border:`1px solid ${theme.accent}33`,
+                borderRadius:10*z, padding:10*z, marginTop:12*z
+              }}>
+                <div style={{fontSize:10*z, fontWeight:700, color:theme.accent, textTransform:"uppercase", letterSpacing:"0.5px", marginBottom:6*z}}>
+                  🔄 Next Round Suggestion
+                </div>
+                <div style={{display:"flex", alignItems:"center", gap:8*z, fontSize:12*z}}>
+                  <span style={{color:theme.accent, fontWeight:700}}>{nextT1.map(getName).join(" & ")}</span>
+                  <span style={{color:theme.sub}}>vs</span>
+                  <span style={{color:"#e05050", fontWeight:700}}>{nextT2.map(getName).join(" & ")}</span>
+                </div>
+                <div style={{fontSize:10*z, color:theme.sub, marginTop:4*z}}>
+                  Balances wins — keeps the competition fresh
+                </div>
+              </div>
+            );
+          })()}
           <div style={{display:"flex",gap:8*z,marginTop:16*z}}>
             <button style={{...S.btnSecondary,flex:1,marginTop:0}} onClick={() => shareRecap(sessionSummary)}>{t("session_summary_share")}</button>
             <button style={{...S.btnPrimary,flex:1,marginTop:0}} onClick={() => setSessionSummary(null)}>{t("session_summary_close")}</button>

@@ -31,7 +31,7 @@ const toYYYYMMDD = (d) => {
 function fmtEventDate(iso, opts = {}) {
   const lang = getLang();
   const d = new Date(iso);
-  if (lang === "zh-TW" || lang === "zh-CN") {
+  if (lang === "zh_tw" || lang === "zh_cn") {
     const dayNames = ["日","一","二","三","四","五","六"];
     const pad = n => String(n).padStart(2, "0");
     const month = d.getMonth() + 1;
@@ -45,9 +45,10 @@ function fmtEventDate(iso, opts = {}) {
   const defaultOpts = {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'};
   return d.toLocaleString([], {...defaultOpts, ...opts});
 }
-export default function Events({ state, set, theme, isAdmin, user }) {
+export default function Events({ state, set, theme, isAdmin, user, nav, onStartSession }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
+  const [qrEvent, setQrEvent] = useState(null); // event id showing QR
 
   // Form state persists in sessionStorage so accidental tab-aways don't lose progress.
   // Cleared on successful save (or when user closes the form with ✕).
@@ -503,6 +504,43 @@ export default function Events({ state, set, theme, isAdmin, user }) {
 
                     {/* Action buttons */}
                     <div style={{display:"flex", gap:8*z, marginTop:12*z, alignItems:"center", flexWrap:"wrap"}}>
+                      {/* Start Session — pre-fills Quick Log with event attendees */}
+                      {!isPast && onStartSession && ev.invitees?.length >= 2 && (
+                        <button style={{
+                          ...S.btnPrimary, marginTop:0, flex:"1 1 auto",
+                          display:"flex", alignItems:"center", justifyContent:"center", gap:6*z
+                        }} onClick={() => onStartSession(ev.invitees)}>
+                          ▶ {t("create_session")||"Start Session"}
+                        </button>
+                      )}
+                      {/* QR check-in — admin shows QR so players self-select */}
+                      {!isPast && isAdmin && ev.invitees?.length >= 2 && (
+                        <button style={{
+                          background:"transparent", border:`1px solid ${theme.border}`,
+                          borderRadius:8*z, color:theme.sub, cursor:"pointer",
+                          padding:`${6*z}px ${10*z}px`, fontSize:12*z
+                        }} onClick={() => setQrEvent(qrEvent === ev.id ? null : ev.id)}>
+                          📱 QR
+                        </button>
+                      )}
+                      {/* QR code display */}
+                      {qrEvent === ev.id && (() => {
+                        const base = window.location.origin + window.location.pathname;
+                        const ids = ev.invitees.join(",");
+                        const checkInUrl = `${base}?checkin=${encodeURIComponent(ids)}`;
+                        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(checkInUrl)}`;
+                        return (
+                          <div style={{width:"100%", marginTop:8*z, textAlign:"center", padding:`${10*z}px`, background:theme.bg, borderRadius:10*z}}>
+                            <div style={{fontSize:11*z, color:theme.sub, marginBottom:8*z}}>
+                              📱 Players scan to auto-join Today's Players
+                            </div>
+                            <img src={qrUrl} alt="Check-in QR" style={{width:160*z, height:160*z, borderRadius:8*z}} />
+                            <div style={{fontSize:10*z, color:theme.sub, marginTop:6*z}}>
+                              {ev.invitees.length} invited · tap ✕ to close
+                            </div>
+                          </div>
+                        );
+                      })()}
                       <button style={{background:theme.card, border:`1px solid ${theme.border}`,
                         borderRadius:6*z, color:theme.text, cursor:"pointer", padding:"6px 10px", fontSize:12*z}}
                         onClick={() => startEdit(ev)}>✏️ Edit</button>

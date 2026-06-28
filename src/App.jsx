@@ -248,6 +248,8 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
   const [selectedId, setSelectedId] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
+  // Local counter forces re-render when language changes so t() reflects immediately
+  const [, forceLangRender] = useState(0);
 
   const sortedPlayers = [...players].sort((a,b) => a.name.localeCompare(b.name));
 
@@ -260,7 +262,7 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
           <select 
             style={{background:"transparent", border:"none", color:theme.sub, fontSize:13*z, cursor:"pointer", outline:"none"}}
             value={user.langId || "en"}
-            onChange={e => setUser({langId: e.target.value})}
+            onChange={e => { setLang(e.target.value); setUser({langId: e.target.value}); forceLangRender(n => n + 1); }}
           >
             <option value="en">English</option>
             <option value="zh_tw">繁體中文</option>
@@ -270,7 +272,7 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
           <div style={{display:"flex", alignItems:"center", gap:6*z}}>
             <span style={{fontSize:10*z, color:theme.sub}}>Aa</span>
             {[0.85, 1.0, 1.15].map(zv => (
-              <button key={zv} onClick={() => setUser({zoomLevel: zv})}
+              <button key={zv} onClick={() => { setUser({zoomLevel: zv}); forceLangRender(n => n + 1); }}
                 style={{
                   padding:`${2*z}px ${7*z}px`, borderRadius:6*z, fontSize:11*z,
                   border:`1px solid ${Math.abs((user.zoomLevel||1) - zv) < 0.01 ? theme.accent : theme.border}`,
@@ -394,9 +396,23 @@ export default function App() {
   // ── Undo last match ────────────────────────────────────────────────────────
   // Store the last logged match IDs in a ref (no re-render needed), plus
   // an undo toast visible for 30 seconds. Undo removes those matches by ID.
-  const [undoToast, setUndoToast] = useState(null); // {label, matchIds, timer}
-  const undoTimerRef = useRef(null);
   const [showQuickLog, setShowQuickLog] = useState(false);
+  const [quickLogPrefill, setQuickLogPrefill] = useState(null);
+
+  // Handle QR check-in URL parameter — player scanned a QR code from an event
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkin = params.get("checkin");
+    if (checkin) {
+      const ids = checkin.split(",").filter(Boolean);
+      if (ids.length > 0) {
+        try { sessionStorage.setItem("ql_today_players", JSON.stringify(ids)); } catch {}
+        // Clean the URL without reloading
+        const clean = window.location.pathname;
+        window.history.replaceState({}, "", clean);
+      }
+    }
+  }, []);
 
   // Offline indicator — tracks network connectivity
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
@@ -519,22 +535,9 @@ export default function App() {
     });
   }, [isLoading]);
 
-  // Call this right after logging any match batch.
-  // matchIds = array of the newly logged match IDs, label = e.g. "Session (3 matches)"
-  const showUndo = useCallback((matchIds, label) => {
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    setUndoToast({ matchIds, label, remaining: 30 });
-    // Auto-dismiss after 30 seconds
-    undoTimerRef.current = setTimeout(() => setUndoToast(null), 30000);
-  }, []);
+  // Undo removed — use History tab to edit or delete matches
 
-  const doUndo = useCallback(() => {
-    if (!undoToast) return;
-    const idsToRemove = new Set(undoToast.matchIds);
-    setShared(s => ({ ...s, matches: (s.matches || []).filter(m => !idsToRemove.has(m.id)) }));
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    setUndoToast(null);
-  }, [undoToast, setShared]);
+  const showUndo = undefined;
 
   const setUserSettings = useCallback((updater) => {
     setUser(prev => {
@@ -738,14 +741,42 @@ export default function App() {
               {activeView==="kotc"      && <KingOfCourt players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} showUndo={showUndo} />}
               {activeView==="tourney"   && <TournamentMode players={stats} state={appState} set={setShared} nav={nav} theme={theme} isAdmin={user.isAdmin} user={user} showUndo={showUndo} />}
               {activeView==="compare"   && <Compare players={stats} matches={derivedMatches} compareIds={state.compareIds || []} set={setShared} nav={nav} theme={theme} state={appState} user={user}/>}
-              {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} initialPlayerId={historyPlayerId} state={appState} user={user} lang={activeLangId}/>}
+              {activeView==="history"   && <History matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} initialPlayerId={historyPlayerId} state={appState} user={user} lang={activeLangId}
+                onSaveNote={(matchId, playerId, note) => {
+                  setShared(s => ({
+                    ...s,
+                    matches: (s.matches||[]).map(m => m.id !== matchId ? m : {
+                      ...m,
+                      playerNotes: { ...(m.playerNotes||{}), [playerId]: note }
+                    })
+                  }));
+                }}
+                onReplay={(m) => {
+                  const t1 = m.teams?.[0] || [];
+                  const t2 = m.teams?.[1] || [];
+                  setQuickLogPrefill({
+                    mode: "custom",
+                    type: m.type || "doubles",
+                    t1ids: t1,
+                    t2ids: t2,
+                  });
+                  setShowQuickLog(true);
+                }}
+              />}
               {activeView==="profile"   && profilePlayer && <Profile player={profilePlayer} matches={derivedMatches} players={stats} nav={nav} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} setUser={setUserSettings}/>}
               {activeView==="stats"     && <StatsView players={stats} matches={derivedMatches} nav={nav} theme={theme} user={user}/>}
               {activeView==="settings"  && <Settings state={appState} user={user} setShared={setShared} setUser={setUserSettings} nav={nav} theme={theme} matchCount={matches.length} isLargeDataset={isLargeDataset}/>}
               {activeView==="trash"     && <Trash state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} />}
               {activeView==="legends"   && <Legends theme={theme} />}
               {activeView==="changelog" && <Changelog theme={theme} />}
-              {activeView==="events"    && <Events state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} />}
+              {activeView==="events"    && <Events state={appState} set={setShared} theme={theme} isAdmin={user.isAdmin} user={user} nav={nav}
+                onStartSession={(inviteeIds) => {
+                  // Navigate to Session tab with invitees pre-saved as today's players in QuickLog
+                  try { sessionStorage.setItem("ql_today_players", JSON.stringify(inviteeIds)); } catch {}
+                  setQuickLogPrefill({ mode: "session" });
+                  setShowQuickLog(true);
+                }}
+              />}
             </main>
             <BottomNav active={activeView} nav={nav} theme={theme}/>
 
@@ -762,7 +793,8 @@ export default function App() {
                 set={setShared}
                 theme={theme}
                 showUndo={showUndo}
-                onClose={() => setShowQuickLog(false)}
+                prefill={quickLogPrefill}
+                onClose={() => { setShowQuickLog(false); setQuickLogPrefill(null); }}
               />
             )}
 
@@ -779,34 +811,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ── Undo toast — floats above bottom nav for 30 seconds after any match log ── */}
-            {undoToast && (
-              <div style={{
-                position:"fixed", bottom:`calc(60px + env(safe-area-inset-bottom, 0px) + 8px)`,
-                left:"50%", transform:"translateX(-50%)",
-                maxWidth:420, width:"calc(100% - 32px)",
-                background: theme.card, border:`1px solid ${theme.accent}66`,
-                borderRadius:12, padding:"10px 14px",
-                display:"flex", justifyContent:"space-between", alignItems:"center",
-                boxShadow:"0 4px 20px rgba(0,0,0,0.3)", zIndex:1000, gap:10
-              }}>
-                <div style={{fontSize:12, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                  ✅ {undoToast.label}
-                </div>
-                <div style={{display:"flex", gap:8, flexShrink:0}}>
-                  <button onClick={doUndo} style={{
-                    background:"#e05050", color:"#fff", border:"none",
-                    borderRadius:8, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer"
-                  }}>
-                    {t("undo")||"↩ Undo"}
-                  </button>
-                  <button onClick={() => { if(undoTimerRef.current) clearTimeout(undoTimerRef.current); setUndoToast(null); }} style={{
-                    background:"transparent", border:`1px solid ${theme.border}`,
-                    borderRadius:8, padding:"5px 8px", fontSize:12, color:theme.sub, cursor:"pointer"
-                  }}>✕</button>
-                </div>
-              </div>
-            )}
           </>
         )}
       </div>

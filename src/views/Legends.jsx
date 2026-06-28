@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { t, K_FACTOR, PROVISIONAL_MATCH_THRESHOLD, CONFIDENCE_FULL_MATCHES, CONFIDENCE_RECENCY_WINDOW_DAYS, WIN_TO_OPTIONS } from '../engine.js';
+import { t, K_FACTOR, PROVISIONAL_MATCH_THRESHOLD, CONFIDENCE_FULL_MATCHES, CONFIDENCE_RECENCY_WINDOW_DAYS, WIN_TO_OPTIONS, isLargeZoom } from '../engine.js';
 import { makeS } from '../styles.js';
 
 export default function Legends({ theme }) {
@@ -301,7 +301,7 @@ export default function Legends({ theme }) {
         {/* ═══ TAB 2: ICONS ═══ */}
         {activeTab === 2 && (
           <Accordion id="2-0" title={t("legends_icons_badges")}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10*z }}>
+            <div style={{ display: "grid", gridTemplateColumns: isLargeZoom(z) ? "1fr" : "1fr 1fr", gap: 4*z }}>
               <ItemRow icon="🎖️" title={t("badge_centurion")} desc={t("legend_centurion_desc")} />
               <ItemRow icon="🛡️" title={t("badge_ironman")} desc={t("legend_ironman_desc")} />
               <ItemRow icon="🌋" title={t("badge_streaker")} desc={t("legend_on_fire_desc")} />
@@ -312,6 +312,9 @@ export default function Legends({ theme }) {
               <ItemRow icon="🔁" title={t("legend_rematch_title")} desc={t("legend_rematch_desc")} />
               <ItemRow icon="🔥" title={t("legend_hot_title")} desc={t("legend_hot_desc")} />
               <ItemRow icon="🧊" title={t("legend_cold_title")} desc={t("legend_cold_desc")} />
+              <ItemRow icon="⚡" title={t("legend_motd_title")||"⚡ Quick Log"} desc={"Quick-logged matches show a ⚡ badge in History. Tap the floating ⚡ button from any screen to log a score instantly."} />
+              <ItemRow icon="🔄" title={t("legend_rematch_title")||"🔄 Rematch"} desc={"Tap the 🔄 button on any match card in History to open Quick Log with the same players pre-filled."} />
+              <ItemRow icon="🔑" title={"🔑 Admin Player"} desc={"Players granted admin rights by the group admin show a 🔑 badge next to their name on the leaderboard."} />
               <ItemRow icon={<span style={{width:10*z,height:10*z,borderRadius:"50%",background:"#50c878",display:"inline-block",boxShadow:"0 0 5px #50c878"}}/>} title={t("legend_online_title")} desc={t("legend_online_desc")} />
               <ItemRow icon="📊" title={t("legend_conf_icon_title")} desc={t("legend_conf_icon_desc")} />
               <ItemRow icon={<span style={{fontSize:9*z,padding:"2px 5px",borderRadius:4,background:"rgba(245,158,11,0.12)",color:"#f59e0b",fontWeight:800}}>P</span>} title={t("legend_prov_title")} desc={t("legend_prov_desc")} />

@@ -154,6 +154,49 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state}
             </div>
           </Sec>
 
+          {/* ── Rating Trajectory Overlay ─────────────────────────────── */}
+          {(() => {
+            const histKey = format === "singles" ? "ratingHistorySingles" : "ratingHistoryDoubles";
+            const h1 = p1?.[histKey] || [];
+            const h2 = p2?.[histKey] || [];
+            if (h1.length < 2 && h2.length < 2) return null;
+            // Align both histories to the same scale
+            const allVals = [...h1, ...h2];
+            const minV = Math.min(...allVals) - 0.1;
+            const maxV = Math.max(...allVals) + 0.1;
+            const W = 300, H = 80;
+            const toX = (i, len) => Math.round((i / Math.max(len - 1, 1)) * W);
+            const toY = (v) => Math.round(H - ((v - minV) / (maxV - minV)) * H);
+            const makePath = (hist, color) => {
+              if (hist.length < 2) return null;
+              const d = hist.map((v, i) => `${i===0?"M":"L"}${toX(i,hist.length)},${toY(v)}`).join(" ");
+              return <path d={d} stroke={color} strokeWidth="2" fill="none" strokeLinejoin="round"/>;
+            };
+            return (
+              <Sec title={t("rating_history_sec")||"Rating Trajectory"} theme={theme}>
+                <div style={{fontSize:11*z,color:theme.sub,marginBottom:8*z}}>
+                  {t("overview_doubles")||format} {t("rating_history_sec")||"trend overlay"}
+                </div>
+                <div style={{display:"flex",gap:12*z,marginBottom:8*z,fontSize:11*z}}>
+                  <span style={{color:"#50c878",fontWeight:700}}>— {t1Name}</span>
+                  <span style={{color:"#40a0e0",fontWeight:700}}>— {t2Name}</span>
+                </div>
+                <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block",overflow:"visible"}}>
+                  <rect width={W} height={H} fill={theme.bg} rx="4"/>
+                  {makePath(h1, "#50c878")}
+                  {makePath(h2, "#40a0e0")}
+                  {/* current value dots */}
+                  {h1.length > 0 && <circle cx={W} cy={toY(h1[h1.length-1])} r="4" fill="#50c878"/>}
+                  {h2.length > 0 && <circle cx={W} cy={toY(h2[h2.length-1])} r="4" fill="#40a0e0"/>}
+                </svg>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:10*z,color:theme.sub,marginTop:4*z}}>
+                  <span>{t("spark_start")||"Start"}</span>
+                  <span>{t("spark_now")||"Now"}</span>
+                </div>
+              </Sec>
+            );
+          })()}
+
           <Sec title={`${t("compare")} (${h2h.total})`} theme={theme}>
             {h2h.total===0?<div style={{color:theme.sub,fontSize:13*z,textAlign:"center",padding:"12px 0"}}>{t("no_matches")}</div>:(
               <>

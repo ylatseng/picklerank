@@ -194,9 +194,18 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
               <input style={S.input} type="password" maxLength="4" placeholder={t("pin_placeholder")} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,''))}/>
             </div>
           </div>
-          <div style={{display:"flex", gap:12*z, marginBottom:12*z}}>
-            <div style={{flex:1}}><label style={S.label}>{t("singles_rating")}</label><input style={S.input} type="number" value={singlesRating} onChange={e=>setSinglesRating(e.target.value)} /></div>
-            <div style={{flex:1}}><label style={S.label}>{t("doubles_rating")}</label><input style={S.input} type="number" value={doublesRating} onChange={e=>setDoublesRating(e.target.value)} /></div>
+          <div style={{display:"flex", gap:12*z, marginBottom:4*z}}>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("singles_rating")}</label>
+              <input style={S.input} type="number" value={singlesRating} onChange={e=>setSinglesRating(e.target.value)} />
+            </div>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("doubles_rating")}</label>
+              <input style={S.input} type="number" value={doublesRating} onChange={e=>setDoublesRating(e.target.value)} />
+            </div>
+          </div>
+          <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z, textAlign:"center"}}>
+            {t("rating_skip_hint")||"Skip if unsure — defaults to 3.000"}
           </div>
           
           <div style={{display: "flex", gap: 8*z}}>

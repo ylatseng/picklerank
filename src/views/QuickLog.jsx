@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { t, genId, replayAllMatches, calcExpected, DEFAULT_RATING, sortOptionsAlpha, shortName } from '../engine.js';
 
 // ── Quick Score Stepper ───────────────────────────────────────────────────────
@@ -46,15 +46,15 @@ function PlayerPill({ player, selected, color, onToggle, z }) {
 }
 
 // ── Quick Log Modal ───────────────────────────────────────────────────────────
-export default function QuickLog({ players, state, set, theme, onClose, showUndo }) {
+export default function QuickLog({ players, state, set, theme, onClose, showUndo, prefill }) {
   const z = theme.zoom || 1.0;
   const T1_COLOR = theme.accent;
   const T2_COLOR = "#e05050";
 
-  const [mode, setMode]   = useState("custom"); // "custom" | "session"
-  const [type, setType]   = useState("singles");   // "singles" | "doubles"
-  const [t1ids, setT1ids] = useState([]);
-  const [t2ids, setT2ids] = useState([]);
+  const [mode, setMode]   = useState(prefill?.mode || "custom"); // "custom" | "session"
+  const [type, setType]   = useState(prefill?.type || "singles");   // "singles" | "doubles"
+  const [t1ids, setT1ids] = useState(prefill?.t1ids || []);
+  const [t2ids, setT2ids] = useState(prefill?.t2ids || []);
   const [scoreA, setA]    = useState(11);
   const [scoreB, setB]    = useState(0);
 
@@ -68,6 +68,7 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
   const [sessionScores, setSessionScores] = useState([{a:11,b:0},{a:11,b:0},{a:11,b:0}]);
   const [err, setErr]     = useState("");
   const [done, setDone]   = useState(false);
+  const doneTimerRef      = useRef(null); // prevents race when logging two matches quickly
 
   // Sorted player list — starred first
   const sortedPlayers = useMemo(() =>
@@ -100,6 +101,23 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
     _setTodayIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
+  // Auto-clear error when player selections change — so the error disappears
+  // the moment the user fixes the issue without needing to tap Log again
+  React.useEffect(() => {
+    if (!err) return;
+    const need = type === "singles" ? 1 : 2;
+    const t1ok = t1ids.length >= need;
+    const t2ok = t2ids.length >= need;
+    const noOverlap = !t1ids.some(id => t2ids.includes(id));
+    if (t1ok && t2ok && noOverlap) setErr("");
+  }, [t1ids, t2ids, type]);
+
+  // Auto-clear session error when all 4 slots filled
+  React.useEffect(() => {
+    if (!err) return;
+    if (sessionIds.filter(Boolean).length === 4 && new Set(sessionIds.filter(Boolean)).size === 4) setErr("");
+  }, [sessionIds]);
+
   const togglePlayer = useCallback((id, slot) => {
     // slot = "t1" | "t2"
     const limit = type === "singles" ? 1 : 2;
@@ -128,12 +146,12 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
   const handleSessionLog = () => {
     setErr("");
     const filled = sessionIds.filter(id => id);
-    if (filled.length < 4) return setErr("Select 4 players");
-    if (new Set(sessionIds).size < 4) return setErr("All 4 players must be different");
+    if (filled.length < 4) return setErr((t("err_select_4")||"Select 4 players"));
+    if (new Set(sessionIds).size < 4) return setErr((t("err_duplicate")||"All 4 players must be different"));
     // Validate all 3 scores
     for (let i = 0; i < 3; i++) {
       const {a, b} = sessionScores[i];
-      if (a === b) return setErr(`Match ${i+1}: scores can't be tied`);
+      if (a === b) return setErr(`${t('round')||'Match'} ${i+1}: ${t('err_valid_scores')||"scores can't be tied"}`);
     }
     const now = new Date();
     const matchesToLog = RR_MATCHUPS.map((mu, i) => {
@@ -148,17 +166,22 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
     });
     set(s => ({ ...s, matches: [...(s.matches || []), ...matchesToLog] }));
     showUndo?.(matchesToLog.map(m => m.id), t("undo_session")||"Session logged");
+    // Reset session state for next log — stay on screen
+    setSessionIds(["","","",""]);
+    setSessionScores([{a:11,b:0},{a:11,b:0},{a:11,b:0}]);
+    setErr("");
     setDone(true);
-    setTimeout(onClose, 1400);
+    if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
+    doneTimerRef.current = setTimeout(() => setDone(false), 2000);
   };
 
   const handleLog = () => {
     setErr("");
     const need = type === "singles" ? 1 : 2;
-    if (t1ids.length < need) return setErr(type === "singles" ? "Select 1 player per side" : "Select 2 players per side");
-    if (t2ids.length < need) return setErr(type === "singles" ? "Select 1 player per side" : "Select 2 players per side");
-    if (t1ids.some(id => t2ids.includes(id))) return setErr("Same player on both teams");
-    if (scoreA === scoreB) return setErr("Scores can't be tied");
+    if (t1ids.length < need) return setErr(type === "singles" ? (t("err_select_singles")||"Select 1 player per side") : (t("err_select_doubles")||"Select 2 players per side"));
+    if (t2ids.length < need) return setErr(type === "singles" ? (t("err_select_singles")||"Select 1 player per side") : (t("err_select_doubles")||"Select 2 players per side"));
+    if (t1ids.some(id => t2ids.includes(id))) return setErr((t("err_same_player")||"Same player on both teams"));
+    if (scoreA === scoreB) return setErr((t("err_valid_scores")||"Scores can't be tied"));
     if (scoreA < 0 || scoreB < 0) return setErr("Scores can't be negative");
 
     const winnerTeam = scoreA > scoreB ? 0 : 1;
@@ -182,7 +205,8 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
     // Reset custom form for next log — stay on screen
     setT1ids([]); setT2ids([]); setA(11); setB(0); setErr("");
     setDone(true);
-    setTimeout(() => setDone(false), 2000);
+    if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
+    doneTimerRef.current = setTimeout(() => setDone(false), 2000);
   };
 
   const T1_NEED = type === "singles" ? 1 : 2;
@@ -213,11 +237,13 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
           <button onClick={onClose} style={{background:"transparent", border:"none", fontSize:20*z, cursor:"pointer", color:theme.sub, padding:`${4*z}px ${8*z}px`}}>✕</button>
         </div>
 
-        {done ? (
-          <div style={{textAlign:"center", padding:`${24*z}px`, fontSize:18*z, fontWeight:800, color:"#50c878"}}>
-            ✅ {t("match_logged_ok")||"Match logged!"}
+        {done && (
+          <div style={{textAlign:"center", padding:`${10*z}px`, fontSize:14*z, fontWeight:700, color:"#50c878",
+            background:"rgba(80,200,120,0.12)", borderRadius:8*z, marginBottom:12*z}}>
+            ✅ {t("match_logged_ok")||"Match logged!"} · {t("undo")||"Undo"} below
           </div>
-        ) : (<>
+        )}
+        {(<>
 
           {/* Custom / Session mode tabs */}
           <div style={{display:"flex", gap:8*z, marginBottom:14*z}}>

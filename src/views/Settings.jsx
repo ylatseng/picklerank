@@ -4,6 +4,76 @@ import { makeS } from '../styles.js';
 import { Sec, Err, ConfirmInline, Sel, PinManager } from '../components/Shared.jsx';
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../engine";
+import { runAllTests } from '../tests/runner.js';
+
+// ── Built-in Test Runner — proper component so useState is valid ──────────────
+function TestRunner({ theme }) {
+  const z = theme.zoom || 1.0;
+  const S = makeS(theme);
+  const [testResult, setTestResult] = useState(null);
+  const [running, setRunning] = useState(false);
+  const run = async () => {
+    setRunning(true);
+    setTestResult(null);
+    await new Promise(r => setTimeout(r, 50));
+    const result = runAllTests();
+    setTestResult(result);
+    setRunning(false);
+  };
+  const suiteMap = testResult ? testResult.results.reduce((acc, r) => {
+    if (!acc[r.suite]) acc[r.suite] = { pass: 0, fail: 0 };
+    acc[r.suite][r.pass ? "pass" : "fail"]++;
+    return acc;
+  }, {}) : {};
+
+  return (
+    <div style={{ marginTop: 14*z, borderTop: `1px solid ${theme.border}`, paddingTop: 12*z }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: testResult ? 10*z : 0 }}>
+        <div style={{ fontSize: 11*z, color: theme.sub }}>🧪 Built-in Test Suite</div>
+        <button onClick={run} disabled={running} style={{
+          ...S.btnSecondary, margin: 0, padding: `${5*z}px ${12*z}px`, fontSize: 11*z, opacity: running ? 0.6 : 1
+        }}>
+          {running ? "Running…" : "Run Tests"}
+        </button>
+      </div>
+      {testResult && (<>
+        <div style={{
+          padding: `${8*z}px ${10*z}px`, borderRadius: 8*z, marginBottom: 8*z,
+          background: testResult.failed.length === 0 ? "rgba(80,200,120,0.12)" : "rgba(224,80,80,0.1)",
+          border: `1px solid ${testResult.failed.length === 0 ? "#50c87844" : "#e0505044"}`,
+          fontSize: 12*z, fontWeight: 700,
+          color: testResult.failed.length === 0 ? "#50c878" : "#e05050"
+        }}>
+          {testResult.failed.length === 0
+            ? `✅ All ${testResult.total} tests passed`
+            : `❌ ${testResult.failed.length} failed / ${testResult.total} total`}
+        </div>
+        {testResult.failed.length > 0 && (
+          <div style={{ display:"flex", flexDirection:"column", gap: 4*z, marginBottom: 8*z }}>
+            {testResult.failed.map((f, i) => (
+              <div key={i} style={{ fontSize: 10*z, color: "#e05050", background: "rgba(224,80,80,0.06)", borderRadius: 6*z, padding: `${4*z}px ${8*z}px` }}>
+                <strong>[{f.suite}]</strong> {f.desc}
+                {f.detail && <div style={{ color: theme.sub, marginTop: 2*z }}>{f.detail}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display:"flex", flexWrap:"wrap", gap: 4*z }}>
+          {Object.entries(suiteMap).map(([s, { pass, fail }]) => (
+            <div key={s} style={{
+              fontSize: 9*z, fontWeight: 700, borderRadius: 4*z, padding: `${2*z}px ${6*z}px`,
+              background: fail > 0 ? "rgba(224,80,80,0.1)" : "rgba(80,200,120,0.1)",
+              color: fail > 0 ? "#e05050" : "#50c878",
+              border: `1px solid ${fail > 0 ? "#e0505044" : "#50c87844"}`
+            }}>
+              {fail > 0 ? "❌" : "✅"} {s} {pass}/{pass+fail}
+            </div>
+          ))}
+        </div>
+      </>)}
+    </div>
+  );
+}
 
 // Collapsible section for Settings — starts open, user can collapse
 function CSec({ title, theme, defaultOpen = true, children }) {
@@ -531,6 +601,9 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
             }
           </div>
         )}
+
+        {/* ── Built-in Test Runner (admin only) ── */}
+        {user.isAdmin && <TestRunner theme={theme} />}
       </CSec>
     </div>
   );

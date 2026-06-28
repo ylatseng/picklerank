@@ -111,10 +111,14 @@ export function MatchEloBreakdown({match, players, theme}) {
 }
 
 // ─── Match Cards ──────────────────────────────────────────────────────────────
-export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, onDelete, highlightPlayerId, lang}) {
+export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, onDelete, highlightPlayerId, lang, onReplay, myPlayerId, onSaveNote}) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
   const [expanded, setExpanded] = useState(false);
+  const [showNote, setShowNote] = useState(false);
+  const [noteText, setNoteText] = useState(() => m.playerNotes?.[myPlayerId] || "");
+  
+  const isParticipant = myPlayerId && m.teams?.flat()?.includes(myPlayerId);
   
   const getName=id=>players.find(p=>p.id===id)?.name??"?";
   const t1=m.teamNames?.t1||m.teams?.[0]?.map(getName).join(" & ")||"TBD";
@@ -193,10 +197,37 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
             <button style={{...S.iconBtn, background: expanded ? theme.bg : "transparent", borderRadius: 6*z}} onClick={()=>setExpanded(!expanded)} title="ELO Stats">📊</button>
           )}
           {onEdit && <button style={S.iconBtn} onClick={()=>onEdit(m)} title="Edit">✏️</button>}
+          {onReplay && <button style={S.iconBtn} onClick={onReplay} title="Rematch">🔄</button>}
           {onShare && <button style={S.iconBtn} onClick={()=>onShare(m)}>📤</button>}
+          {(isParticipant || isAdmin) && onSaveNote && (
+            <button style={{...S.iconBtn, color: noteText ? theme.accent : theme.sub}} onClick={()=>setShowNote(v=>!v)} title="My Note">✍️</button>
+          )}
           {isAdmin && onDelete && <button style={S.iconBtn} onClick={()=>onDelete(m.id)}>🗑️</button>}
         </div>
       </div>
+      {/* Personal note */}
+      {showNote && (
+        <div style={{marginTop:8*z, display:"flex", gap:6*z, alignItems:"flex-start"}}>
+          <textarea
+            value={noteText}
+            onChange={e=>setNoteText(e.target.value)}
+            placeholder="Add your personal note..."
+            style={{flex:1, fontSize:11*z, padding:`${6*z}px`, borderRadius:6*z,
+              border:`1px solid ${theme.accent}66`, background:theme.bg, color:theme.text,
+              resize:"none", height:52*z, outline:"none"}}
+          />
+          <button onClick={()=>{ onSaveNote(m.id, myPlayerId, noteText); setShowNote(false); }}
+            style={{...S.btnPrimary, padding:`${6*z}px ${10*z}px`, marginTop:0, fontSize:11*z}}>
+            {t("save")||"Save"}
+          </button>
+        </div>
+      )}
+      {/* Display saved note if not editing */}
+      {!showNote && noteText && (
+        <div style={{fontSize:11*z, color:theme.accent, marginTop:6*z, fontStyle:"italic", display:"flex", gap:4*z}}>
+          <span>✍️</span><span>{noteText}</span>
+        </div>
+      )}
       {expanded && <MatchEloBreakdown match={m} players={players} theme={theme} />}
     </div>
   );
