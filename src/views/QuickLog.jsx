@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { t, genId, replayAllMatches, calcExpected, DEFAULT_RATING, sortOptionsAlpha, shortName } from '../engine.js';
+import { t, genId, calcExpected, DEFAULT_RATING, sortOptionsAlpha, shortName } from '../engine.js';
 
 // ── Quick Score Stepper ───────────────────────────────────────────────────────
 function ScoreStepper({ value, onChange, color, label, z }) {
@@ -76,7 +76,7 @@ function QuickLogHint({ theme }) {
 }
 
 // ── Quick Log Modal ───────────────────────────────────────────────────────────
-export default function QuickLog({ players, state, set, theme, onClose, showUndo, prefill }) {
+export default function QuickLog({ players, state, set, theme, onClose, showUndo, prefill, user }) {
   const z = theme.zoom || 1.0;
   const T1_COLOR = theme.accent;
   const T2_COLOR = "#e05050";
@@ -228,8 +228,6 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
       loggedBy: state.players ? (user?.myPlayerId || "quick") : "quick"
     };
     const newMatchArray = [...(state.matches || []), match];
-    const { derivedMatches } = replayAllMatches(state.players, newMatchArray);
-    const logged = derivedMatches.find(m => m.id === match.id);
     set(s => ({ ...s, matches: newMatchArray }));
     showUndo?.([match.id], t("undo_match")||"Match logged");
     // Reset custom form for next log — stay on screen
@@ -237,6 +235,11 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
     setDone(true);
     if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
     doneTimerRef.current = setTimeout(() => setDone(false), 2000);
+    // Scroll modal to top so user sees the ✅ banner and can start next match
+    setTimeout(() => {
+      const modal = document.querySelector("[data-ql-modal]");
+      if (modal) modal.scrollTop = 0;
+    }, 30);
   };
 
   const T1_NEED = type === "singles" ? 1 : 2;
@@ -253,7 +256,7 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
       background:"rgba(0,0,0,0.7)", display:"flex", flexDirection:"column",
       justifyContent:"flex-end"
     }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{
+      <div data-ql-modal style={{
         background:theme.card, borderRadius:`${20*z}px ${20*z}px 0 0`,
         padding:`${16*z}px ${14*z}px calc(${20*z}px + env(safe-area-inset-bottom, 0px))`,
         maxHeight:"92vh", overflowY:"auto"

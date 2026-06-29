@@ -358,7 +358,7 @@ export default function Profile({player:p,matches,players,nav,set,theme,isAdmin,
 
       {/* Admin Role Grant — only the global admin can promote/demote players */}
       {isAdmin && (
-        <Sec title="🔑 Admin Role" theme={theme}>
+        <Sec title={t("admin_role_title")||"🔑 Admin Role"} theme={theme}>
           <div style={{fontSize:12*z, color:theme.sub, marginBottom:12*z}}>
             {t("admin_role_desc")||"When enabled, this player will receive full admin access automatically after verifying their PIN."}
           </div>

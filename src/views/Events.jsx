@@ -322,7 +322,9 @@ export default function Events({ state, set, theme, isAdmin, user, nav, onStartS
         }}>
           <div>
             <div style={{fontSize:12*z, fontWeight:700, color:theme.accent}}>🔔 Event Reminders</div>
-            <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>Get notified 1 hour before each session</div>
+            <div style={{fontSize:11*z, color:theme.sub, marginTop:2*z}}>
+              {t("notif_own_device_short")||"Enable on your own phone to get notified 1 hour before each session"}
+            </div>
           </div>
           <button onClick={requestNotifPermission} style={{
             background: theme.accent, border: "none", borderRadius: 8*z,
@@ -335,14 +337,12 @@ export default function Events({ state, set, theme, isAdmin, user, nav, onStartS
         <div style={{
           display:"flex", alignItems:"center", justifyContent:"space-between",
           background:"rgba(80,200,120,0.1)", border:"1px solid rgba(80,200,120,0.3)",
-          borderRadius:8*z, padding:`${8*z}px ${12*z}px`, marginBottom:8*z
+          borderRadius:8*z, padding:`${8*z}px ${12*z}px`, marginBottom:4*z
         }}>
           <div style={{fontSize:11*z, color:"#50c878", fontWeight:600}}>
             🔔 {t("reminders_on")||"Reminders on"}
           </div>
           <button onClick={async () => {
-            // Can't revoke Notification permission via JS (browser security).
-            // Store user preference to suppress notification scheduling.
             try { localStorage.setItem("ql_notif_suppressed","1"); } catch {}
             setNotifPerm("suppressed");
           }} style={{
@@ -352,6 +352,18 @@ export default function Events({ state, set, theme, isAdmin, user, nav, onStartS
           }}>
             {t("reminders_off")||"Turn off"}
           </button>
+        </div>
+      )}
+      {/* "Your own phone" hint — shown when reminders are on */}
+      {notifPerm === 'granted' && (
+        <div style={{
+          background: theme.accent + "0d",
+          border: `1px solid ${theme.accent}33`,
+          borderRadius: 8*z, padding: `${8*z}px ${12*z}px`,
+          marginBottom: 8*z, fontSize: 11*z, color: theme.sub, lineHeight: 1.5
+        }}>
+          💡 <strong style={{color:theme.text}}>Each player needs to enable this on their own phone.</strong>
+          {" "}{t("notif_own_device_hint")||"Reminders only fire on the device where you tap Enable. Tap the bell icon on your phone so you get notified — not someone else's device."}
         </div>
       )}
       {notifPerm === 'suppressed' && (

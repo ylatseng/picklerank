@@ -82,7 +82,8 @@ import { Sel, Err } from './components/Shared.jsx';
 // Engine & Components
 import {
   APP_MODES, APP_ACCENTS, APP_FONTS, setLang, t, replayAllMatches, computeStats, APP_VERSION, 
-  loadState, saveState, blankState, pingPresence, clearPresence, genId, DEFAULT_RATING
+  loadState, saveState, blankState, pingPresence, clearPresence, genId, DEFAULT_RATING,
+  syncPendingMatches, readPendingMatches, queueMatchOffline, readCache
 } from './engine.js';
 
 import { Header, BottomNav } from './components/Navigation.jsx';
@@ -416,12 +417,27 @@ export default function App() {
 
   // Offline indicator — tracks network connectivity
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(() => readPendingMatches().length);
+
   useEffect(() => {
-    const goOnline = () => setIsOnline(true);
+    const goOnline = async () => {
+      setIsOnline(true);
+      // Drain the offline queue when connectivity is restored
+      const synced = await syncPendingMatches();
+      if (synced > 0) {
+        // Reload state from Firestore to get merged data
+        const cloudData = await loadState();
+        setState(prev => ({ ...prev, ...(cloudData || {}) }));
+        setPendingCount(0);
+      }
+    };
     const goOffline = () => setIsOnline(false);
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
-    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
   }, []);
 
   // 1. Local User Settings (Isolated to browser)
@@ -473,10 +489,20 @@ export default function App() {
       if (isFetching) return;
       isFetching = true;
       try {
+        // On initial load: show cache immediately so UI appears instantly,
+        // then silently update from Firestore in the background.
+        if (isInitialLoad) {
+          const cached = readCache(); // synchronous localStorage read — instant
+          if (cached) {
+            setState(prev => ({ ...prev, ...cached, activeView: "dashboard" }));
+            setIsLoading(false); // show UI immediately with cached data
+          }
+        }
+        // Fetch fresh data from Firestore (background on cache hit, blocking otherwise)
         const cloudData = await loadState();
         setState(prev => {
-          let s = { ...prev, ...(cloudData || blankState()) };
-          if (isInitialLoad) s.activeView = "dashboard";
+          const s = { ...prev, ...(cloudData || blankState()) };
+          if (isInitialLoad && !s.activeView) s.activeView = "dashboard";
           else if (prev.activeView) s.activeView = prev.activeView;
           return s;
         });
@@ -542,10 +568,22 @@ export default function App() {
   const setShared = useCallback((updater) => {
     setState(prev => {
       const next = typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
-      if (!isLoading) saveState(next); 
+      if (!isLoading) {
+        if (isOnline) {
+          saveState(next);
+        } else {
+          // Offline: find any new matches that were added and queue them
+          const prevIds = new Set((prev.matches || []).map(m => m.id));
+          const newMatches = (next.matches || []).filter(m => !prevIds.has(m.id));
+          newMatches.forEach(m => queueMatchOffline(m));
+          if (newMatches.length > 0) setPendingCount(c => c + newMatches.length);
+          // Still save non-match state to the local cache
+          saveState(next); // saveState now caches to localStorage when offline
+        }
+      }
       return next;
     });
-  }, [isLoading]);
+  }, [isLoading, isOnline]);
 
   // Undo removed — use History tab to edit or delete matches
 
@@ -813,6 +851,7 @@ export default function App() {
                 theme={theme}
                 showUndo={showUndo}
                 prefill={quickLogPrefill}
+                user={user}
                 onClose={() => { setShowQuickLog(false); setQuickLogPrefill(null); }}
               />
             )}
@@ -822,11 +861,32 @@ export default function App() {
               <div style={{
                 position:"fixed", top:0, left:0, right:0,
                 background:"#e05050", color:"#fff",
-                padding:"6px 16px", textAlign:"center",
+                padding:"8px 16px", textAlign:"center",
                 fontSize:12, fontWeight:700, zIndex:2000,
                 display:"flex", alignItems:"center", justifyContent:"center", gap:6
               }}>
-                📶 Offline — changes saved locally, will sync when reconnected
+                <span>📶</span>
+                <span>
+                  {t("offline_banner")||"Offline — you can still log matches. They'll sync when reconnected."}
+                  {pendingCount > 0 && (
+                    <span style={{
+                      marginLeft:8, background:"rgba(255,255,255,0.25)",
+                      borderRadius:10, padding:"1px 8px"
+                    }}>
+                      {pendingCount} {t("pending_sync")||"pending sync"}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+            {isOnline && pendingCount > 0 && (
+              <div style={{
+                position:"fixed", top:0, left:0, right:0,
+                background:"#50c878", color:"#fff",
+                padding:"6px 16px", textAlign:"center",
+                fontSize:12, fontWeight:700, zIndex:2000
+              }}>
+                ✅ {t("sync_complete")||"Back online — syncing your matches..."}
               </div>
             )}
 
