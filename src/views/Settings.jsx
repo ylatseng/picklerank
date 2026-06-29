@@ -247,6 +247,10 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
     setImportErr(""); setImportOk(false);
     const file = e.target.files[0]; 
     if (!file) return;
+    if (!navigator.onLine) {
+      setImportErr("Import requires an internet connection. Please connect and try again.");
+      return;
+    }
     
     const reader = new FileReader();
     reader.onload = async (ev) => {

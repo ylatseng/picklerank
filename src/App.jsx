@@ -417,21 +417,47 @@ export default function App() {
 
   // Offline indicator — tracks network connectivity
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const [pendingCount, setPendingCount] = useState(() => readPendingMatches().length);
+  const [hasOfflineChanges, setHasOfflineChanges] = useState(
+    () => readPendingMatches().length > 0
+  );
+  const hasOfflineChangesRef = React.useRef(hasOfflineChanges);
+  const [offlineBannerDismissed, setOfflineBannerDismissed] = useState(false);
+
+  // Keep ref in sync with state so the goOnline closure always reads current value
+  React.useEffect(() => {
+    hasOfflineChangesRef.current = hasOfflineChanges;
+  }, [hasOfflineChanges]);
+  const [syncStatus, setSyncStatus] = useState(null); // null | "syncing" | "done" | "error"
 
   useEffect(() => {
     const goOnline = async () => {
       setIsOnline(true);
-      // Drain the offline queue when connectivity is restored
-      const synced = await syncPendingMatches();
-      if (synced > 0) {
-        // Reload state from Firestore to get merged data
-        const cloudData = await loadState();
-        setState(prev => ({ ...prev, ...(cloudData || {}) }));
-        setPendingCount(0);
+      setOfflineBannerDismissed(false);
+      // Read ref (not closed-over state) to get the current value at call time
+      const hasPending = hasOfflineChangesRef.current || readPendingMatches().length > 0;
+      if (!hasPending) return;
+      setSyncStatus("syncing");
+      try {
+        // Step 1: merge queued offline matches into Firestore
+        await syncPendingMatches();
+        // Step 2: push full state (players, events, settings) to Firestore.
+        // Get current state via setState callback to avoid stale closure.
+        await new Promise((resolve) => {
+          setState(currentState => {
+            saveState(currentState).then(resolve).catch(resolve);
+            return currentState; // no state change, just reading
+          });
+        });
+        setHasOfflineChanges(false);
+        setSyncStatus("done");
+        setTimeout(() => setSyncStatus(null), 4000);
+      } catch (e) {
+        console.error("Sync error:", e);
+        setSyncStatus("error");
+        setTimeout(() => setSyncStatus(null), 5000);
       }
     };
-    const goOffline = () => setIsOnline(false);
+    const goOffline = () => { setIsOnline(false); setSyncStatus(null); setOfflineBannerDismissed(false); };
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
     return () => {
@@ -489,23 +515,40 @@ export default function App() {
       if (isFetching) return;
       isFetching = true;
       try {
-        // On initial load: show cache immediately so UI appears instantly,
-        // then silently update from Firestore in the background.
+        // Step 1: always show cache immediately if available (instant, synchronous)
         if (isInitialLoad) {
-          const cached = readCache(); // synchronous localStorage read — instant
+          const cached = readCache();
           if (cached) {
             setState(prev => ({ ...prev, ...cached, activeView: "dashboard" }));
-            setIsLoading(false); // show UI immediately with cached data
+            setIsLoading(false); // unblock UI right away
+
+            // Step 2a: if offline, we're done — cache is all we have
+            if (!navigator.onLine) {
+              setIsLoading(false);
+              isFetching = false;
+              return;
+            }
+          } else if (!navigator.onLine) {
+            // Offline and no cache at all — show the "first load needs internet" message
+            // isLoading stays true briefly then clears so user sees the message
+            setIsLoading(false);
+            isFetching = false;
+            return;
           }
         }
-        // Fetch fresh data from Firestore (background on cache hit, blocking otherwise)
+
+        // Step 2b: online — fetch fresh from Firestore (or first-ever load with no cache)
         const cloudData = await loadState();
-        setState(prev => {
-          const s = { ...prev, ...(cloudData || blankState()) };
-          if (isInitialLoad && !s.activeView) s.activeView = "dashboard";
-          else if (prev.activeView) s.activeView = prev.activeView;
-          return s;
-        });
+        // Only apply Firestore data if it's real data (not blankState wiping a good cache)
+        if (cloudData && cloudData.players !== undefined) {
+          setState(prev => {
+            const s = { ...prev, ...cloudData };
+            // Preserve navigation state — don't reset to dashboard mid-session
+            if (isInitialLoad && !s.activeView) s.activeView = "dashboard";
+            else if (prev.activeView) s.activeView = prev.activeView;
+            return s;
+          });
+        }
       } catch (error) {
         console.error("Firebase Error:", error);
       } finally {
@@ -514,10 +557,10 @@ export default function App() {
       }
     };
     fetchCloudData(true);
-    const doRefresh = () => fetchCloudData(false);
+    const doRefresh = () => { if (navigator.onLine) fetchCloudData(false); };
     const handleVisibilityChange = () => { if (document.visibilityState === 'visible') doRefresh(); };
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", doRefresh); 
+    window.addEventListener("focus", doRefresh);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", doRefresh);
@@ -565,25 +608,38 @@ export default function App() {
     }));
   }, [isCurrentlyVerified, user.myPlayerId, isLoading]);
 
+  // pendingSaveRef holds the next state to save — used to call saveState OUTSIDE
+  // the setState updater (React anti-pattern to call async functions inside updaters).
+  const pendingSaveRef = React.useRef(null);
+
   const setShared = useCallback((updater) => {
     setState(prev => {
       const next = typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
       if (!isLoading) {
-        if (isOnline) {
-          saveState(next);
-        } else {
-          // Offline: find any new matches that were added and queue them
+        if (!isOnline) {
+          // Offline: queue new matches for sync, cache everything
           const prevIds = new Set((prev.matches || []).map(m => m.id));
-          const newMatches = (next.matches || []).filter(m => !prevIds.has(m.id));
+          const alreadyQueued = new Set(readPendingMatches().map(m => m.id));
+          const newMatches = (next.matches || []).filter(
+            m => !prevIds.has(m.id) && !alreadyQueued.has(m.id)
+          );
           newMatches.forEach(m => queueMatchOffline(m));
-          if (newMatches.length > 0) setPendingCount(c => c + newMatches.length);
-          // Still save non-match state to the local cache
-          saveState(next); // saveState now caches to localStorage when offline
+          setHasOfflineChanges(true);
         }
+        // Queue state for saving — actual save happens in useEffect below
+        pendingSaveRef.current = next;
       }
       return next;
     });
   }, [isLoading, isOnline]);
+
+  // Save state outside setState updater — avoids async side-effects in render
+  React.useEffect(() => {
+    if (pendingSaveRef.current && !isLoading) {
+      saveState(pendingSaveRef.current);
+      pendingSaveRef.current = null;
+    }
+  });
 
   // Undo removed — use History tab to edit or delete matches
 
@@ -615,6 +671,7 @@ export default function App() {
     // Skipping pings in background prevents unnecessary radio wake-ups on mobile.
     const ping = () => {
       if (document.visibilityState === "hidden") return;
+      if (!navigator.onLine) return; // skip presence ping when offline — avoids silent Firestore error
       pingPresence(pid);
       setState(prev => ({ ...prev, presence: { ...(prev.presence || {}), [pid]: Date.now() } }));
     };
@@ -702,9 +759,23 @@ export default function App() {
   }, [activeView]);
 
   if (isLoading) {
+    const hasCache = !!readCache();
+    const offline = !navigator.onLine;
     return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#121212", color: "#50c878", fontSize: "20px", fontWeight: "bold" }}>
-        Loading PickleRank... 🥒
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "100vh", background: "#121212", color: "#50c878", fontSize: "20px", fontWeight: "bold", gap: 16, padding: 24 }}>
+        <div>PickleRank 🥒</div>
+        {offline && !hasCache ? (
+          <div style={{ fontSize: 14, color: "#e05050", fontWeight: 700, textAlign: "center", maxWidth: 320 }}>
+            📶 You're offline and no local data is available yet.<br/>
+            <span style={{ fontSize: 12, color: "#888", fontWeight: 400, display: "block", marginTop: 8 }}>
+              Please connect to the internet to load your data for the first time. After that, the app will work offline.
+            </span>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: "#888", fontWeight: 400 }}>
+            {offline ? "📶 Offline — loading from local cache..." : "Loading..."}
+          </div>
+        )}
       </div>
     );
   }
@@ -856,37 +927,63 @@ export default function App() {
               />
             )}
 
-            {/* ── Offline banner — shows when device loses network ── */}
-            {!isOnline && (
+            {/* ── Offline banner ── */}
+            {!isOnline && !offlineBannerDismissed && (
               <div style={{
-                position:"fixed", top:0, left:0, right:0,
+                position:"fixed", top:0, left:0, right:0, zIndex:2000,
                 background:"#e05050", color:"#fff",
-                padding:"8px 16px", textAlign:"center",
-                fontSize:12, fontWeight:700, zIndex:2000,
-                display:"flex", alignItems:"center", justifyContent:"center", gap:6
+                padding:"6px 12px",
+                fontSize:12, fontWeight:700,
+                display:"flex", alignItems:"center", justifyContent:"space-between", gap:6
               }}>
-                <span>📶</span>
-                <span>
-                  {t("offline_banner")||"Offline — you can still log matches. They'll sync when reconnected."}
-                  {pendingCount > 0 && (
-                    <span style={{
-                      marginLeft:8, background:"rgba(255,255,255,0.25)",
-                      borderRadius:10, padding:"1px 8px"
-                    }}>
-                      {pendingCount} {t("pending_sync")||"pending sync"}
-                    </span>
-                  )}
+                <span style={{display:"flex", alignItems:"center", gap:6, flex:1, minWidth:0}}>
+                  <span style={{flexShrink:0}}>📶</span>
+                  <span style={{overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                    {hasOfflineChanges
+                      ? (t("offline_changes")||"Offline — changes saved locally, will sync on reconnect")
+                      : (t("offline_banner")||"Offline — app works, data syncs when reconnected")}
+                  </span>
                 </span>
+                <button
+                  onClick={() => setOfflineBannerDismissed(true)}
+                  style={{background:"rgba(255,255,255,0.25)", border:"none", borderRadius:4,
+                    color:"#fff", cursor:"pointer", fontSize:13, fontWeight:700,
+                    padding:"1px 8px", flexShrink:0, lineHeight:1.4}}
+                >
+                  ✕
+                </button>
               </div>
             )}
-            {isOnline && pendingCount > 0 && (
+
+            {/* ── Sync status banners (online only) ── */}
+            {isOnline && syncStatus === "syncing" && (
               <div style={{
-                position:"fixed", top:0, left:0, right:0,
-                background:"#50c878", color:"#fff",
-                padding:"6px 16px", textAlign:"center",
-                fontSize:12, fontWeight:700, zIndex:2000
+                position:"fixed", top:0, left:0, right:0, zIndex:2000,
+                background:"#f0a830", color:"#fff",
+                padding:"8px 16px", textAlign:"center",
+                fontSize:12, fontWeight:700
               }}>
-                ✅ {t("sync_complete")||"Back online — syncing your matches..."}
+                ⏳ {t("syncing_matches")||"Syncing your offline matches to the server..."}
+              </div>
+            )}
+            {isOnline && syncStatus === "done" && (
+              <div style={{
+                position:"fixed", top:0, left:0, right:0, zIndex:2000,
+                background:"#50c878", color:"#fff",
+                padding:"8px 16px", textAlign:"center",
+                fontSize:12, fontWeight:700
+              }}>
+                ✅ {t("sync_done")||"All matches synced successfully!"}
+              </div>
+            )}
+            {isOnline && syncStatus === "error" && (
+              <div style={{
+                position:"fixed", top:0, left:0, right:0, zIndex:2000,
+                background:"#e05050", color:"#fff",
+                padding:"8px 16px", textAlign:"center",
+                fontSize:12, fontWeight:700
+              }}>
+                ❌ {t("sync_error")||"Sync failed — your matches are still saved locally. Will retry when reconnected."}
               </div>
             )}
 
