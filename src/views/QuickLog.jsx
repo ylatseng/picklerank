@@ -3,26 +3,29 @@ import { t, genId, calcExpected, DEFAULT_RATING, sortOptionsAlpha, shortName } f
 
 // ── Quick Score Stepper ───────────────────────────────────────────────────────
 function ScoreStepper({ value, onChange, color, label, z }) {
+  const bSize = Math.min(54*z, 58); // cap button size
+  const fSize = Math.min(52*z, 56); // cap score font size
+  const btnFont = Math.min(26*z, 28);
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6*z }}>
-      <div style={{ fontSize:10*z, fontWeight:700, color, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:Math.min(6*z,8) }}>
+      <div style={{ fontSize:Math.min(10*z,11), fontWeight:700, color, textTransform:"uppercase", letterSpacing:"0.5px" }}>
         {label}
       </div>
       <button
         onClick={() => onChange(Math.min(30, value + 1))}
-        style={{ width:54*z, height:54*z, borderRadius:"50%", fontSize:26*z, fontWeight:900,
+        style={{ width:bSize, height:bSize, borderRadius:"50%", fontSize:btnFont, fontWeight:900,
           background:color+"22", border:`2px solid ${color}`, color, cursor:"pointer",
-          display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>
+          display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1, flexShrink:0 }}>
         +
       </button>
-      <div style={{ fontSize:52*z, fontWeight:900, color, lineHeight:1, minWidth:60*z, textAlign:"center" }}>
+      <div style={{ fontSize:fSize, fontWeight:900, color, lineHeight:1, minWidth:Math.min(60*z,64), textAlign:"center" }}>
         {value}
       </div>
       <button
         onClick={() => onChange(Math.max(0, value - 1))}
-        style={{ width:54*z, height:54*z, borderRadius:"50%", fontSize:26*z, fontWeight:900,
+        style={{ width:bSize, height:bSize, borderRadius:"50%", fontSize:btnFont, fontWeight:900,
           background:"transparent", border:`2px solid ${color}66`, color:color+"99", cursor:"pointer",
-          display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>
+          display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1, flexShrink:0 }}>
         −
       </button>
     </div>

@@ -324,7 +324,7 @@ export function MatchEditModal({match:m,players,onSave,onClose,theme}) {
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div style={{background:theme.card,border:`1px solid ${theme.border}`,borderRadius:"20px 20px 0 0",padding:"20px 16px 32px",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto"}}>
+      <div style={{background:theme.card,border:`1px solid ${theme.border}`,borderRadius:`${20*(theme?.zoom||z||1)}px ${20*(theme?.zoom||z||1)}px 0 0`,padding:"20px 16px 32px",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16*z}}>
           <div style={{fontWeight:800,fontSize:16*z, color:theme.text}}>{t("edit_match_title")}</div>
           <button style={{...S.iconBtn,fontSize:22*z}} onClick={onClose}>✕</button>
@@ -405,14 +405,11 @@ export function LeaderboardRow({player:p,rank,onClick,theme,format}) {
       <Avatar name={p.name} url={p.avatar} size={36}/>
       <div style={{...S.lbInfo, minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:6*z, minWidth:0}}>
-          <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{smartName(p.name, theme.zoom)}</span>
-          {p.isAdminPlayer && <span title="Admin" style={{fontSize:11*z, lineHeight:1}}>🔑</span>}
-          {streakIcon && <span style={{fontSize:12*z}} title={`${p.streak} Game Streak`}>{streakIcon}{p.streak}</span>}
-          <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background: isProv ? "rgba(245,158,11,0.12)" : "rgba(80,200,120,0.12)", color: isProv ? "#f59e0b" : "#50c878", fontWeight:700}}>
-             {isProv ? "P" : "C"}
-          </span>
+          <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, minWidth:0}}>{smartName(p.name, theme.zoom)}</span>
+          {streakIcon && <span style={{fontSize:11*z, flexShrink:0}} title={`${p.streak} Game Streak`}>{streakIcon}</span>}
+          {p.isAdminPlayer && <span title="Admin" style={{fontSize:10*z, flexShrink:0}}>🔑</span>}
         </div>
-        <div style={{fontSize:11*z,color:theme.sub}}>{gP||0}G · {w||0}W {l||0}L</div>
+        <div style={{fontSize:10*z,color:theme.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{gP||0}G · {w||0}W {l||0}L</div>
       </div>
       <div style={{textAlign:"right", opacity: (gP||0) === 0 ? 0.4 : 1}}>
         <div style={{...S.badge,background:ratingColor(activeRating)}}>{activeRating.toFixed(3)}</div>
@@ -503,7 +500,7 @@ export function SynergyRow({icon, title, pid, pct, color, theme, getName, subTex
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   return (
-    <div style={{...S.lbRow, cursor:"default", padding:"12px 0"}}>
+    <div style={{...S.lbRow, cursor:"default"}}>
       <div style={{fontSize: 24*z, width:30*z, textAlign:"center"}}>{icon}</div>
       <div style={S.lbInfo}>
         <div style={{fontSize: 13*z, fontWeight:600}}>{title}</div>

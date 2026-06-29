@@ -26,11 +26,11 @@ export function makeS(t) {
                   paddingBottom:"env(safe-area-inset-bottom, 0px)" },
     navBtn:     { flex:1, background:"none", border:"none", color:t.sub, cursor:"pointer", padding:`${f(8)}px ${f(2)}px`, display:"flex", flexDirection:"column", alignItems:"center", gap:f(2) },
     navLabel:   { fontSize:f(9), fontWeight:600, letterSpacing:"0.3px" },
-    lbRow:      { display:"flex", alignItems:"center", gap:f(10), padding:`${f(10)}px 0`, borderBottom:`1px solid ${t.border}`, cursor:"pointer" },
+    lbRow:      { display:"flex", alignItems:"center", gap:f(8), padding:`${f(8)}px 0`, borderBottom:`1px solid ${t.border}`, cursor:"pointer", overflow:"hidden", minWidth:0 },
     lbRank:     { fontSize:f(18), minWidth:f(28), textAlign:"center" },
-    lbInfo:     { flex:1 },
-    lbName:     { fontSize:f(14), fontWeight:600, color: t.text },
-    badge:      { borderRadius:f(8), padding:`${f(4)}px ${f(10)}px`, fontSize:f(13), fontWeight:800, color:"#0d0d0f", display:"inline-block", letterSpacing:"-0.3px" },
+    lbInfo:     { flex:1, minWidth:0, overflow:"hidden" },
+    lbName:     { fontSize:f(14), fontWeight:600, color: t.text, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" },
+    badge:      { borderRadius:f(6), padding:`${f(3)}px ${f(7)}px`, fontSize:f(12), fontWeight:800, color:"#0d0d0f", display:"inline-block", letterSpacing:"-0.3px", flexShrink:0 },
     statPill:   { background:t.bg, border:`1px solid ${t.border}`, borderRadius:f(12), padding:`${f(10)}px ${f(12)}px`, display:"flex", flexDirection:"column", alignItems:"center", gap:f(2), flex:"1 1 30%" },
     
     /* ADDED LINE HEIGHTS AND DYNAMIC PADDING BELOW */

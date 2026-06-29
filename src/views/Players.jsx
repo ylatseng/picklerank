@@ -183,7 +183,7 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                    <button style={{...S.btnDanger, padding:"2px 6px", fontSize:10*z, marginTop:0}} onClick={() => setAvatarData(null)}>✕</button>
                  )}
                </div>
-               <input type="file" accept="image/*" ref={fileInputRef} className="file-input-hidden" onChange={handleFileAdd} />
+               <input type="file" accept="image/*" ref={fileInputRef} style={{display:"none"}} onChange={handleFileAdd} />
             </div>
             <div style={{flex:1}}>
               <label style={S.label}>{t("name_lbl")}</label>
@@ -268,7 +268,7 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                              <button style={{...S.btnDanger, padding:"2px 6px", fontSize:10*z, marginTop:0}} onClick={() => setEditAvatar(null)}>✕</button>
                            )}
                          </div>
-                         <input type="file" accept="image/*" ref={editFileInputRef} className="file-input-hidden" onChange={handleEditFileAdd} />
+                         <input type="file" accept="image/*" ref={editFileInputRef} style={{display:"none"}} onChange={handleEditFileAdd} />
                       </div>
                       <div style={{flex:1}}>
                         <label style={S.label}>{t("name_lbl")}</label>
@@ -320,33 +320,14 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
                     </button>
                     <div style={{flexShrink:0}}><Avatar name={p.name} url={p.avatar} size={38}/></div>
                     <div style={{...S.lbInfo, minWidth:0, overflow:"hidden"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6*z, flexWrap:"wrap"}}>
-                        <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%"}} title={p.name}>
+                      <div style={{display:"flex", alignItems:"center", gap:Math.min(4*z,6), flexWrap:"nowrap", minWidth:0, overflow:"hidden"}}>                        <span style={{...S.lbName, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, minWidth:0}} title={p.name}>
                           {shortName(p.name, isLargeZoom(z) ? "always" : "auto")}
                         </span>
                         {/* C/P: Provisional if either singles or doubles is under 5 matches separately.
                             A player with 4S + 4D = 8 total is still provisional in each format. */}
-                        {(() => {
-                          const doublesOk = (p.doublesPlayed || 0) >= 5;
-                          const singlesOk = (p.singlesPlayed || 0) >= 5;
-                          // Show C only if they're certified in at least the format they play most
-                          const isProv = !doublesOk && !singlesOk;
-                          const isMixed = doublesOk !== singlesOk; // one cert, one not
-                          const label = isProv ? "P" : isMixed ? "P/C" : "C";
-                          const bg = isProv ? "rgba(245,158,11,0.12)" : isMixed ? "rgba(100,150,255,0.12)" : "rgba(80,200,120,0.12)";
-                          const color = isProv ? "#f59e0b" : isMixed ? "#6496ff" : "#50c878";
-                          const tip = isProv ? "Provisional (both formats under 5 matches)"
-                            : isMixed ? `Doubles: ${doublesOk?"✓":"P"} · Singles: ${singlesOk?"✓":"P"}`
-                            : "Certified (5+ matches in both formats)";
-                          return (
-                            <span style={{fontSize:9*z, padding:"1px 4px", borderRadius:4, background:bg, color, fontWeight:700, flexShrink:0}}
-                              title={tip}>
-                              {label}
-                            </span>
-                          );
-                        })()}
+
                         {isOnline(p.id) && <span style={{width: 8*z, height: 8*z, borderRadius: "50%", background: "#50c878", boxShadow: "0 0 5px #50c878", display: "inline-block", flexShrink:0}} title="Online Now"></span>}
-                        {p.duprImported && <span style={{ background: "rgba(64, 160, 224, 0.15)", color: "#40a0e0", padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 800, flexShrink:0 }}>D</span>}
+
                         {p.pin && <span style={{fontSize: 10*z, flexShrink:0}} title="Secured Account">🔒</span>}
                         {(isAdmin || user?.myPlayerId === p.id) && (
                           <button 

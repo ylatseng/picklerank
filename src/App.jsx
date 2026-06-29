@@ -255,8 +255,8 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
   const sortedPlayers = [...players].sort((a,b) => a.name.localeCompare(b.name));
 
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:9999, overflowY:"auto", padding:`${20*z}px ${16*z}px`}}>
-      <div style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:16*z, padding:24*z, width:"100%", maxWidth:400*z, margin:"0 auto", boxShadow:"0 10px 30px rgba(0,0,0,0.5)", position:"relative"}}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:9999, overflowY:"auto", padding:`${Math.min(16*z, 20)}px ${Math.min(14*z, 16)}px`, boxSizing:"border-box"}}>
+      <div style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:Math.min(16*z,16), padding:Math.min(24*z,20), width:"100%", maxWidth:"min(400px, 100%)", margin:"0 auto", boxShadow:"0 10px 30px rgba(0,0,0,0.5)", position:"relative", boxSizing:"border-box"}}>
         
         {/* Top row: Language + Zoom controls */}
         <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z}}>
@@ -781,17 +781,17 @@ export default function App() {
     const hasCache = !!readCache();
     const offline = !navigator.onLine;
     return (
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "100vh", background: "#121212", color: "#50c878", fontSize: "20px", fontWeight: "bold", gap: 16, padding: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "100vh", background: "#121212", color: "#50c878", fontSize: "clamp(16px, 5vw, 20px)", fontWeight: "bold", gap: 16, padding: 16, boxSizing: "border-box" }}>
         <div>PickleRank 🥒</div>
         {offline && !hasCache ? (
-          <div style={{ fontSize: 14, color: "#e05050", fontWeight: 700, textAlign: "center", maxWidth: 320 }}>
+          <div style={{ fontSize: "clamp(12px, 3.5vw, 14px)", color: "#e05050", fontWeight: 700, textAlign: "center", maxWidth: "90vw" }}>
             📶 You're offline and no local data is available yet.<br/>
-            <span style={{ fontSize: 12, color: "#888", fontWeight: 400, display: "block", marginTop: 8 }}>
+            <span style={{ fontSize: "clamp(11px, 3vw, 12px)", color: "#888", fontWeight: 400, display: "block", marginTop: 8 }}>
               Please connect to the internet to load your data for the first time. After that, the app will work offline.
             </span>
           </div>
         ) : (
-          <div style={{ fontSize: 13, color: "#888", fontWeight: 400 }}>
+          <div style={{ fontSize: "clamp(11px, 3vw, 13px)", color: "#888", fontWeight: 400 }}>
             {offline ? "📶 Offline — loading from local cache..." : "Loading..."}
           </div>
         )}
@@ -866,7 +866,7 @@ export default function App() {
         {/* 3. FORCED SETUP MODE */}
         {(!user.isAdmin && user.pendingAutoLink && !user.myPlayerId) && (
           <div style={{display: "flex", flexDirection: "column", height: "100vh", background: theme.bg}}>
-            <div style={{padding: 20, background: theme.nav, display: "flex", alignItems: "center", borderBottom: `1px solid ${theme.border}`}}>
+            <div style={{padding: `${16*(theme.zoom||1)}px`, background: theme.nav, display: "flex", alignItems: "center", borderBottom: `1px solid ${theme.border}`}}>
               <button onClick={() => setUserSettings({pendingAutoLink: false})} style={{background: "transparent", border: "none", color: theme.sub, fontSize: 16, cursor: "pointer"}}>← {t("cancel")}</button>
               <div style={{flex: 1, textAlign: "center", color: theme.text, fontWeight: "bold", fontSize: 18}}>{t("create_profile")}</div>
               <div style={{width: 60}}></div>
@@ -980,7 +980,7 @@ export default function App() {
                 position:"fixed", top:0, left:0, right:0, zIndex:2000,
                 background:"#f0a830", color:"#fff",
                 padding:"8px 16px", textAlign:"center",
-                fontSize:12, fontWeight:700
+                fontSize:`${12*(theme.zoom||1)}px`, fontWeight:700
               }}>
                 ⏳ {t("syncing_matches")||"Syncing your offline matches to the server..."}
               </div>
