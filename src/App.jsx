@@ -709,6 +709,7 @@ export default function App() {
     document.body.style.background = theme.bg; 
     document.body.style.color = theme.text;
     document.body.style.fontFamily = activeFont.css;
+    document.body.style.overscrollBehavior = "none"; // prevent pull-to-refresh browser reload in PWA
     const metaThemeColor = document.getElementById("theme-color-meta");
     if (metaThemeColor) metaThemeColor.setAttribute("content", theme.bg);
   }, [theme.bg, theme.text, activeFont.css]);
