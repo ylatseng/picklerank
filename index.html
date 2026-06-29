@@ -1,43 +1,28 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- ── PWA Meta Tags ─────────────────────────────────────────────────── -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0d2e1a" />
     <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>PickleRank</title>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;800&family=Noto+Serif+TC:wght@400;600;800&display=swap" rel="stylesheet">
-    
-    <style>
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      
-      /* THE FIX: Added text-size-adjust and line-height here */
-      html, body { 
-        min-height: 100dvh; 
-        background: var(--bg-root, #0d0d0f); 
-        color: var(--text-root, #e8e8e8); 
-        transition: background 0.2s, color 0.2s; 
-        -webkit-text-size-adjust: 100%; 
-        text-size-adjust: 100%; 
-        line-height: 1.5; 
-      }
-      
-      body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
-      #root { min-height: 100dvh; }
-      input, select, button { font-family: inherit; }
-      input[type=number]::-webkit-inner-spin-button,
-      input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-      input[type=number] { -moz-appearance: textfield; }
-      main { -webkit-overflow-scrolling: touch; }
-      .file-input-hidden { display: none; }
-      .badge-earned { opacity: 1; filter: none; }
-      .badge-locked { opacity: 0.35; filter: grayscale(100%); }
-      .star-btn { background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px; line-height: 1; }
-    </style>
+    <meta name="apple-mobile-web-app-title" content="PickleRank" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+
+    <!-- App info -->
+    <meta name="description" content="Private pickleball ELO rating tracker for your group." />
+    <meta name="application-name" content="PickleRank" />
+
+    <title>PickleRank 🥒</title>
   </head>
   <body>
     <div id="root"></div>

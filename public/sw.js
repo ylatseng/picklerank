@@ -78,6 +78,11 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// ── SW update: skip waiting when app signals a new version is ready ──────────
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') { self.skipWaiting(); return; }
+});
+
 // ── Notification scheduling ────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SCHEDULE_NOTIFICATION') {

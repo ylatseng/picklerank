@@ -392,6 +392,24 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
 }
 
 export default function App() {
+  // Register service worker for offline support and PWA install prompt
+  React.useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => {
+          // When a new SW version is found, activate it immediately
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            newWorker?.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          });
+        })
+        .catch(err => console.warn('SW registration failed:', err));
+    }
+  }, []);
   const [state, setState] = useState(() => blankState());
   const [isLoading, setIsLoading] = useState(true);
   // ── Undo last match ────────────────────────────────────────────────────────
