@@ -13,10 +13,21 @@ export const PROVISIONAL_K_MULTIPLIER = 2; // provisional players move up to 2x 
 export const STORAGE_KEY = "pkl_tracker_v4"; 
 
 // ─── Version & Changelog ──────────────────────────────────────────────────────
-export const APP_VERSION = "2.2.53";
+export const APP_VERSION = "2.2.54";
 export const APP_UPDATED = "2026-06-29";
 
 export const RELEASES = [
+    {
+    version: "2.2.54",
+    date: "2026-06-29",
+    title: "PWA Implementation & Offline Mode",
+    changes: [
+      "⚡ PERF: PWA Implementation: Added vite-plugin-pwa for full offline-first functionality.",
+      "🐛 FIX: UI/UX: Added System Health Dashboard to Settings for automated diagnostics..",
+      "🔔 FIX: Mobile Optimization: Added viewport-fit support and safe-area padding for notch/bezel compatibility.",
+      "🛡️ PERF: Integrated large-dataset stress testing for rating engine.",
+    
+  },
   {
     version: "2.2.53",
     date: "2026-06-29",

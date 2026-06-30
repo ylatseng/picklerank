@@ -2,27 +2,37 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-    <!-- ── PWA Meta Tags ─────────────────────────────────────────────────── -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0d2e1a" />
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="PickleRank" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    <!-- Favicon -->
     <link rel="icon" type="image/png" href="/favicon.png" />
 
-    <!-- App info -->
     <meta name="description" content="Private pickleball ELO rating tracker for your group." />
     <meta name="application-name" content="PickleRank" />
 
     <title>PickleRank 🥒</title>
+
+    <style>
+      :root {
+        --safe-area-top: env(safe-area-inset-top);
+        --safe-area-bottom: env(safe-area-inset-bottom);
+      }
+      body {
+        /* Prevent bounce on iOS */
+        overscroll-behavior-y: none;
+        /* Ensure background fills the entire screen including behind the notch */
+        padding-top: var(--safe-area-top);
+        padding-bottom: var(--safe-area-bottom);
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
