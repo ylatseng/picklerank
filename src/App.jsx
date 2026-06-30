@@ -411,6 +411,11 @@ export default function App() {
     }
   }, []);
   const [state, setState] = useState(() => blankState());
+  // activeView lives in its OWN useState — completely isolated from shared state.
+  // This means fetchCloudData, saveState, setShared can NEVER touch it.
+  const [activeView, setActiveView] = useState("dashboard");
+  const [profileId, setProfileId] = useState(null);
+  const [historyPlayerId, setHistoryPlayerId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   // ── Undo last match ────────────────────────────────────────────────────────
   // Store the last logged match IDs in a ref (no re-render needed), plus
@@ -537,8 +542,9 @@ export default function App() {
         if (isInitialLoad) {
           const cached = readCache();
           if (cached) {
-            setState(prev => ({ ...prev, ...cached, activeView: "dashboard" }));
-            setIsLoading(false); // unblock UI right away
+            const { activeView: _ignored, ...safeCache } = cached;
+            setState(prev => ({ ...prev, ...safeCache }));
+            setIsLoading(false);
 
             // Step 2a: if offline, we're done — cache is all we have
             if (!navigator.onLine) {
@@ -557,15 +563,12 @@ export default function App() {
 
         // Step 2b: online — fetch fresh from Firestore (or first-ever load with no cache)
         const cloudData = await loadState();
-        // Only apply Firestore data if it's real data (not blankState wiping a good cache)
         if (cloudData && cloudData.players !== undefined) {
-          setState(prev => {
-            const s = { ...prev, ...cloudData };
-            // Preserve navigation state — don't reset to dashboard mid-session
-            if (isInitialLoad && !s.activeView) s.activeView = "dashboard";
-            else if (prev.activeView) s.activeView = prev.activeView;
-            return s;
-          });
+          // Explicitly delete activeView from cloudData — it may still be stored in old
+          // Firestore documents from before we excluded it. Never let cloud overwrite
+          // local navigation state.
+          const { activeView: _ignored, ...safeCloudData } = cloudData;
+          setState(prev => ({ ...prev, ...safeCloudData })); // activeView never in safeCloudData
         }
       } catch (error) {
         console.error("Firebase Error:", error);
@@ -575,22 +578,27 @@ export default function App() {
       }
     };
     fetchCloudData(true);
-    const doRefresh = () => { if (navigator.onLine) fetchCloudData(false); };
-    const handleVisibilityChange = () => { if (document.visibilityState === 'visible') doRefresh(); };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", doRefresh);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", doRefresh);
-    };
+    // No background polling — background setState was causing isCurrentlyVerified
+    // to briefly recalculate to false (when state.players reference changed),
+    // flashing the welcome/PIN screen mid-session.
+    // Data is fresh on every app open via cache-first + Firestore load.
   }, []);
 
+  // isCurrentlyVerified is cached in a ref to prevent flash when state.players
+  // is refreshed from Firestore (which creates a new array reference and would
+  // otherwise cause the memo to briefly return false, flashing the PIN screen).
+  const verifiedRef = React.useRef(false);
   const isCurrentlyVerified = useMemo(() => {
-    if (!user.myPlayerId) return false;
+    if (!user.myPlayerId) { verifiedRef.current = false; return false; }
     const player = state.players?.find(p => p.id === user.myPlayerId);
-    if (!player) return false;
-    if (!player.pin) return true; // no PIN set = no barrier, auto-verified
-    return user.verifiedHash === hashPin(user.myPlayerId, player.pin);
+    if (!player) {
+      // Player not found yet (state still loading) — keep last known verified state
+      return verifiedRef.current;
+    }
+    if (!player.pin) { verifiedRef.current = true; return true; }
+    const verified = user.verifiedHash === hashPin(user.myPlayerId, player.pin);
+    verifiedRef.current = verified;
+    return verified;
   }, [user, state.players]);
 
   // Auto-elevate players who have been granted isAdminPlayer but are already verified.
@@ -652,12 +660,13 @@ export default function App() {
   }, [isLoading, isOnline]);
 
   // Save state outside setState updater — avoids async side-effects in render
+  // FIX: Added dependency array to stop the unbounded execution loop
   React.useEffect(() => {
     if (pendingSaveRef.current && !isLoading) {
       saveState(pendingSaveRef.current);
       pendingSaveRef.current = null;
     }
-  });
+  }, [state, isLoading]);
 
   // Undo removed — use History tab to edit or delete matches
 
@@ -716,7 +725,16 @@ export default function App() {
   const activeMode = APP_MODES.find(m => m.id === activeModeId) || APP_MODES[0];
   const activeAccent = APP_ACCENTS.find(a => a.id === activeAccentId) || APP_ACCENTS[0];
   const activeFont = APP_FONTS.find(f => f.id === activeFontId) || APP_FONTS[0];
-  const theme = { ...activeMode, accent: activeAccent.hex, zoom: activeZoomLevel, logoText: state.logoText, logoData: state.logoData, format: state.leaderboardFormat };
+  
+  // FIX: Memoize the theme object so we stop triggering massive application re-renders
+  const theme = useMemo(() => ({
+    ...activeMode, 
+    accent: activeAccent.hex, 
+    zoom: activeZoomLevel, 
+    logoText: state.logoText, 
+    logoData: state.logoData, 
+    format: state.leaderboardFormat 
+  }), [activeMode, activeAccent.hex, activeZoomLevel, state.logoText, state.logoData, state.leaderboardFormat]);
 
   // Apply language change in effect to avoid calling module-level setLang on every render cycle
   // (was previously called directly in render body — caused unnecessary re-renders and battery drain)
@@ -732,7 +750,7 @@ export default function App() {
     if (metaThemeColor) metaThemeColor.setAttribute("content", theme.bg);
   }, [theme.bg, theme.text, activeFont.css]);
 
-  const { players = [], matches = [], activeView = "dashboard", profileId, historyPlayerId } = state;
+  const { players = [], matches = [] } = state;
   const { derivedPlayers, derivedMatches } = useMemo(() => replayAllMatches(players, matches), [players, matches]);
   const stats = useMemo(() => computeStats(derivedPlayers, derivedMatches),[derivedPlayers, derivedMatches]);
   // Flag for large datasets — replay is O(n²) and can get slow above ~200 matches
@@ -761,20 +779,25 @@ export default function App() {
   },[stats, state.leaderboardFormat]);
 
   const profilePlayer = profileId ? stats.find(p=>p.id===profileId) : null;
-  const nav = (view,extra={}) => {
-    // Scroll to top immediately when changing views — belt-and-suspenders with the useEffect below
+  const nav = (view, extra={}) => {
     const mains = document.querySelectorAll("main");
-    const main = mains[mains.length - 1];
-    if (main) main.scrollTop = 0;
+    const m = mains[mains.length - 1];
+    if (m) m.scrollTop = 0;
     window.scrollTo({ top: 0, behavior: "instant" });
-    setShared(s=>({...s,activeView:view,...extra}));
+    setActiveView(view);
+    // extra may contain profileId or historyPlayerId
+    if (extra.profileId !== undefined) setProfileId(extra.profileId);
+    if (extra.historyPlayerId !== undefined) setHistoryPlayerId(extra.historyPlayerId);
+    // Pass any other extras into shared state (e.g. compareIds)
+    const { profileId: _p, historyPlayerId: _h, ...sharedExtra } = extra;
+    if (Object.keys(sharedExtra).length > 0) setShared(s => ({ ...s, ...sharedExtra }));
   };
 
-  // Scroll to top after every view change — targets the last <main> which is the app content container
+  // Scroll to top after every view change
   useEffect(() => {
     const mains = document.querySelectorAll("main");
-    const main = mains[mains.length - 1]; // last main = the full-app content container
-    if (main) main.scrollTop = 0;
+    const m = mains[mains.length - 1];
+    if (m) m.scrollTop = 0;
   }, [activeView]);
 
   if (isLoading) {

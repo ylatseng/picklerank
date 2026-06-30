@@ -66,7 +66,7 @@ function GoalSection({ player: p, user, setUser, theme }) {
             </div>
             <div style={{flex:1}}>
               <label style={S.label}>{t("goal_target_lbl")} (1.5–6.5)</label>
-              <input style={S.input} type="number" step="0.1" min="1.5" max="6.5"
+              <input style={S.input} type="text" inputMode="decimal"
                 value={goalTarget} onChange={e=>setGoalTarget(e.target.value)}
                 placeholder="e.g. 4.000"/>
             </div>

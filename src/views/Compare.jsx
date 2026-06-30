@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { t, calcExpected, ratingColor, ratingLabel, fmtDate, sortOptionsAlpha, initials } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, Sel, Avatar, Err } from '../components/Shared.jsx';
+import { Sec, Sel, PlayerPicker, Avatar, Err } from '../components/Shared.jsx';
 import { MatchesSubNav } from '../components/Navigation.jsx';
 import { dynamicKFactor } from '../engine.js';
 
@@ -104,25 +104,25 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state,
         
         {format === "singles" ? (
           <div style={{display:"flex",gap:12*z,alignItems:"center", marginTop: 16*z}}>
-            <div style={{flex:1}}><label style={S.label}>{t("player_1")}</label><Sel opts={opts} value={t1p1} onChange={v=>setT1p1(v)} placeholder={t("select_prompt")} theme={theme}/></div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_1")}</label><PlayerPicker opts={opts} value={t1p1} onChange={v=>setT1p1(v)} placeholder={t("select_prompt")} theme={theme}/></div>
             <div style={{fontSize:18*z,color:theme.sub,marginTop:16*z}}>⚔️</div>
-            <div style={{flex:1}}><label style={S.label}>{t("player_2")}</label><Sel opts={opts} value={t2p1} onChange={v=>setT2p1(v)} placeholder={t("select_prompt")} theme={theme}/></div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_2")}</label><PlayerPicker opts={opts} value={t2p1} onChange={v=>setT2p1(v)} placeholder={t("select_prompt")} theme={theme}/></div>
           </div>
         ) : (
           <div style={{display:"flex", flexDirection:"column", gap:12*z, marginTop:16*z}}>
             <div style={{background:theme.bg, border:`1px solid ${theme.border}`, padding:10*z, borderRadius:10*z}}>
               <label style={{...S.label, color:"#50c878", fontWeight:700}}>{t("team")} 1</label>
               <div style={{display:"flex", gap:8*z}}>
-                <div style={{flex:1}}><Sel opts={opts} value={t1p1} onChange={v=>setT1p1(v)} placeholder={t("player_a")} theme={theme}/></div>
-                <div style={{flex:1}}><Sel opts={opts} value={t1p2} onChange={v=>setT1p2(v)} placeholder={t("player_b")} theme={theme}/></div>
+                <div style={{flex:1}}><PlayerPicker opts={opts} value={t1p1} onChange={v=>setT1p1(v)} placeholder={t("player_a")} theme={theme}/></div>
+                <div style={{flex:1}}><PlayerPicker opts={opts} value={t1p2} onChange={v=>setT1p2(v)} placeholder={t("player_b")} theme={theme}/></div>
               </div>
             </div>
             <div style={{textAlign:"center", fontSize:18*z, color:theme.sub}}>⚔️</div>
             <div style={{background:theme.bg, border:`1px solid ${theme.border}`, padding:10*z, borderRadius:10*z}}>
               <label style={{...S.label, color:"#40a0e0", fontWeight:700}}>{t("team")} 2</label>
               <div style={{display:"flex", gap:8*z}}>
-                <div style={{flex:1}}><Sel opts={opts} value={t2p1} onChange={v=>setT2p1(v)} placeholder={t("player_a")} theme={theme}/></div>
-                <div style={{flex:1}}><Sel opts={opts} value={t2p2} onChange={v=>setT2p2(v)} placeholder={t("player_b")} theme={theme}/></div>
+                <div style={{flex:1}}><PlayerPicker opts={opts} value={t2p1} onChange={v=>setT2p1(v)} placeholder={t("player_a")} theme={theme}/></div>
+                <div style={{flex:1}}><PlayerPicker opts={opts} value={t2p2} onChange={v=>setT2p2(v)} placeholder={t("player_b")} theme={theme}/></div>
               </div>
             </div>
           </div>

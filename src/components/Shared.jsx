@@ -182,23 +182,22 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
         </div>
       )}
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{display:"flex", alignItems:"center", gap: 8*z}}>
-           <span style={{fontSize:12*z,color:"#50c878",fontWeight:600}}>🏆 {m.winnerTeam===0?t1:t2}</span>
-           {pSnap != null && (
-             <span style={{fontSize:11*z, fontWeight:700, color: pSnap >= 0 ? "#50c878" : "#e05050", background:theme.bg, padding:"2px 6px", borderRadius:4*z, border:`1px solid ${theme.border}`}}>
-               {pSnap >= 0 ? "+" : ""}{pSnap.toFixed(3)}
-             </span>
-           )}
-        </div>
-        
-        <div style={{display:"flex",gap:6*z}}>
+      <div style={{display:"flex", alignItems:"center", gap:4*z}}>
+        {/* Rating delta pill — left, doesn't grow */}
+        {pSnap != null && (
+          <span style={{fontSize:11*z, fontWeight:700, color: pSnap >= 0 ? "#50c878" : "#e05050",
+            background:theme.bg, padding:"2px 6px", borderRadius:4*z,
+            border:`1px solid ${theme.border}`, flexShrink:0, whiteSpace:"nowrap"}}>
+            {pSnap >= 0 ? "+" : ""}{pSnap.toFixed(3)}
+          </span>
+        )}
+        {/* Icons — evenly fill remaining space, centered */}
+        <div style={{flex:1, display:"flex", justifyContent:"space-evenly", alignItems:"center"}}>
           {m.ratingDeltas && (
             <button style={{...S.iconBtn, background: expanded ? theme.bg : "transparent", borderRadius: 6*z}} onClick={()=>setExpanded(!expanded)} title="ELO Stats">📊</button>
           )}
           {onEdit && <button style={S.iconBtn} onClick={()=>onEdit(m)} title="Edit">✏️</button>}
           {onReplay && <button style={S.iconBtn} onClick={onReplay} title="Rematch">🔄</button>}
-          {onShare && <button style={S.iconBtn} onClick={()=>onShare(m)}>📤</button>}
           {(isParticipant || isAdmin) && onSaveNote && (
             <button style={{...S.iconBtn, color: noteText ? theme.accent : theme.sub}} onClick={()=>setShowNote(v=>!v)} title="My Note">✍️</button>
           )}
@@ -471,14 +470,14 @@ export function EditBaseRating({player:p,set,theme}) {
             <div style={{flex:1}}>
               <label style={S.label}>{t("singles_rating")} (1.5–6.5)</label>
               <input style={{...S.input,borderColor:valS&&!validS?"#5a2020":valS&&validS?theme.accent:theme.border}}
-                type="number" min="1.5" max="6.5" step="0.001" placeholder={t("overview_singles")} value={valS} autoFocus
+                type="text" inputMode="decimal" placeholder={t("overview_singles")} value={valS} autoFocus
                 onChange={e=>{setValS(e.target.value);setErr("");}}/>
               {validS&&<div style={{fontSize:10*z,color:ratingColor(parsedS),marginTop:3*z,fontWeight:600}}>{parsedS.toFixed(3)} — {t(ratingLabel(parsedS))}</div>}
             </div>
             <div style={{flex:1}}>
               <label style={S.label}>{t("doubles_rating")} (1.5–6.5)</label>
               <input style={{...S.input,borderColor:valD&&!validD?"#5a2020":valD&&validD?theme.accent:theme.border}}
-                type="number" min="1.5" max="6.5" step="0.001" placeholder={t("overview_doubles")} value={valD}
+                type="text" inputMode="decimal" placeholder={t("overview_doubles")} value={valD}
                 onChange={e=>{setValD(e.target.value);setErr("");}}/>
               {validD&&<div style={{fontSize:10*z,color:ratingColor(parsedD),marginTop:3*z,fontWeight:600}}>{parsedD.toFixed(3)} — {t(ratingLabel(parsedD))}</div>}
             </div>
@@ -553,6 +552,134 @@ export function ConfirmInline({msg,note,onConfirm,onCancel,danger=false,theme}) 
 export function Sec({title,children,theme}) { const S=makeS(theme); return <div style={S.sec}>{title?<div style={S.secTitle}>{title}</div>:null}{children}</div>; }
 export function Empty({text,onAction,label,theme}) { const S=makeS(theme); const z = theme.zoom || 1.0; return <div style={{color:theme.sub,fontSize:13*z,textAlign:"center",padding:"20px 0",display:"flex",flexDirection:"column",alignItems:"center",gap:10*z}}><div>{text}</div>{onAction&&<button style={S.btnSecondary} onClick={onAction}>{label}</button>}</div>; }
 export function Err({msg, theme}){ const z = theme.zoom || 1.0; return <div style={{color:"#e05050",fontSize:13*z,padding:"8px 12px",background:"rgba(224,80,80,0.1)",border:"1px solid rgba(224,80,80,0.3)",borderRadius:10*z,marginTop:8*z}}>{msg}</div>; }
+
+// ── Player Picker — Inline Chip Selector ─────────────────────────────────────
+// No modal, no scrolling. All players shown as tappable chips in 3-4 columns.
+// Already-selected players are highlighted/disabled. Search filters chips.
+// Much faster than a dropdown for groups of 10-30 players.
+export function PlayerPicker({ opts, value, onChange, placeholder, theme, disabled }) {
+  const S = makeS(theme);
+  const z = theme.zoom || 1.0;
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+
+  const selected = opts?.find(o => o.value === value);
+  const filtered = (opts || []).filter(o =>
+    o.value !== "" &&
+    (!search || o.label.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  if (disabled) {
+    return (
+      <div style={{...S.select, opacity:0.5, cursor:"not-allowed", display:"flex", alignItems:"center"}}>
+        <span style={{flex:1, color:value?theme.text:theme.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+          {selected?.label || placeholder || "—"}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Trigger */}
+      <button onClick={() => { setSearch(""); setOpen(true); }}
+        style={{...S.select, display:"flex", alignItems:"center",
+          justifyContent:"space-between", textAlign:"left", cursor:"pointer"}}>
+        <span style={{flex:1, color: value ? theme.text : theme.sub,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+          {selected?.label || placeholder || "—"}
+        </span>
+        <span style={{fontSize:10*z, color:theme.sub, flexShrink:0, marginLeft:6*z}}>▾</span>
+      </button>
+
+      {/* Bottom sheet */}
+      {open && (
+        <div onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}
+          style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+            zIndex:4000, display:"flex", alignItems:"flex-end"}}>
+          <div style={{background:theme.card, borderRadius:`${14*z}px ${14*z}px 0 0`,
+            width:"100%", maxHeight:"70vh", display:"flex", flexDirection:"column",
+            boxShadow:"0 -4px 24px rgba(0,0,0,0.25)"}}>
+
+            {/* Handle + header */}
+            <div style={{padding:`${8*z}px ${16*z}px ${6*z}px`, textAlign:"center"}}>
+              <div style={{width:36*z, height:4*z, borderRadius:2*z,
+                background:theme.border, margin:"0 auto 8px"}}/>
+              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+                <span style={{fontSize:13*z, fontWeight:700, color:theme.text}}>
+                  {placeholder || t("select_prompt") || "Select player"}
+                </span>
+                <button onClick={() => setOpen(false)}
+                  style={{background:"transparent", border:`1px solid ${theme.border}`,
+                    borderRadius:16*z, fontSize:12*z, color:theme.sub,
+                    cursor:"pointer", padding:`${3*z}px ${10*z}px`}}>
+                  {t("cancel")||"Cancel"}
+                </button>
+              </div>
+            </div>
+
+            {/* Search bar */}
+            <div style={{padding:`${4*z}px ${12*z}px ${8*z}px`}}>
+              <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+                placeholder={t("search_players_placeholder") || "Search players..."}
+                style={{...S.input, margin:0, fontSize:14*z, padding:`${8*z}px ${12*z}px`}}
+              />
+            </div>
+
+            {/* Chip grid — 3 columns, compact, all visible */}
+            <div style={{overflowY:"auto", flex:1,
+              padding:`${4*z}px ${10*z}px ${24*z}px`,
+              display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:6*z}}>
+              {filtered.length === 0 && (
+                <div style={{gridColumn:"1/-1", textAlign:"center", color:theme.sub,
+                  fontSize:12*z, padding:`${20*z}px`}}>
+                  {t("no_data")||"No players found"}
+                </div>
+              )}
+              {filtered.map(o => {
+                const isSelected = o.value === value;
+                const isDisabled = o.disabled;
+                return (
+                  <button key={o.value} disabled={isDisabled}
+                    onClick={() => { onChange(o.value); setOpen(false); setSearch(""); }}
+                    style={{
+                      padding:`${9*z}px ${4*z}px`,
+                      borderRadius:8*z, boxSizing:"border-box",
+                      fontSize:Math.min(12*z, 14), fontWeight: isSelected ? 700 : 400,
+                      border:`1.5px solid ${isSelected ? theme.accent : isDisabled ? theme.border : theme.border}`,
+                      background: isSelected ? theme.accent+"22" : theme.bg,
+                      color: isDisabled ? theme.sub : isSelected ? theme.accent : theme.text,
+                      cursor: isDisabled ? "not-allowed" : "pointer",
+                      opacity: isDisabled ? 0.35 : 1,
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      gap:3*z, minHeight:36*z,
+                    }}>
+                    {isSelected && <span style={{fontSize:10*z}}>✓</span>}
+                    <span style={{overflow:"hidden", textOverflow:"ellipsis",
+                      whiteSpace:"nowrap", maxWidth:"100%"}}>
+                      {o.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Clear selection */}
+            {value && !search && (
+              <div style={{padding:`${6*z}px ${12*z}px ${Math.max(16*z,16)}px`}}>
+                <button onClick={() => { onChange(""); setOpen(false); }}
+                  style={{...S.btnSecondary, width:"100%", marginTop:0, fontSize:12*z}}>
+                  {t("clear")||"Clear"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function Sel({opts,value,onChange,placeholder,theme}){ const S=makeS(theme); return <select style={S.select} value={value} onChange={e=>onChange(e.target.value)}>{placeholder !== undefined && <option value="">{placeholder}</option>}{(opts||[]).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>; }
 
 export function Avatar({name, url, size=36}) {

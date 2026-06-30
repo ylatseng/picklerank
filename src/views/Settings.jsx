@@ -4,7 +4,7 @@ import { makeS } from '../styles.js';
 import { Sec, Err, ConfirmInline, Sel, PinManager } from '../components/Shared.jsx';
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../engine";
-import { runAllTests } from '../tests/runner.js';
+import TestDashboard from '../components/TestDashboard.jsx';
 
 // ── Proper component for inline name editing (avoids Hook-in-IIFE) ────────────
 function NameEditor({ player, myPlayerId, theme, z, S, setShared, t }) {
@@ -212,7 +212,9 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
       verifiedHash: "", 
       isAdmin: false    
     });
-    window.location.reload();
+    // Navigate to dashboard so WelcomeModal appears — no page reload needed
+    // (reload caused a visible flash before the welcome screen appeared)
+    nav("dashboard");
   };
 
   function exportData(){
@@ -657,7 +659,8 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
         )}
 
         {/* ── Built-in Test Runner (admin only) ── */}
-        {user.isAdmin && <TestRunner theme={theme} />}
+        {user.isAdmin && <TestDashboard theme={theme} />}
+        
       </CSec>
     </div>
   );

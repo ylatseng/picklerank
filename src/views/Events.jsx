@@ -21,16 +21,28 @@ async function scheduleEventNotification(event) {
   });
 }
 
+// FIX: New helper to cancel alarms for deleted or rescheduled events
+async function cancelEventNotification(eventId) {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+  const reg = await navigator.serviceWorker.ready;
+  reg.active?.postMessage({
+    type: 'CANCEL_NOTIFICATION',
+    tag: `pr-event-${eventId}`
+  });
+}
+
 const toYYYYMMDD = (d) => {
   const dt = new Date(d);
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 };
 
-
 // Format event date respecting app language
 function fmtEventDate(iso, opts = {}) {
+  if (!iso) return "Date TBD"; 
   const lang = getLang();
   const d = new Date(iso);
+  if (isNaN(d)) return "Invalid Date"; 
+  
   if (lang === "zh_tw" || lang === "zh_cn") {
     const dayNames = ["日","一","二","三","四","五","六"];
     const pad = n => String(n).padStart(2, "0");
@@ -45,6 +57,7 @@ function fmtEventDate(iso, opts = {}) {
   const defaultOpts = {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'};
   return d.toLocaleString([], {...defaultOpts, ...opts});
 }
+
 export default function Events({ state, set, theme, isAdmin, user, nav, onStartSession }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
@@ -109,8 +122,11 @@ export default function Events({ state, set, theme, isAdmin, user, nav, onStartS
         ? (s.events || []).map(e => e.id === editingEvent.id ? savedEvent : e)
         : [...(s.events || []), savedEvent]
     }));
-    // Schedule push notification for the event (1h before)
+    
+    // FIX: Cancel any old notification before scheduling the new one
+    cancelEventNotification(savedEvent.id);
     scheduleEventNotification(savedEvent);
+    
     setEditingEvent(null);
     clearNewEvent();
     setShowForm(false);
@@ -130,6 +146,10 @@ export default function Events({ state, set, theme, isAdmin, user, nav, onStartS
       events: (s.events || []).filter(e => e.id !== id),
       trash: [...(s.trash || []), { id: ev.id, type: 'event', data: ev, deletedAt: Date.now() }]
     }));
+    
+    // FIX: Send cancellation to service worker
+    cancelEventNotification(id);
+    
     setPendingDelete(null);
   };
 
@@ -202,11 +222,11 @@ export default function Events({ state, set, theme, isAdmin, user, nav, onStartS
   // Sort: starred players first (still alphabetically within each group), then everyone else alphabetically
   const favored = new Set(state.favoredPlayerIds || []);
   const sortedPlayers = [...(state.players || [])]
-    .filter(p => p.name.toLowerCase().includes(playerSearch.toLowerCase()))
+    .filter(p => (p.name || "").toLowerCase().includes(playerSearch.toLowerCase()))
     .sort((a, b) => {
       const aFav = favored.has(a.id), bFav = favored.has(b.id);
       if (aFav !== bFav) return aFav ? -1 : 1;     // starred above unstarred
-      return a.name.localeCompare(b.name);          // alphabetical within group
+      return (a.name || "").localeCompare(b.name || "");          // alphabetical within group
     });
 
   const mobileDateFix = newEvent.date ? newEvent.date.slice(0, 16) : "";

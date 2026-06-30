@@ -197,11 +197,11 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
           <div style={{display:"flex", gap:12*z, marginBottom:4*z}}>
             <div style={{flex:1}}>
               <label style={S.label}>{t("singles_rating")}</label>
-              <input style={S.input} type="number" value={singlesRating} onChange={e=>setSinglesRating(e.target.value)} />
+              <input style={S.input} type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" value={singlesRating} onChange={e=>setSinglesRating(e.target.value.replace(/[^0-9.]/g,""))} placeholder="1.500–6.500" />
             </div>
             <div style={{flex:1}}>
               <label style={S.label}>{t("doubles_rating")}</label>
-              <input style={S.input} type="number" value={doublesRating} onChange={e=>setDoublesRating(e.target.value)} />
+              <input style={S.input} type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" value={doublesRating} onChange={e=>setDoublesRating(e.target.value.replace(/[^0-9.]/g,""))} placeholder="1.500–6.500" />
             </div>
           </div>
           <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z, textAlign:"center"}}>
@@ -287,8 +287,8 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
 
                     {isAdmin ? (
                       <div style={{display:"flex", gap:10*z}}>
-                         <div style={{flex:1}}><label style={S.label}>{t("singles_rating")}</label><input style={S.input} type="number" value={editSR} onChange={e=>setEditSR(e.target.value)}/></div>
-                         <div style={{flex:1}}><label style={S.label}>{t("doubles_rating")}</label><input style={S.input} type="number" value={editDR} onChange={e=>setEditDR(e.target.value)}/></div>
+                         <div style={{flex:1}}><label style={S.label}>{t("singles_rating")}</label><input style={S.input} type="text" inputMode="decimal" value={editSR} onChange={e=>setEditSR(e.target.value.replace(/[^0-9.]/g,""))} placeholder="1.500–6.500"/></div>
+                         <div style={{flex:1}}><label style={S.label}>{t("doubles_rating")}</label><input style={S.input} type="text" inputMode="decimal" value={editDR} onChange={e=>setEditDR(e.target.value.replace(/[^0-9.]/g,""))} placeholder="1.500–6.500"/></div>
                       </div>
                     ) : (
                       <div style={{display:"flex", gap:10*z}}>

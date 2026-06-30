@@ -1,30 +1,60 @@
-// PickleRank Notification Service Worker
-// Handles scheduled push notifications for upcoming events
+// public/sw-notifications.js
 
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', () => self.clients.claim());
+const scheduledNotifications = new Map();
 
-// Listen for scheduled notification messages from the main app
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'SCHEDULE_NOTIFICATION') {
-    const { title, body, tag, timestamp } = event.data;
+  const data = event.data;
+  
+  if (data && data.type === 'SCHEDULE_NOTIFICATION') {
+    const { title, body, tag, timestamp } = data;
     const delay = timestamp - Date.now();
-    if (delay <= 0) return;
-    // Use setTimeout — works for short delays (< 1 day)
-    setTimeout(() => {
+    
+    // Clear any existing notification with this tag first
+    if (scheduledNotifications.has(tag)) {
+      clearTimeout(scheduledNotifications.get(tag));
+      scheduledNotifications.delete(tag);
+    }
+    
+    if (delay > 0) {
+      const timeoutId = setTimeout(() => {
+        self.registration.showNotification(title, {
+          body,
+          tag,
+          icon: '/icon-192.png', 
+          vibrate: [200, 100, 200]
+        });
+        scheduledNotifications.delete(tag);
+      }, delay);
+      
+      scheduledNotifications.set(tag, timeoutId);
+    } else {
+      // If the time is already past or imminent, show immediately
       self.registration.showNotification(title, {
         body,
-        icon: '/vite.svg',
-        badge: '/vite.svg',
         tag,
-        requireInteraction: false,
-        data: { url: '/' }
+        icon: '/icon-192.png',
+        vibrate: [200, 100, 200]
       });
-    }, Math.min(delay, 2147483647)); // clamp to max safe timeout
+    }
+  } else if (data && data.type === 'CANCEL_NOTIFICATION') {
+    const { tag } = data;
+    if (scheduledNotifications.has(tag)) {
+      clearTimeout(scheduledNotifications.get(tag));
+      scheduledNotifications.delete(tag);
+    }
   }
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(clients.openWindow(event.notification.data?.url || '/'));
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((windowClients) => {
+      if (windowClients.length > 0) {
+        let client = windowClients[0];
+        client.focus();
+      } else {
+        clients.openWindow('/');
+      }
+    })
+  );
 });

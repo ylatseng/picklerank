@@ -6,14 +6,12 @@ import { Sec } from '../components/Shared.jsx';
 export default function Changelog({ theme }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
-  // Latest version expanded by default — that's what users care most about
+  // Latest version expanded by default
   const [expanded, setExpanded] = useState({ 0: true });
   const isMajor = v => v.endsWith(".0.0");
 
   const toggle = (i) => setExpanded(prev => ({ ...prev, [i]: !prev[i] }));
 
-  // Force scroll to top when this component mounts — belt-and-suspenders alongside
-  // the App-level useEffect, which can fire before the Changelog DOM is ready.
   useEffect(() => {
     const mains = document.querySelectorAll("main");
     const main = mains[mains.length - 1];
@@ -21,8 +19,8 @@ export default function Changelog({ theme }) {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, []);
 
-  // Get the lang note — only show if non-empty (EN value is "" which we skip)
   const langNote = t("changelog_lang_note");
+  // Only render if the key actually resolves to something other than itself or an empty string
   const showLangNote = langNote && langNote !== "changelog_lang_note" && langNote.length > 0;
 
   return (
@@ -30,7 +28,7 @@ export default function Changelog({ theme }) {
       <Sec title={`📜 ${t("changelog_title")||"Changelog"}`} theme={theme}>
         <div style={{fontSize:11*z, color:theme.sub, marginBottom:12*z}}>
           {t("changelog_hint")||"Tap any version to see details."}
-          {showLangNote && <span style={{marginLeft:4}}>{langNote}</span>}
+          {showLangNote && <span style={{marginLeft:4}}>({langNote})</span>}
         </div>
         {RELEASES.map((rel, index) => {
           const open = !!expanded[index];
@@ -42,7 +40,6 @@ export default function Changelog({ theme }) {
               border: `1px solid ${major ? "rgba(80,200,120,0.3)" : theme.border}`,
               borderRadius: 12*z, overflow: "hidden"
             }}>
-              {/* Header — always visible, click to toggle */}
               <button onClick={() => toggle(index)} style={{
                 width: "100%", background: "transparent", border: "none",
                 cursor: "pointer", padding: `${12*z}px ${14*z}px`,
@@ -73,11 +70,10 @@ export default function Changelog({ theme }) {
                   }}>▾</span>
                 </div>
               </button>
-              {/* Expanded content */}
               {open && (
                 <div style={{padding: `0 ${14*z}px ${12*z}px`, borderTop: `1px solid ${theme.border}`, paddingTop: 10*z}}>
                   <div style={{fontSize: 10*z, color: theme.sub, marginBottom: 6*z}}>
-                    {rel.changes.length} changes
+                    {rel.changes.length} {t("changes") || "changes"}
                   </div>
                   <ul style={{margin: 0, paddingLeft: 18*z, color: theme.text, fontSize: 12*z, lineHeight: 1.6}}>
                     {rel.changes.map((change, i) => (

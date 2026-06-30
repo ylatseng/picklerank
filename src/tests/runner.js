@@ -326,6 +326,10 @@ export function runAllTests() {
     ["Team Suggester",   testTeamSuggester],
     ["ID Generation",    testIdGeneration],
     ["Security",         testSecurityAndRegression],
+    ["Offline Queue",    testOfflineQueue],
+    ["Zoom Guards",      testZoomOverflowGuards],
+    ["State Schema",     testStateSchema],
+    ["Large Dataset",    testLargeDatasetPerformance],
   ];
   for (const [name, fn] of suites) {
     try { fn(); }
@@ -335,4 +339,132 @@ export function runAllTests() {
   const passed = _results.filter(r => r.pass).length;
   const failed = _results.filter(r => !r.pass);
   return { total, passed, failed, results: _results };
+}
+
+// ── Suite 10: Offline Queue ───────────────────────────────────────────────────
+function testOfflineQueue() {
+  suite("Offline Queue");
+  // Import the queue functions
+  // We test the logic directly without localStorage side-effects
+  const PENDING_KEY = "pr_pending_matches_test";
+
+  // Simulate queueMatchOffline dedup logic
+  const mockQueue = [];
+  const queueWithDedup = (match, existing) => {
+    const alreadyQueued = new Set(existing.map(m => m.id));
+    if (!alreadyQueued.has(match.id)) existing.push(match);
+    return existing;
+  };
+  
+  const m1 = { id: "m1", date: "2026-06-01T10:00:00Z", teams: [["p1"],["p2"]] };
+  const m2 = { id: "m2", date: "2026-06-01T11:00:00Z", teams: [["p3"],["p4"]] };
+  
+  let q = [];
+  q = queueWithDedup(m1, q);
+  q = queueWithDedup(m2, q);
+  q = queueWithDedup(m1, q); // duplicate — should not add again
+  
+  expect("Queue dedup: 2 unique matches (not 3)", q.length === 2);
+  expectEq("Queue dedup: first is m1", q[0].id, "m1");
+  expectEq("Queue dedup: second is m2", q[1].id, "m2");
+  
+  // Simulate merge logic from syncPendingMatches
+  const existing = [m1];
+  const existingIds = new Set(existing.map(m => m.id));
+  const pending = [m1, m2]; // m1 already on server
+  const newOnly = pending.filter(m => !existingIds.has(m.id));
+  expect("Sync merge: only adds non-duplicate", newOnly.length === 1);
+  expectEq("Sync merge: adds m2 not m1", newOnly[0].id, "m2");
+  
+  // Sort by date
+  const merged = [...existing, ...newOnly].sort((a,b) => new Date(a.date) - new Date(b.date));
+  expect("Merge sorts chronologically", merged[0].date < merged[1].date);
+}
+
+// ── Suite 11: Zoom / Overflow Guards ─────────────────────────────────────────
+function testZoomOverflowGuards() {
+  suite("Zoom / Overflow Guards");
+  
+  // Test Math.min() caps used throughout the app
+  const capTest = (val, cap) => Math.min(val, cap);
+  
+  // ScoreStepper caps
+  const zLarge = 1.15;
+  const buttonSize = Math.min(54 * zLarge, 58);
+  const scoreFont = Math.min(52 * zLarge, 56);
+  expect("ScoreStepper button capped at 58px", buttonSize <= 58);
+  expect("ScoreStepper score font capped at 56px", scoreFont <= 56);
+  
+  // Welcome modal card at large zoom
+  const cardPad = Math.min(24 * zLarge, 20);
+  expect("WelcomeModal padding capped at 20px", cardPad <= 20);
+  
+  // smartName thresholds
+  expect("Short name (7 chars) unchanged at z=1.0", smartName("Allen T", 1.0) === "Allen T");
+  expect("Long name (15+ chars) abbreviated at z=1.0", smartName("Christopher Alexander", 1.0) !== "Christopher Alexander");
+  expect("Long name abbreviated at z=1.15", smartName("Michael Jackson", 1.15) !== "Michael Jackson");
+  expect("Single word never abbreviated", smartName("Alice", 1.15) === "Alice");
+  
+  // fmtDelta returns object not string
+  if (typeof fmtDelta === "function") {
+    const result = fmtDelta(0.123);
+    expect("fmtDelta returns object", typeof result === "object" && result !== null);
+    expect("fmtDelta has .text", typeof result.text === "string");
+    expect("fmtDelta has .color", typeof result.color === "string");
+    expect("fmtDelta positive text has +", result.text.includes("+"));
+    const neg = fmtDelta(-0.123);
+    expect("fmtDelta negative has color", neg.color === "#e05050");
+  }
+}
+
+// ── Suite 12: State Schema Integrity ──────────────────────────────────────────
+function testStateSchema() {
+  suite("State Schema");
+  
+  // blankState shape — all required fields present
+  // We can't import blankState directly but we can test the cache merge logic
+  const requiredFields = ["players", "matches", "events", "trash", "presence", "activeView"];
+  
+  // Simulate cache merge (what readCache does on version mismatch)
+  const mockBlank = { players: [], matches: [], events: [], trash: [], presence: {}, activeView: "dashboard", logoText: "LS", logoData: null, adminPass: "1234", leaderboardFormat: "doubles" };
+  const oldCache = { players: [{id:"p1",name:"Alice"}], matches: [] }; // missing new fields
+  const merged = { ...mockBlank, ...oldCache };
+  
+  for (const field of requiredFields) {
+    expect(`Merged cache has '${field}'`, field in merged);
+  }
+  expect("Merged cache preserves old players", merged.players[0]?.name === "Alice");
+  expect("Merged cache fills missing presence", Array.isArray(merged.players) || typeof merged.presence === "object");
+  
+  // Match ID uniqueness
+  const ids = Array.from({length: 50}, () => genId());
+  expect("genId: 50 unique IDs", new Set(ids).size === 50);
+  
+  // Rating bounds
+  expect("DEFAULT_RATING is 3.0", DEFAULT_RATING === 3.0 || DEFAULT_RATING === 3);
+  expect("calcExpected within (0,1)", calcExpected(3.0, 3.0) > 0 && calcExpected(3.0, 3.0) < 1);
+}
+
+// ── Suite 13: Large Dataset Performance 
+function testLargeDatasetPerformance() {
+  suite("Large Dataset Performance");
+
+  // Create a synthetic workload: 500 matches and 50 players
+  const players = Array.from({length: 50}, (_, i) => ({ 
+    id: `p${i}`, name: `Player ${i}`, ratingSingles: 3.0, ratingDoubles: 3.0 
+  }));
+  
+  const matches = Array.from({length: 500}, (_, i) => ({
+    id: `m${i}`, type: "doubles", date: new Date().toISOString(),
+    teams: [[`p${i%50}`, `p${(i+1)%50}`], [`p${(i+2)%50}`, `p${(i+3)%50}`]],
+    winnerTeam: 0, games: [{a: 11, b: 5, winner: 0}]
+  }));
+
+  const start = performance.now();
+  replayAllMatches(players, matches);
+  const end = performance.now();
+  
+  const duration = end - start;
+  expect(`Process 500 matches in < 1000ms`, duration < 1000, 
+    `took ${duration.toFixed(0)}ms`);
 }

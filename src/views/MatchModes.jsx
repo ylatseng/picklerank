@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { t, genId, validatePickleballScore, isoToDatetimeLocal, sortOptionsAlpha, replayAllMatches, WIN_TO_OPTIONS, suggestBalancedTeams, computeSessionSummary, getRecentForm, shortName, isLargeZoom, getSessionNum, calcExpected, DEFAULT_RATING } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, Empty, Err, Sel, MatchEloBreakdown, ConfirmInline, MatchEditModal, MatchCard, usePersistentFormState } from '../components/Shared.jsx';
+import { Sec, Empty, Err, Sel, PlayerPicker, MatchEloBreakdown, ConfirmInline, MatchEditModal, MatchCard, usePersistentFormState } from '../components/Shared.jsx';
 import { MatchesSubNav } from '../components/Navigation.jsx';
 
 // Tiny inline form indicator: shows last 3 results as W/L badges
@@ -266,12 +266,18 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
       
       {type==="singles"?(
         <CollapsibleSec title={t("players")} theme={theme}>
-          <label style={S.label}>{t("player_1")}</label>
-          <Sel opts={opts} value={sp.s1} onChange={v=>upSp("s1",v)} placeholder={t("select_prompt")} theme={theme}/>
-          {sp.s1 && <FormDots pid={sp.s1} matches={state.matches} z={z}/>}
-          <label style={{...S.label,marginTop:10*z}}>{t("player_2")}</label>
-          <Sel opts={opts} value={sp.s2} onChange={v=>upSp("s2",v)} placeholder={t("select_prompt")} theme={theme}/>
-          {sp.s2 && <FormDots pid={sp.s2} matches={state.matches} z={z}/>}
+          <div style={{display:"flex",gap:8*z}}>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("player_1")}</label>
+              <PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&o.value===sp.s2}))} value={sp.s1} onChange={v=>upSp("s1",v)} placeholder={t("player_1")} theme={theme}/>
+              {sp.s1 && <FormDots pid={sp.s1} matches={state.matches} z={z}/>}
+            </div>
+            <div style={{flex:1}}>
+              <label style={S.label}>{t("player_2")}</label>
+              <PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&o.value===sp.s1}))} value={sp.s2} onChange={v=>upSp("s2",v)} placeholder={t("player_2")} theme={theme}/>
+              {sp.s2 && <FormDots pid={sp.s2} matches={state.matches} z={z}/>}
+            </div>
+          </div>
           {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
         </CollapsibleSec>
       ):(
@@ -279,15 +285,15 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           <label style={S.label}>{t("team_name_opt")}</label>
           <input style={S.input} value={tnames.t1} onChange={e=>upTn("t1",e.target.value)} placeholder="e.g. The Bangers"/>
           <div style={{display:"flex",gap:8*z,marginTop:8*z}}>
-            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><Sel opts={opts} value={sp.d1a} onChange={v=>upSp("d1a",v)} placeholder={t("select_prompt")} theme={theme}/>{sp.d1a&&<FormDots pid={sp.d1a} matches={state.matches} z={z}/>}</div>
-            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><Sel opts={opts} value={sp.d1b} onChange={v=>upSp("d1b",v)} placeholder={t("select_prompt")} theme={theme}/>{sp.d1b&&<FormDots pid={sp.d1b} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1b,sp.d2a,sp.d2b].includes(o.value)}))} value={sp.d1a} onChange={v=>upSp("d1a",v)} placeholder={t("player_a")} theme={theme}/>{sp.d1a&&<FormDots pid={sp.d1a} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1a,sp.d2a,sp.d2b].includes(o.value)}))} value={sp.d1b} onChange={v=>upSp("d1b",v)} placeholder={t("player_b")} theme={theme}/>{sp.d1b&&<FormDots pid={sp.d1b} matches={state.matches} z={z}/>}</div>
           </div>
           <div style={{borderTop:`1px solid ${theme.border}`,margin:"14px 0"}}/>
           <label style={S.label}>{t("team_name_opt")}</label>
           <input style={S.input} value={tnames.t2} onChange={e=>upTn("t2",e.target.value)} placeholder="e.g. The Dinkers"/>
           <div style={{display:"flex",gap:8*z,marginTop:8*z}}>
-            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><Sel opts={opts} value={sp.d2a} onChange={v=>upSp("d2a",v)} placeholder={t("select_prompt")} theme={theme}/>{sp.d2a&&<FormDots pid={sp.d2a} matches={state.matches} z={z}/>}</div>
-            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><Sel opts={opts} value={sp.d2b} onChange={v=>upSp("d2b",v)} placeholder={t("select_prompt")} theme={theme}/>{sp.d2b&&<FormDots pid={sp.d2b} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1a,sp.d1b,sp.d2b].includes(o.value)}))} value={sp.d2a} onChange={v=>upSp("d2a",v)} placeholder={t("player_a")} theme={theme}/>{sp.d2a&&<FormDots pid={sp.d2a} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1a,sp.d1b,sp.d2a].includes(o.value)}))} value={sp.d2b} onChange={v=>upSp("d2b",v)} placeholder={t("player_b")} theme={theme}/>{sp.d2b&&<FormDots pid={sp.d2b} matches={state.matches} z={z}/>}</div>
           </div>
           {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
         </CollapsibleSec>
@@ -342,7 +348,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
       <CollapsibleSec title={t("game_scores_sec")} theme={theme}>
         {/* Best-of-N series toggle */}
         <div style={{display:"flex", alignItems:"center", gap:8*z, marginBottom:10*z}}>
-          <span style={{fontSize:12*z, color:theme.sub}}>Series:</span>
+          <span style={{fontSize:12*z, color:theme.sub, flexShrink:0}}>{t("series_lbl")||"Series"}:</span>
           {[1,3,5].map(n => (
             <button key={n} onClick={() => {
               setBestOf(n);
@@ -357,7 +363,7 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
                 border:`1px solid ${bestOf===n ? theme.accent : theme.border}`,
                 background: bestOf===n ? theme.accent+"22" : "transparent",
                 color: bestOf===n ? theme.accent : theme.sub}}>
-              {n === 1 ? t("series_single")||"Single" : `Best of ${n}`}
+              {n === 1 ? (t("series_single")||"Single") : n === 3 ? (t("best_of_3")||"Best of 3") : (t("best_of_5")||"Best of 5")}
             </button>
           ))}
         </div>
@@ -381,18 +387,39 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           const ga=parseInt(g.a), gb=parseInt(g.b);
           const bothFilled = g.a!=="" && g.b!=="" && !isNaN(ga) && !isNaN(gb);
           const isIllegal = bothFilled && !validatePickleballScore(ga,gb,winTo,winBy);
+          const gameWinner = bothFilled && !isIllegal ? validatePickleballScore(ga,gb,winTo,winBy).winner : null;
+          // Get team names from selected players
+          const getName = id => players.find(p=>p.id===id)?.name || "?";
+          const t1Label = type==="singles" ? shortName(getName(sp.s1),"always") : `${shortName(getName(sp.d1a),"always")} / ${shortName(getName(sp.d1b),"always")}`;
+          const t2Label = type==="singles" ? shortName(getName(sp.s2),"always") : `${shortName(getName(sp.d2a),"always")} / ${shortName(getName(sp.d2b),"always")}`;
+          const hasPlayers = type==="singles" ? (sp.s1 && sp.s2) : (sp.d1a && sp.d1b && sp.d2a && sp.d2b);
           return (
-          <div key={i}>
-            <div style={S.gameRow}>
-              <span style={{color:theme.sub,fontSize:11*z,minWidth:36*z,flexShrink:0}}>
-                {t("game_lbl") === "第" ? `第${i+1}局` : `${t("game_lbl")||"Game"} ${i+1}`}
-              </span>
-              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder="P1" value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
-              <span style={{color:theme.sub}}>–</span>
-              <input style={{...S.scoreInput, ...(isIllegal?{borderColor:"#e05050"}:{})}} type="number" min="0" max="99" placeholder="P2" value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
-              {games.length>1&&<button style={S.btnDanger} onClick={()=>rmGame(i)}>✕</button>}
+          <div key={i} style={{marginBottom:8*z, padding:`${6*z}px ${8*z}px`, background:theme.bg, borderRadius:8*z, border:`1px solid ${isIllegal?"#e05050":theme.border}`}}>
+            <div style={{fontSize:10*z, color:theme.sub, marginBottom:4*z, display:"flex", justifyContent:"space-between"}}>
+              <span>{t("game_lbl")==="第" ? `第${i+1}局` : `${t("game_lbl")||"Game"} ${i+1}`}</span>
+              {games.length>1&&<button style={{...S.btnDanger, padding:`${1*z}px ${6*z}px`, fontSize:10*z}} onClick={()=>rmGame(i)}>✕</button>}
             </div>
-            {isIllegal && <div style={{fontSize:11*z,color:"#e05050",marginTop:-4*z,marginBottom:8*z}}>{t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>}
+            {/* T1 row */}
+            <div style={{display:"flex", alignItems:"center", gap:8*z, marginBottom:4*z}}>
+              <span style={{flex:1, minWidth:0, fontSize:12*z, fontWeight:gameWinner===0?700:500,
+                color:gameWinner===0?theme.accent:theme.text,
+                overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                {gameWinner===0?"✓ ":""}{hasPlayers ? t1Label : "P1"}
+              </span>
+              <input style={{...S.scoreInput, width:Math.min(52*z,56), ...(isIllegal?{borderColor:"#e05050"}:{})}}
+                type="number" min="0" max="99" placeholder="–" value={g.a} onChange={e=>updGame(i,"a",e.target.value)}/>
+            </div>
+            {/* T2 row */}
+            <div style={{display:"flex", alignItems:"center", gap:8*z}}>
+              <span style={{flex:1, minWidth:0, fontSize:12*z, fontWeight:gameWinner===1?700:500,
+                color:gameWinner===1?theme.accent:theme.text,
+                overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                {gameWinner===1?"✓ ":""}{hasPlayers ? t2Label : "P2"}
+              </span>
+              <input style={{...S.scoreInput, width:Math.min(52*z,56), ...(isIllegal?{borderColor:"#e05050"}:{})}}
+                type="number" min="0" max="99" placeholder="–" value={g.b} onChange={e=>updGame(i,"b",e.target.value)}/>
+            </div>
+            {isIllegal && <div style={{fontSize:10*z,color:"#e05050",marginTop:4*z}}>{t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}</div>}
           </div>
           );
         })}
@@ -431,6 +458,79 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
   );
 }
 
+
+// ── Shared Round Card ─────────────────────────────────────────────────────────
+// Layout:
+//   回合 1
+//   Player 1 / Player 2      [11]
+//   Player 3 / Player 4      [ 2]
+function RoundCard({ round, t1Name, t2Name, t1Score, t2Score, onT1Change, onT2Change,
+                     winTo, winBy, highlighted, highlightLabel, theme, z, S, t }) {
+  const s1 = parseInt(t1Score), s2 = parseInt(t2Score);
+  const bothFilled = t1Score !== "" && t2Score !== "" && !isNaN(s1) && !isNaN(s2);
+  const isValid   = bothFilled && !!validatePickleballScore(s1, s2, winTo, winBy);
+  const isIllegal = bothFilled && !isValid;
+  const winner    = isValid ? validatePickleballScore(s1, s2, winTo, winBy).winner : null;
+
+  const inputStyle = (isWinner) => ({
+    ...S.scoreInput,
+    width: Math.min(52*z, 56),
+    fontSize: Math.min(15*z, 17),
+    borderColor: isIllegal ? "#e05050" : isWinner ? theme.accent : undefined,
+    fontWeight: isWinner ? 800 : 400,
+  });
+
+  return (
+    <div style={{
+      background: highlighted ? theme.accent + "10" : theme.bg,
+      border: `${highlighted ? 2 : 1}px solid ${
+        highlighted ? theme.accent : isIllegal ? "#e05050" : theme.border
+      }`,
+      borderRadius: 10*z, padding: `${8*z}px ${10*z}px`, marginBottom: 8*z,
+    }}>
+      {/* Round label */}
+      <div style={{fontSize:10*z, fontWeight:700, color:theme.accent, marginBottom:5*z, display:"flex", justifyContent:"space-between"}}>
+        <span>{t("round_lbl")||"R"}{round}{highlighted && ` · ✅ ${highlightLabel}`}</span>
+        {isIllegal && <span style={{color:"#e05050"}}>⚠ {t("err_valid_scores")||"invalid"}</span>}
+      </div>
+
+      {/* T1 row: name left, score right */}
+      <div style={{display:"flex", alignItems:"center", gap:8*z, marginBottom:4*z}}>
+        <span style={{
+          flex:1, minWidth:0, fontSize:12*z,
+          fontWeight: winner===0 ? 700 : 500,
+          color: winner===0 ? theme.accent : theme.text,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"
+        }}>
+          {winner===0 ? "✓ " : ""}{t1Name}
+        </span>
+        <input
+          style={inputStyle(winner===0)}
+          type="number" min="0" max="99" placeholder="–"
+          value={t1Score} onChange={e => onT1Change(e.target.value)}
+        />
+      </div>
+
+      {/* T2 row: name left, score right */}
+      <div style={{display:"flex", alignItems:"center", gap:8*z}}>
+        <span style={{
+          flex:1, minWidth:0, fontSize:12*z,
+          fontWeight: winner===1 ? 700 : 500,
+          color: winner===1 ? theme.accent : theme.text,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"
+        }}>
+          {winner===1 ? "✓ " : ""}{t2Name}
+        </span>
+        <input
+          style={inputStyle(winner===1)}
+          type="number" min="0" max="99" placeholder="–"
+          value={t2Score} onChange={e => onT2Change(e.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function SessionMode({ players, state, set, nav, theme, isAdmin, user, showUndo }) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
@@ -445,6 +545,18 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
   const [sessionSummary, setSessionSummary] = useState(null);
   const [chosenSplit, setChosenSplit] = useState(null); // team suggester selection
   const savedGroups = state.savedGroups || [];
+
+  // Auto-clear session validation error when scores become valid
+  const MATCHUPS_STATIC = [{ t1:[0,1], t2:[2,3] }, { t1:[0,2], t2:[1,3] }, { t1:[0,3], t2:[1,2] }];
+  React.useEffect(() => {
+    if (!err) return;
+    const allValid = MATCHUPS_STATIC.every((_, i) => {
+      const s1 = parseInt(roundScores[i]?.t1), s2 = parseInt(roundScores[i]?.t2);
+      if (isNaN(s1) || isNaN(s2)) return false;
+      return !!validatePickleballScore(s1, s2, winTo, winBy);
+    });
+    if (allValid && sessionIds.filter(Boolean).length === 4) setErr("");
+  }, [roundScores, sessionIds, err, winTo, winBy]);
   
   useEffect(() => {
     if (user?.myPlayerId && !sessionIds[0]) {
@@ -487,9 +599,9 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
     for(let i=0; i<3; i++) {
         const s1 = parseInt(roundScores[i].t1);
         const s2 = parseInt(roundScores[i].t2);
-        if (isNaN(s1) || isNaN(s2)) return setErr(`Round ${i+1}: ${t("err_valid_scores")}`);
+        if (isNaN(s1) || isNaN(s2)) return setErr(`${t("round_lbl")||"Round"} ${i+1}: ${t("err_valid_scores")}`);
         const r = validatePickleballScore(s1, s2, winTo, winBy);
-        if(!r) return setErr(`Round ${i+1}: ${t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}`);
+        if(!r) return setErr(`${t("round_lbl")||"Round"} ${i+1}: ${t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}`);
         const winnerTeam = r.winner;
         const t1w = winnerTeam === 0 ? 1 : 0;
         const t2w = winnerTeam === 1 ? 1 : 0;
@@ -497,7 +609,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
         const t2Ids = [sessionIds[matchups[i].t2[0]], sessionIds[matchups[i].t2[1]]];
         // Stagger timestamps so Round 3 appears on top in reverse-chrono History
         const matchDate = new Date(baseTime + i * 1000).toISOString();
-        const roundNote = `Session #${sessionNum} Round ${i+1} of 3${notes.trim() ? " — " + notes.trim() : ""}`;
+        const roundNote = `${(t("session_round_note")||"Session #{num} Round {round} of 3").replace("{num}", sessionNum).replace("{round}", i+1)}${notes.trim() ? " — " + notes.trim() : ""}`;
         matchesToLog.push({id:genId(),type:"doubles",date:matchDate,teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:null, notes:roundNote, loggedBy: user?.myPlayerId || "guest"});
     }
 
@@ -676,7 +788,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
             const form = pid ? getRecentForm(pid, state.matches) : [];
             return (
               <div key={i}>
-                <Sel opts={opts} value={pid} onChange={v=>upP(i,v)} placeholder={`${t("player_n")||"Player"} ${i+1}`} theme={theme}/>
+                <PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&sessionIds.some((id,idx)=>idx!==i&&id===o.value)}))} value={pid} onChange={v=>upP(i,v)} placeholder={`${t("player_n")||"Player"} ${i+1}`} theme={theme}/>
                 {form.length > 0 && (
                   <div style={{display:"flex",gap:3*z,marginTop:3*z,justifyContent:"center"}}>
                     {form.map((r,j) => (
@@ -714,12 +826,22 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
                     </span>
                     <span style={{fontSize:10*z, color:theme.sub}}>{t("team_balance_label")} {s.gap.toFixed(3)}</span>
                   </div>
-                  <div style={{fontSize:12*z, marginTop:4*z, color:theme.text}}>
-                    <strong>{getName(s.t1[0])} & {getName(s.t1[1])}</strong>
-                    <span style={{color:theme.sub}}> ({s.avg1.toFixed(2)}) </span>
-                    vs
-                    <strong> {getName(s.t2[0])} & {getName(s.t2[1])}</strong>
-                    <span style={{color:theme.sub}}> ({s.avg2.toFixed(2)})</span>
+                  <div style={{fontSize:12*z, marginTop:4*z}}>
+                    {/* Stacked layout: T1 on one line, T2 on next — readable at all font sizes */}
+                    <div style={{display:"flex", alignItems:"center", gap:4*z, flexWrap:"nowrap", overflow:"hidden"}}>
+                      <span style={{fontSize:10*z, color:theme.sub, flexShrink:0}}>{t("team_abbr_1")||"T1"}</span>
+                      <strong style={{color:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1}}>
+                        {getName(s.t1[0])} &amp; {getName(s.t1[1])}
+                      </strong>
+                      <span style={{fontSize:10*z, color:theme.sub, flexShrink:0}}>({s.avg1.toFixed(2)})</span>
+                    </div>
+                    <div style={{display:"flex", alignItems:"center", gap:4*z, flexWrap:"nowrap", overflow:"hidden", marginTop:2*z}}>
+                      <span style={{fontSize:10*z, color:theme.sub, flexShrink:0}}>{t("team_abbr_2")||"T2"}</span>
+                      <strong style={{color:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1}}>
+                        {getName(s.t2[0])} &amp; {getName(s.t2[1])}
+                      </strong>
+                      <span style={{fontSize:10*z, color:theme.sub, flexShrink:0}}>({s.avg2.toFixed(2)})</span>
+                    </div>
                   </div>
                 </div>
               );
@@ -774,29 +896,20 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
               const isChosenMatchup = chosenSplit !== null && suggestions[chosenSplit] &&
                 JSON.stringify([...suggestions[chosenSplit].t1].sort()) === JSON.stringify([...matchupPlayerSet]);
               return (
-                <div key={i} style={{
-                  background: isChosenMatchup ? theme.accent + "10" : theme.bg,
-                  border:`${isChosenMatchup ? 2 : 1}px solid ${isChosenMatchup ? theme.accent : theme.border}`,
-                  borderRadius:12*z, padding:12*z, position:"relative"
-                }}>
-                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z}}>
-                    <div style={{fontSize:12*z, fontWeight:700, color:theme.accent}}>{t("round")} {i+1}</div>
-                    {isChosenMatchup && <div style={{fontSize:10*z, color:theme.accent, fontWeight:700}}>✅ {t("team_fairest")}</div>}
-                  </div>
-                  {/* Team names on their own row */}
-                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z, gap:8*z}}>
-                    <span style={{flex:1, fontSize:12*z, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                      {getName(sessionIds[m.t1[0]])} / {getName(sessionIds[m.t1[1]])}
-                    </span>
-                    <span style={{flex:1, fontSize:12*z, color:theme.text, fontWeight:600, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                      {getName(sessionIds[m.t2[0]])} / {getName(sessionIds[m.t2[1]])}
-                    </span>
-                  </div>
-                  <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
-                    <input style={S.scoreInput} type="number" placeholder="T1" value={roundScores[i].t1} onChange={e=>updScore(i, "t1", e.target.value)}/>
-                    <span style={{color:theme.sub, fontSize:14*z}}>–</span>
-                    <input style={S.scoreInput} type="number" placeholder="T2" value={roundScores[i].t2} onChange={e=>updScore(i, "t2", e.target.value)}/>
-                  </div>
+                <div key={i}>
+                <RoundCard
+                  round={i+1}
+                  t1Name={`${getName(sessionIds[m.t1[0]])} / ${getName(sessionIds[m.t1[1]])}`}
+                  t2Name={`${getName(sessionIds[m.t2[0]])} / ${getName(sessionIds[m.t2[1]])}`}
+                  t1Score={roundScores[i].t1}
+                  t2Score={roundScores[i].t2}
+                  onT1Change={v => updScore(i, "t1", v)}
+                  onT2Change={v => updScore(i, "t2", v)}
+                  winTo={winTo} winBy={winBy}
+                  highlighted={isChosenMatchup}
+                  highlightLabel={t("team_fairest")}
+                  theme={theme} z={z} S={S} t={t}
+                />
                 </div>
               );
             })}
@@ -823,18 +936,27 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
               return (
                 <div style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:10*z, padding:10*z}}>
                   <div style={{fontSize:11*z, fontWeight:700, color:theme.accent, marginBottom:8*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>
-                    📊 Score Preview
+                    📊 {t("score_preview")||"SCORE PREVIEW"}
                   </div>
                   {liveResults.map(r => (
-                    <div key={r.round} style={{display:"flex", alignItems:"center", gap:6*z, fontSize:11*z, padding:`${4*z}px 0`, borderBottom:`1px solid ${theme.border}`}}>
-                      <span style={{color:theme.sub, fontWeight:700, flexShrink:0}}>R{r.round}</span>
-                      <span style={{flex:1, color: r.winner===0 ? theme.accent : theme.text, fontWeight: r.winner===0 ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                        {r.winner===0 && "✓ "}{r.t1Name}
-                      </span>
-                      <span style={{fontWeight:700, color:theme.text, flexShrink:0}}>{r.s1}–{r.s2}</span>
-                      <span style={{flex:1, textAlign:"right", color: r.winner===1 ? theme.accent : theme.text, fontWeight: r.winner===1 ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                        {r.t2Name}{r.winner===1 && " ✓"}
-                      </span>
+                    <div key={r.round} style={{padding:`${5*z}px 0`, borderBottom:`1px solid ${theme.border}`}}>
+                      <div style={{fontSize:10*z, color:theme.sub, fontWeight:700, marginBottom:3*z}}>
+                        {t("round_lbl")||"R"}{r.round}
+                      </div>
+                      {/* T1 row */}
+                      <div style={{display:"flex", alignItems:"center", gap:8*z, marginBottom:2*z}}>
+                        <span style={{flex:1, minWidth:0, fontSize:11*z, fontWeight:r.winner===0?700:400, color:r.winner===0?theme.accent:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                          {r.winner===0?"✓ ":""}{r.t1Name}
+                        </span>
+                        <span style={{fontSize:12*z, fontWeight:800, color:r.winner===0?theme.accent:theme.text, flexShrink:0, minWidth:24*z, textAlign:"right"}}>{r.s1}</span>
+                      </div>
+                      {/* T2 row */}
+                      <div style={{display:"flex", alignItems:"center", gap:8*z}}>
+                        <span style={{flex:1, minWidth:0, fontSize:11*z, fontWeight:r.winner===1?700:400, color:r.winner===1?theme.accent:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                          {r.winner===1?"✓ ":""}{r.t2Name}
+                        </span>
+                        <span style={{fontSize:12*z, fontWeight:800, color:r.winner===1?theme.accent:theme.text, flexShrink:0, minWidth:24*z, textAlign:"right"}}>{r.s2}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -924,9 +1046,9 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
     const kotcNum = getSessionNum(state.matches, "King of the Court");
         const s1 = parseInt(roundScores[i].t1);
         const s2 = parseInt(roundScores[i].t2);
-        if (isNaN(s1) || isNaN(s2)) return setErr(`Round ${i+1}: ${t("err_valid_scores")}`);
+        if (isNaN(s1) || isNaN(s2)) return setErr(`${t("round_lbl")||"Round"} ${i+1}: ${t("err_valid_scores")}`);
         const r = validatePickleballScore(s1, s2, winTo, winBy);
-        if(!r) return setErr(`Round ${i+1}: ${t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}`);
+        if(!r) return setErr(`${t("round_lbl")||"Round"} ${i+1}: ${t("err_invalid_score_fmt").replace("{winTo}", winTo).replace("{winBy}", winBy)}`);
         const winnerTeam = r.winner;
         const t1w = winnerTeam === 0 ? 1 : 0;
         const t2w = winnerTeam === 1 ? 0 : 1;
@@ -940,7 +1062,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
           games: [{a:s1, b:s2, winner: winnerTeam}],
           teamNames: {t1:null, t2:null}, winTo, winBy,
           team1Wins: t1w, team2Wins: t2w, venue: null,
-          notes: `King of the Court #${kotcNum}: Match ${i+1} of 3${notes.trim() ? " — " + notes.trim() : ""}`,
+          notes: `${(t("kotc_match_note")||"King of the Court #{num}: Match {round} of 3").replace("{num}", kotcNum).replace("{round}", i+1)}${notes.trim() ? " — " + notes.trim() : ""}`,
           loggedBy: user?.myPlayerId || "guest"
         });
     }
@@ -956,7 +1078,9 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
         s1: parseInt(roundScores[i].t1), s2: parseInt(roundScores[i].t2),
       })),
     });
-    setSuccess(`✅ 3 Matches Logged.\nKing Crowned: ${getName(kotcLeaderboard[0].id)}`);
+    setSuccess(`${t("matches_logged_3")||"✅ 3 Matches Logged."}\n${t("king_crowned")||"King Crowned:"} ${getName(kotcLeaderboard[0].id)}`);
+    // Scroll to top so user sees results
+    setTimeout(() => { const mains = document.querySelectorAll("main"); const m = mains[mains.length-1]; if(m) m.scrollTop=0; window.scrollTo({top:0,behavior:"instant"}); }, 80);
     // Clear persisted draft
     clearKotcScores();
     clearKotcIds();
@@ -977,7 +1101,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
       {/* ── KOTC analysis panel — shows after matches are logged ───────────────
           Tells the story of why each player landed where they did. */}
       {kotcAnalysis && (
-        <Sec title="👑 King of the Court — Analysis" theme={theme}>
+        <Sec title={t("kotc_analysis_title")||"👑 King of the Court — Analysis"} theme={theme}>
           {/* Leaderboard with explanations */}
           <div style={{display:"flex", flexDirection:"column", gap:8*z, marginBottom:14*z}}>
             {kotcAnalysis.leaderboard.map((entry, rank) => {
@@ -985,13 +1109,16 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
               const medal = rank === 0 ? "👑" : rank === 1 ? "🥈" : rank === 2 ? "🥉" : `#${rank+1}`;
               // Reason text: explain via wins + point diff
               let reason;
+              const diffStr = `${entry.diff >= 0 ? '+' : ''}${entry.diff}`;
               if (isKing) {
-                reason = `Won ${entry.wins} of 3 matches with a +${entry.diff} point differential — the strongest combined record.`;
+                reason = (t("kotc_king_reason")||"Won {wins} of 3 matches with a +{diff} point differential — the strongest combined record.")
+                  .replace("{wins}", entry.wins).replace("{diff}", entry.diff);
               } else if (entry.wins === kotcAnalysis.leaderboard[0].wins) {
-                reason = `Tied at ${entry.wins} wins but lost the tiebreaker on point differential (${entry.diff >= 0 ? '+' : ''}${entry.diff}).`;
+                reason = (t("kotc_tied_reason")||"Tied at {wins} wins but lost the tiebreaker on point differential ({diff}).")
+                  .replace("{wins}", entry.wins).replace("{diff}", diffStr);
               } else {
-                const lostBy = kotcAnalysis.leaderboard[0].wins - entry.wins;
-                reason = `Won ${entry.wins} match${entry.wins === 1 ? '' : 'es'} (${lostBy} fewer than the King). Point differential: ${entry.diff >= 0 ? '+' : ''}${entry.diff}.`;
+                reason = (t("kotc_lost_reason")||"Won {wins} match (fewer than the King). Point differential: {diff}.")
+                  .replace("{wins}", entry.wins).replace("{diff}", diffStr);
               }
               return (
                 <div key={entry.id} style={{
@@ -1003,7 +1130,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
                     <div style={{display:"flex", alignItems:"center", gap:8*z, flex:1, minWidth:0, overflow:"hidden"}}>
                       <span style={{fontSize:18*z, flexShrink:0}}>{medal}</span>
                       <span style={{fontSize:14*z, fontWeight: isKing ? 800 : 700, color: isKing ? "#f0c040" : theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                        {getName(entry.id)}{isKing && " — KING"}
+                        {getName(entry.id)}{isKing && ` — ${t("kotc_king_suffix")||"KING"}`}
                       </span>
                     </div>
                     <div style={{fontSize:11*z, color:theme.sub, flexShrink:0}}>
@@ -1016,20 +1143,27 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
             })}
           </div>
           {/* Per-match recap */}
-          <div style={{fontSize:11*z, fontWeight:700, color:theme.sub, marginBottom:6*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>Match recap</div>
+          <div style={{fontSize:11*z, fontWeight:700, color:theme.sub, marginBottom:6*z, textTransform:"uppercase", letterSpacing:"0.5px"}}>{t("kotc_match_recap")||"Match Recap"}</div>
           <div style={{display:"flex", flexDirection:"column", gap:6*z, marginBottom: 12*z}}>
             {kotcAnalysis.matchups.map(m => {
               const winT1 = m.s1 > m.s2;
+              const t1Name = `${shortName(getName(m.t1Ids[0]),"always")} / ${shortName(getName(m.t1Ids[1]),"always")}`;
+              const t2Name = `${shortName(getName(m.t2Ids[0]),"always")} / ${shortName(getName(m.t2Ids[1]),"always")}`;
               return (
-                <div key={m.round} style={{display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:11*z, padding:`${5*z}px ${8*z}px`, background: theme.bg, borderRadius: 6*z, gap: 6*z}}>
-                  <span style={{color:theme.sub, fontWeight:700, flexShrink:0}}>#{m.round}</span>
-                  <span style={{flex:1, color: winT1 ? theme.accent : theme.text, fontWeight: winT1 ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                    {getName(m.t1Ids[0])}/{getName(m.t1Ids[1])} {winT1 && "✓"}
-                  </span>
-                  <span style={{color:theme.text, fontWeight:700, flexShrink:0}}>{m.s1}–{m.s2}</span>
-                  <span style={{flex:1, textAlign:"right", color: !winT1 ? theme.accent : theme.text, fontWeight: !winT1 ? 700 : 500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                    {!winT1 && "✓ "}{getName(m.t2Ids[0])}/{getName(m.t2Ids[1])}
-                  </span>
+                <div key={m.round} style={{padding:`${6*z}px ${8*z}px`, background:theme.bg, borderRadius:6*z, marginBottom:4*z}}>
+                  <div style={{fontSize:10*z, color:theme.sub, fontWeight:700, marginBottom:3*z}}>#{m.round}</div>
+                  <div style={{display:"flex", alignItems:"center", gap:6*z, marginBottom:2*z}}>
+                    <span style={{flex:1, minWidth:0, fontSize:11*z, fontWeight:winT1?700:400, color:winT1?theme.accent:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                      {winT1?"✓ ":""}{t1Name}
+                    </span>
+                    <span style={{fontSize:12*z, fontWeight:800, color:winT1?theme.accent:theme.text, flexShrink:0, minWidth:22*z, textAlign:"right"}}>{m.s1}</span>
+                  </div>
+                  <div style={{display:"flex", alignItems:"center", gap:6*z}}>
+                    <span style={{flex:1, minWidth:0, fontSize:11*z, fontWeight:!winT1?700:400, color:!winT1?theme.accent:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                      {!winT1?"✓ ":""}{t2Name}
+                    </span>
+                    <span style={{fontSize:12*z, fontWeight:800, color:!winT1?theme.accent:theme.text, flexShrink:0, minWidth:22*z, textAlign:"right"}}>{m.s2}</span>
+                  </div>
                 </div>
               );
             })}
@@ -1037,7 +1171,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
           <button
             onClick={() => { setKotcAnalysis(null); setSuccess(""); }}
             style={{...S.btnSecondary, width:"100%", marginTop:0}}>
-            Start Another King of the Court
+            {t("kotc_start_another")||"Start Another King of the Court"}
           </button>
         </Sec>
       )}
@@ -1046,7 +1180,11 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
       <Sec title={t("kotc")} theme={theme}>
         <div style={{fontSize:12*z, color:theme.sub, marginBottom:12*z}}>{t("kotc_desc")}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z, marginBottom:16*z}}>
-          {[0,1,2,3].map(i=><Sel key={i} opts={opts} value={sessionIds[i]} onChange={v=>upP(i,v)} placeholder={`${t("player_n")||"Player"} ${i+1}`} theme={theme}/>)}
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8*z}}>
+          {[0,1,2,3].map(i=>(
+            <PlayerPicker key={i} opts={opts.map(o=>({...o,disabled:o.value&&sessionIds.some((id,idx)=>idx!==i&&id===o.value)}))} value={sessionIds[i]} onChange={v=>upP(i,v)} placeholder={`${t("player_n")||"Player"} ${i+1}`} theme={theme}/>
+          ))}
+        </div>
         </div>
 
         {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
@@ -1065,21 +1203,19 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
             </div>
 
             {matchups.map((m, i) => (
-              <div key={i} style={{background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12*z, padding:12*z}}>
-                <div style={{fontSize:12*z, fontWeight:700, color:theme.accent, marginBottom:8*z}}>{t("round")} {i+1}</div>
-                <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z, gap:8*z}}>
-                  <span style={{flex:1, fontSize:12*z, color:theme.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                    {getName(sessionIds[m.t1[0]])} / {getName(sessionIds[m.t1[1]])}
-                  </span>
-                  <span style={{flex:1, fontSize:12*z, color:theme.text, fontWeight:600, textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                    {getName(sessionIds[m.t2[0]])} / {getName(sessionIds[m.t2[1]])}
-                  </span>
-                </div>
-                <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:10*z}}>
-                  <input style={S.scoreInput} type="number" placeholder="T1" value={roundScores[i].t1} onChange={e=>updScore(i, "t1", e.target.value)}/>
-                  <span style={{color:theme.sub, fontSize:14*z}}>–</span>
-                  <input style={S.scoreInput} type="number" placeholder="T2" value={roundScores[i].t2} onChange={e=>updScore(i, "t2", e.target.value)}/>
-                </div>
+              <div key={i}>
+              <RoundCard
+                round={i+1}
+                t1Name={`${getName(sessionIds[m.t1[0]])} / ${getName(sessionIds[m.t1[1]])}`}
+                t2Name={`${getName(sessionIds[m.t2[0]])} / ${getName(sessionIds[m.t2[1]])}`}
+                t1Score={roundScores[i].t1}
+                t2Score={roundScores[i].t2}
+                onT1Change={v => updScore(i, "t1", v)}
+                onT2Change={v => updScore(i, "t2", v)}
+                winTo={winTo} winBy={winBy}
+                highlighted={false}
+                theme={theme} z={z} S={S} t={t}
+              />
               </div>
             ))}
             
@@ -1449,6 +1585,8 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
     showUndo?.(matchesToLog.map(m => m.id), t("undo_tourney")||"Tournament logged");
     const champLabel = `${getName(computedBracket.champion[0])} & ${getName(computedBracket.champion[1])}`;
     setSuccess(`🏆 ${formatLabel} Logged!\n${champLabel}`);
+    // Scroll to top so user sees the result
+    setTimeout(() => { const mains = document.querySelectorAll("main"); const m = mains[mains.length-1]; if(m) m.scrollTop=0; window.scrollTo({top:0,behavior:"instant"}); }, 80);
     // Reset everything for the next tournament
     clearFormat(); clearPlayerCount(); clearTIds(); clearBracket(); clearTNotes();
     setStep(0);
@@ -1530,9 +1668,9 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
           {Array.from({length: teamCount}).map((_, tIdx) => (
             <div key={tIdx} style={{background:theme.card, padding:10*z, borderRadius:8*z, border:`1px solid ${theme.border}`}}>
               <div style={{fontSize:12*z, fontWeight:700, color:theme.sub, marginBottom:8*z}}>{t("team")} {tIdx+1}</div>
-              <Sel opts={opts} value={tIds[tIdx*2] || ""} onChange={v=>updateSlot(tIdx*2, v)} placeholder={t("player_1")} theme={theme}/>
+              <PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&tIds.includes(o.value)&&tIds[tIdx*2]!==o.value}))} value={tIds[tIdx*2]||""} onChange={v=>updateSlot(tIdx*2,v)} placeholder={t("player_1")} theme={theme}/>
               <div style={{height:8*z}}/>
-              <Sel opts={opts} value={tIds[tIdx*2+1] || ""} onChange={v=>updateSlot(tIdx*2+1, v)} placeholder={t("player_2")} theme={theme}/>
+              <PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&tIds.includes(o.value)&&tIds[tIdx*2+1]!==o.value}))} value={tIds[tIdx*2+1]||""} onChange={v=>updateSlot(tIdx*2+1,v)} placeholder={t("player_2")} theme={theme}/>
             </div>
           ))}
         </div>
@@ -1588,29 +1726,33 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
             {m.label}
           </div>
         )}
-        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8*z, gap:8*z}}>
+        {/* T1 row: name left, score right */}
+        <div style={{display:"flex", alignItems:"center", gap:8*z, marginBottom:4*z}}>
           <span style={{flex:1, fontSize:12*z, fontWeight: winner === 0 ? 800 : 600,
             color: winner === 0 ? theme.accent : (hasTeams ? theme.text : theme.sub),
             overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+            {winner === 0 && "✓ "}
             {hasTeams ? teamA : (m.label ? t("awaiting_prior_round")||"Awaiting prior round" : "TBD")}
-            {winner === 0 && " ✓"}
           </span>
-          <span style={{fontSize:10*z, color:theme.sub}}>vs</span>
-          <span style={{flex:1, fontSize:12*z, fontWeight: winner === 1 ? 800 : 600,
-            color: winner === 1 ? theme.accent : (hasTeams ? theme.text : theme.sub),
-            textAlign:"right", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-            {hasTeams ? teamB : (m.label ? t("awaiting_prior_round")||"Awaiting prior round" : "TBD")}
-            {winner === 1 && " ✓"}
-          </span>
-        </div>
-        <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:8*z}}>
-          <input style={{...S.scoreInput, opacity: hasTeams ? 1 : 0.4}}
-            type="number" placeholder="A" value={m.scoreA}
+          <input style={{...S.scoreInput, width:Math.min(52*z,56), opacity: hasTeams ? 1 : 0.4,
+            fontWeight: winner===0 ? 800 : 400,
+            borderColor: winner===0 ? theme.accent : undefined}}
+            type="number" placeholder="–" value={m.scoreA}
             disabled={!hasTeams || locked}
             onChange={e => updateScore(roundIdx, matchIdx, "scoreA", e.target.value)}/>
-          <span style={{color:theme.sub, fontSize:14*z}}>–</span>
-          <input style={{...S.scoreInput, opacity: hasTeams ? 1 : 0.4}}
-            type="number" placeholder="B" value={m.scoreB}
+        </div>
+        {/* T2 row: name left, score right */}
+        <div style={{display:"flex", alignItems:"center", gap:8*z}}>
+          <span style={{flex:1, fontSize:12*z, fontWeight: winner === 1 ? 800 : 600,
+            color: winner === 1 ? theme.accent : (hasTeams ? theme.text : theme.sub),
+            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+            {winner === 1 && "✓ "}
+            {hasTeams ? teamB : (m.label ? t("awaiting_prior_round")||"Awaiting prior round" : "TBD")}
+          </span>
+          <input style={{...S.scoreInput, width:Math.min(52*z,56), opacity: hasTeams ? 1 : 0.4,
+            fontWeight: winner===1 ? 800 : 400,
+            borderColor: winner===1 ? theme.accent : undefined}}
+            type="number" placeholder="–" value={m.scoreB}
             disabled={!hasTeams || locked}
             onChange={e => updateScore(roundIdx, matchIdx, "scoreB", e.target.value)}/>
         </div>

@@ -70,7 +70,7 @@ export function BottomNav({active,nav,theme}) {
   const S = makeS(theme);
   const tabs=[
     {id:"dashboard",icon:"🏠",label:t("home")},
-    {id:"matches",icon:"🏓",label:t("matches_tab")},
+    {id:"matches",icon:"🎾",label:t("matches_tab")},
     {id:"history",icon:"📋",label:t("history")},
     {id:"events",icon:"📅",label:t("events")},
     {id:"settings",icon:"⚙️",label:t("settings")}
@@ -83,7 +83,25 @@ export function BottomNav({active,nav,theme}) {
         
         return (
           <button key={tab.id} onClick={()=>nav(tab.id === "matches" ? "log" : tab.id, tab.id === "history" ? {historyPlayerId: null} : {})} style={{...S.navBtn,...(isActive?{color:theme.accent}:{})}}>
-            <span style={{fontSize:20*(theme.zoom||1.0)}}>{tab.icon}</span>
+            <span style={{fontSize:20*(theme.zoom||1.0), lineHeight:1, display:"flex", alignItems:"center", justifyContent:"center"}}>
+              {tab.id === "matches" ? (
+                <svg width={20*(theme.zoom||1.0)} height={20*(theme.zoom||1.0)} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                  {/* Paddle head */}
+                  <ellipse cx="10" cy="9" rx="7" ry="8"/>
+                  {/* Holes */}
+                  <circle cx="8"  cy="7"  r="1.2" fill={theme.nav||"#1a1a2e"} opacity="0.8"/>
+                  <circle cx="12" cy="7"  r="1.2" fill={theme.nav||"#1a1a2e"} opacity="0.8"/>
+                  <circle cx="8"  cy="11" r="1.2" fill={theme.nav||"#1a1a2e"} opacity="0.8"/>
+                  <circle cx="12" cy="11" r="1.2" fill={theme.nav||"#1a1a2e"} opacity="0.8"/>
+                  <circle cx="10" cy="9"  r="1.2" fill={theme.nav||"#1a1a2e"} opacity="0.8"/>
+                  {/* Handle */}
+                  <rect x="8.5" y="16.5" width="3" height="6" rx="1.5"/>
+                  {/* Ball */}
+                  <circle cx="19" cy="5" r="3" opacity="0.75"/>
+                  <path d="M17 4 Q19 2.5 21 4M17 6 Q19 7.5 21 6" stroke={theme.nav||"#1a1a2e"} strokeWidth="0.8" fill="none" opacity="0.9"/>
+                </svg>
+              ) : tab.icon}
+            </span>
             <span style={S.navLabel}>{tab.label}</span>
           </button>
         )
