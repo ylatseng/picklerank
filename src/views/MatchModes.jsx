@@ -143,11 +143,13 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
   
   const rawOpts=players.map(p=>({value:p.id,label:shortName(p.name, isLargeZoom(z) ? "always" : "auto")}));
   const myId = user?.myPlayerId || "";
-  const opts = sortOptionsAlpha(rawOpts, [myId, ...(state.favoredPlayerIds||[])].filter(Boolean));
+  // Today's Players (set in QuickLog) float to the top — above starred, above alpha.
+  const _todayIds = (() => { try { return JSON.parse(sessionStorage.getItem("ql_today_players")||"[]"); } catch { return []; } })();
+  const opts = sortOptionsAlpha(rawOpts, [...new Set([..._todayIds, myId, ...(state.favoredPlayerIds||[])].filter(Boolean))]);
 
   return (
     <div style={S.view}>
-      <MatchesSubNav active="log" nav={nav} theme={theme} />
+      <MatchesSubNav active="log" nav={nav} theme={theme} players={players} favoredPlayerIds={state.favoredPlayerIds} />
       {result&&(
         <div style={S.successBox}>
           <div style={{fontWeight:800,fontSize:15*z,marginBottom:8*z}}>{t("match_logged_ok")}</div>
@@ -253,11 +255,11 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           ))}
         </div>
         <div style={{display:"flex", gap:12*z, marginTop:12*z}}>
-          <div style={{flex:1}}>
+          <div style={{flex:1, minWidth:0}}>
             <label style={S.label}>{t("win_to_lbl")}</label>
             <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
           </div>
-          <div style={{flex:1}}>
+          <div style={{flex:1, minWidth:0}}>
             <label style={S.label}>{t("win_by_lbl")}</label>
             <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
           </div>
@@ -267,12 +269,12 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
       {type==="singles"?(
         <CollapsibleSec title={t("players")} theme={theme}>
           <div style={{display:"flex",gap:8*z}}>
-            <div style={{flex:1}}>
+            <div style={{flex:1, minWidth:0}}>
               <label style={S.label}>{t("player_1")}</label>
               <PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&o.value===sp.s2}))} value={sp.s1} onChange={v=>upSp("s1",v)} placeholder={t("player_1")} theme={theme}/>
               {sp.s1 && <FormDots pid={sp.s1} matches={state.matches} z={z}/>}
             </div>
-            <div style={{flex:1}}>
+            <div style={{flex:1, minWidth:0}}>
               <label style={S.label}>{t("player_2")}</label>
               <PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&o.value===sp.s1}))} value={sp.s2} onChange={v=>upSp("s2",v)} placeholder={t("player_2")} theme={theme}/>
               {sp.s2 && <FormDots pid={sp.s2} matches={state.matches} z={z}/>}
@@ -285,15 +287,15 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           <label style={S.label}>{t("team_name_opt")}</label>
           <input style={S.input} value={tnames.t1} onChange={e=>upTn("t1",e.target.value)} placeholder="e.g. The Bangers"/>
           <div style={{display:"flex",gap:8*z,marginTop:8*z}}>
-            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1b,sp.d2a,sp.d2b].includes(o.value)}))} value={sp.d1a} onChange={v=>upSp("d1a",v)} placeholder={t("player_a")} theme={theme}/>{sp.d1a&&<FormDots pid={sp.d1a} matches={state.matches} z={z}/>}</div>
-            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1a,sp.d2a,sp.d2b].includes(o.value)}))} value={sp.d1b} onChange={v=>upSp("d1b",v)} placeholder={t("player_b")} theme={theme}/>{sp.d1b&&<FormDots pid={sp.d1b} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1, minWidth:0}}><label style={S.label}>{t("player_a")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1b,sp.d2a,sp.d2b].includes(o.value)}))} value={sp.d1a} onChange={v=>upSp("d1a",v)} placeholder={t("player_a")} theme={theme}/>{sp.d1a&&<FormDots pid={sp.d1a} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1, minWidth:0}}><label style={S.label}>{t("player_b")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1a,sp.d2a,sp.d2b].includes(o.value)}))} value={sp.d1b} onChange={v=>upSp("d1b",v)} placeholder={t("player_b")} theme={theme}/>{sp.d1b&&<FormDots pid={sp.d1b} matches={state.matches} z={z}/>}</div>
           </div>
           <div style={{borderTop:`1px solid ${theme.border}`,margin:"14px 0"}}/>
           <label style={S.label}>{t("team_name_opt")}</label>
           <input style={S.input} value={tnames.t2} onChange={e=>upTn("t2",e.target.value)} placeholder="e.g. The Dinkers"/>
           <div style={{display:"flex",gap:8*z,marginTop:8*z}}>
-            <div style={{flex:1}}><label style={S.label}>{t("player_a")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1a,sp.d1b,sp.d2b].includes(o.value)}))} value={sp.d2a} onChange={v=>upSp("d2a",v)} placeholder={t("player_a")} theme={theme}/>{sp.d2a&&<FormDots pid={sp.d2a} matches={state.matches} z={z}/>}</div>
-            <div style={{flex:1}}><label style={S.label}>{t("player_b")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1a,sp.d1b,sp.d2a].includes(o.value)}))} value={sp.d2b} onChange={v=>upSp("d2b",v)} placeholder={t("player_b")} theme={theme}/>{sp.d2b&&<FormDots pid={sp.d2b} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1, minWidth:0}}><label style={S.label}>{t("player_a")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1a,sp.d1b,sp.d2b].includes(o.value)}))} value={sp.d2a} onChange={v=>upSp("d2a",v)} placeholder={t("player_a")} theme={theme}/>{sp.d2a&&<FormDots pid={sp.d2a} matches={state.matches} z={z}/>}</div>
+            <div style={{flex:1, minWidth:0}}><label style={S.label}>{t("player_b")}</label><PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&[sp.d1a,sp.d1b,sp.d2a].includes(o.value)}))} value={sp.d2b} onChange={v=>upSp("d2b",v)} placeholder={t("player_b")} theme={theme}/>{sp.d2b&&<FormDots pid={sp.d2b} matches={state.matches} z={z}/>}</div>
           </div>
           {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
         </CollapsibleSec>
@@ -569,7 +571,9 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
   const isReady = filledIds.length === 4 && !hasDupes;
 
   const rawOpts = players.map(p=>({value:p.id,label:shortName(p.name, isLargeZoom(z) ? "always" : "auto")}));
-  const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
+  // Today's Players (set in QuickLog) float to the top — above starred, above alpha.
+  const _todayIds = (() => { try { return JSON.parse(sessionStorage.getItem("ql_today_players")||"[]"); } catch { return []; } })();
+  const opts = sortOptionsAlpha(rawOpts, [...new Set([..._todayIds, ...(state.favoredPlayerIds||[])].filter(Boolean))]);
   const getName = id => shortName(players.find(p=>p.id===id)?.name ?? "?", isLargeZoom(z) ? "always" : "auto");
   
   const matchups = [{ id: 1, t1: [0, 1], t2: [2, 3] }, { id: 2, t1: [0, 2], t2: [1, 3] }, { id: 3, t1: [0, 3], t2: [1, 2] }];
@@ -646,7 +650,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
 
   return (
     <div style={S.view}>
-      <MatchesSubNav active="session" nav={nav} theme={theme} />
+      <MatchesSubNav active="session" nav={nav} theme={theme} players={players} favoredPlayerIds={state.favoredPlayerIds} />
       <div style={{paddingTop:4*z, paddingBottom:2*z, paddingLeft:12*z, paddingRight:12*z}}>
         <div style={{fontSize:10*z, color:theme.sub, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.5px"}}>
           {t("session")||"Session"} — 4-{t("player_n")||"Player"} {t("format_rr")||"Round Robin"}
@@ -782,12 +786,12 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
             </div>
           </div>
         )}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z}}>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:10*z}}>
           {[0,1,2,3].map(i => {
             const pid = sessionIds[i];
             const form = pid ? getRecentForm(pid, state.matches) : [];
             return (
-              <div key={i}>
+              <div key={i} style={{minWidth:0}}>
                 <PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&sessionIds.some((id,idx)=>idx!==i&&id===o.value)}))} value={pid} onChange={v=>upP(i,v)} placeholder={`${t("player_n")||"Player"} ${i+1}`} theme={theme}/>
                 {form.length > 0 && (
                   <div style={{display:"flex",gap:3*z,marginTop:3*z,justifyContent:"center"}}>
@@ -852,11 +856,11 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
         {isReady && (
           <div style={{marginTop: 12*z}}>
             <div style={{display:"flex", gap:12*z, marginBottom:12*z}}>
-              <div style={{flex:1}}>
+              <div style={{flex:1, minWidth:0}}>
                 <label style={S.label}>{t("win_to_lbl")}</label>
                 <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
               </div>
-              <div style={{flex:1}}>
+              <div style={{flex:1, minWidth:0}}>
                 <label style={S.label}>{t("win_by_lbl")}</label>
                 <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
               </div>
@@ -1008,7 +1012,9 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
   const isReady = filledIds.length === 4 && !hasDupes;
 
   const rawOpts = players.map(p=>({value:p.id,label:shortName(p.name, isLargeZoom(z) ? "always" : "auto")}));
-  const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
+  // Today's Players (set in QuickLog) float to the top — above starred, above alpha.
+  const _todayIds = (() => { try { return JSON.parse(sessionStorage.getItem("ql_today_players")||"[]"); } catch { return []; } })();
+  const opts = sortOptionsAlpha(rawOpts, [...new Set([..._todayIds, ...(state.favoredPlayerIds||[])].filter(Boolean))]);
   const getName = id => shortName(players.find(p=>p.id===id)?.name ?? "?", isLargeZoom(z) ? "always" : "auto");
   const matchups = [{ id: 1, t1: [0, 1], t2: [2, 3] }, { id: 2, t1: [0, 2], t2: [1, 3] }, { id: 3, t1: [0, 3], t2: [1, 2] }];
   
@@ -1089,7 +1095,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
 
   return (
     <div style={S.view}>
-      <MatchesSubNav active="kotc" nav={nav} theme={theme} />
+      <MatchesSubNav active="kotc" nav={nav} theme={theme} players={players} favoredPlayerIds={state.favoredPlayerIds} />
       {success && (
         <div style={{background:"rgba(80,200,120,0.15)", color:"#50c878", padding:`${10*z}px`, borderRadius:8*z, marginBottom:12*z, textAlign:"center"}}>
           {success.split('\n').map((line, i) => (
@@ -1179,12 +1185,10 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
       {!kotcAnalysis && (
       <Sec title={t("kotc")} theme={theme}>
         <div style={{fontSize:12*z, color:theme.sub, marginBottom:12*z}}>{t("kotc_desc")}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10*z, marginBottom:16*z}}>
-          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8*z}}>
+        <div style={{display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:8*z, marginBottom:16*z}}>
           {[0,1,2,3].map(i=>(
             <PlayerPicker key={i} opts={opts.map(o=>({...o,disabled:o.value&&sessionIds.some((id,idx)=>idx!==i&&id===o.value)}))} value={sessionIds[i]} onChange={v=>upP(i,v)} placeholder={`${t("player_n")||"Player"} ${i+1}`} theme={theme}/>
           ))}
-        </div>
         </div>
 
         {hasDupes && <div style={{marginTop:12*z}}><Err msg={t("err_duplicate")} theme={theme}/></div>}
@@ -1192,11 +1196,11 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
         {isReady && (
           <div style={{display:"flex", flexDirection:"column", gap:16*z}}>
             <div style={{display:"flex", gap:12*z}}>
-              <div style={{flex:1}}>
+              <div style={{flex:1, minWidth:0}}>
                 <label style={S.label}>{t("win_to_lbl")}</label>
                 <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
               </div>
-              <div style={{flex:1}}>
+              <div style={{flex:1, minWidth:0}}>
                 <label style={S.label}>{t("win_by_lbl")}</label>
                 <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
               </div>
@@ -1278,7 +1282,9 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const rawOpts = roster.map(p => ({ value: p.id, label: shortName(p.name, isLargeZoom(z) ? "always" : "auto") }));
-  const opts = sortOptionsAlpha(rawOpts, state.favoredPlayerIds);
+  // Today's Players (set in QuickLog) float to the top — above starred, above alpha.
+  const _todayIds = (() => { try { return JSON.parse(sessionStorage.getItem("ql_today_players")||"[]"); } catch { return []; } })();
+  const opts = sortOptionsAlpha(rawOpts, [...new Set([..._todayIds, ...(state.favoredPlayerIds||[])].filter(Boolean))]);
   const getName = id => shortName(roster.find(p => p.id === id)?.name ?? "TBD", isLargeZoom(z) ? "always" : "auto");
   const getTeamLabel = (team) => (team || []).map(getName).join(" / ");
 
@@ -1653,20 +1659,20 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
 
         {/* Win-To / Win-By */}
         <div style={{display:"flex", gap:12*z, marginBottom:16*z}}>
-          <div style={{flex:1}}>
+          <div style={{flex:1, minWidth:0}}>
             <label style={S.label}>{t("win_to_lbl")}</label>
             <Sel opts={WIN_TO_OPTIONS.map(v=>({value:v, label:String(v)}))} value={winTo} onChange={v=>setWinTo(parseInt(v))} placeholder="" theme={theme} />
           </div>
-          <div style={{flex:1}}>
+          <div style={{flex:1, minWidth:0}}>
             <label style={S.label}>{t("win_by_lbl")}</label>
             <Sel opts={[{value:1, label:"1 "+t("point")}, {value:2, label:"2 "+t("points")}]} value={winBy} onChange={v=>setWinBy(parseInt(v))} placeholder="" theme={theme} />
           </div>
         </div>
 
         {/* Team rosters */}
-        <div style={{display:"grid", gridTemplateColumns: teamCount <= 4 ? "1fr 1fr" : "1fr 1fr 1fr", gap:12*z}}>
+        <div style={{display:"grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap:12*z}}>
           {Array.from({length: teamCount}).map((_, tIdx) => (
-            <div key={tIdx} style={{background:theme.card, padding:10*z, borderRadius:8*z, border:`1px solid ${theme.border}`}}>
+            <div key={tIdx} style={{background:theme.card, padding:10*z, borderRadius:8*z, border:`1px solid ${theme.border}`, minWidth:0, boxSizing:"border-box"}}>
               <div style={{fontSize:12*z, fontWeight:700, color:theme.sub, marginBottom:8*z}}>{t("team")} {tIdx+1}</div>
               <PlayerPicker opts={opts.map(o=>({...o,disabled:o.value&&tIds.includes(o.value)&&tIds[tIdx*2]!==o.value}))} value={tIds[tIdx*2]||""} onChange={v=>updateSlot(tIdx*2,v)} placeholder={t("player_1")} theme={theme}/>
               <div style={{height:8*z}}/>
@@ -1895,7 +1901,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
   // ── Main render ────────────────────────────────────────────────────────────
   return (
     <div style={S.view}>
-      <MatchesSubNav active="tourney" nav={nav} theme={theme} />
+      <MatchesSubNav active="tourney" nav={nav} theme={theme} players={roster} favoredPlayerIds={state.favoredPlayerIds} />
 
       {success && (
         <div style={{background:"rgba(80,200,120,0.15)", border:"1px solid #50c87844", color:"#50c878", padding:`${12*z}px`, borderRadius:10*z, marginBottom:12*z, textAlign:"center"}}>

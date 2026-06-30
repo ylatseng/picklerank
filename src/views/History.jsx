@@ -9,7 +9,7 @@ const toYYYYMMDD = (d) => {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 };
 
-export default function History({matches,players,nav,set,theme,isAdmin,initialPlayerId,state,user,lang,onReplay,onSaveNote}) {
+export default function History({matches,players,nav,set,theme,isAdmin,initialPlayerId,state,user,lang,onSaveNote}) {
   const S=makeS(theme);
   const z = theme.zoom || 1.0;
   
@@ -170,7 +170,6 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
     if(navigator.share) navigator.share({title:"PickleRank Match",text:txt});
     else { navigator.clipboard.writeText(txt); alert("Copied!"); }
   }
-
   const selectOpts = sortOptionsAlpha(players.map(p=>({value:p.id, label:p.name})), state.favoredPlayerIds);
   const todayStr = toYYYYMMDD(new Date());
 
@@ -323,8 +322,7 @@ export default function History({matches,players,nav,set,theme,isAdmin,initialPl
                     <MatchCard match={m} players={players} theme={theme} isAdmin={canEditMatch} lang={activeLang}
                       myPlayerId={user?.myPlayerId}
                       onSaveNote={onSaveNote}
-                      onEdit={canEditMatch ? setEditingMatch : undefined} onShare={share} onDelete={canDeleteMatch ? () => setPendingDelete(m.id) : undefined}
-                      onReplay={onReplay ? () => onReplay(m) : undefined} />
+                      onEdit={canEditMatch ? setEditingMatch : undefined} onDelete={canDeleteMatch ? () => setPendingDelete(m.id) : undefined} />
                     {pendingDelete===m.id&&(
                       <ConfirmInline msg={t("delete_match_q")} note={t("ratings_recalculated")}
                         onConfirm={()=>moveToTrash(m)} onCancel={()=>setPendingDelete(null)} theme={theme}/>

@@ -103,14 +103,6 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
   const [done, setDone]   = useState(false);
   const doneTimerRef      = useRef(null); // prevents race when logging two matches quickly
 
-  // Sorted player list — starred first
-  const sortedPlayers = useMemo(() =>
-    sortOptionsAlpha(
-      players.map(p => ({ value: p.id, label: p.name })),
-      state.favoredPlayerIds || []
-    ).map(o => players.find(p => p.id === o.value)).filter(Boolean),
-  [players, state.favoredPlayerIds]);
-
   // "Today's players" filter — defaults to starred players, user can adjust
   const [todayIds, setTodayIds] = useState(() => {
     try {
@@ -119,11 +111,47 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
     } catch {}
     return state.favoredPlayerIds || [];
   });
+  const [todayOpen, setTodayOpen] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("ql_today_players")||"[]").length === 0; }
+    catch { return true; }
+  });
   const _setTodayIds = (ids) => {
     const next = typeof ids === "function" ? ids(todayIds) : ids;
     setTodayIds(next);
-    try { sessionStorage.setItem("ql_today_players", JSON.stringify(next)); } catch {}
+    try {
+      sessionStorage.setItem("ql_today_players", JSON.stringify(next));
+      // Notify other components (MatchesSubNav) so they sync without a reload
+      window.dispatchEvent(new StorageEvent("storage", { key: "ql_today_players", newValue: JSON.stringify(next) }));
+    } catch {}
   };
+
+  // Cross-component sync: when MatchesSubNav writes to sessionStorage, update here too
+  React.useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === "ql_today_players") {
+        try { setTodayIds(JSON.parse(e.newValue || "[]")); } catch {}
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // Sorted player list — Today's Players first → starred → alphabetical
+  // Must be declared AFTER todayIds to avoid "cannot access before initialization"
+  const sortedPlayers = useMemo(() => {
+    const starred = state.favoredPlayerIds || [];
+    return [...players].sort((a, b) => {
+      const aToday = todayIds.includes(a.id);
+      const bToday = todayIds.includes(b.id);
+      if (aToday && !bToday) return -1;
+      if (!aToday && bToday) return 1;
+      const aStar = starred.includes(a.id);
+      const bStar = starred.includes(b.id);
+      if (aStar && !bStar) return -1;
+      if (!aStar && bStar) return 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }, [players, state.favoredPlayerIds, todayIds]);
   // displayPlayers: only today's selected players. Empty when none selected (shows prompt).
   const displayPlayers = useMemo(() => {
     if (todayIds.length === 0) return []; // no selection = show prompt
@@ -406,63 +434,86 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
             ))}
           </div>
 
-          {/* Today's Players selector — dropdown to pick who's playing today */}
-          <div style={{marginBottom:12*z}}>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6*z}}>
-              <span style={{fontSize:11*z, fontWeight:700, color:theme.sub, textTransform:"uppercase", letterSpacing:"0.5px"}}>
-                👥 {t("todays_players")||"Today's Players"}
-              </span>
-              <span style={{fontSize:10*z, color:theme.sub}}>
-                {todayIds.length > 0 ? `${todayIds.length} ${t("selected")||"selected"}` : t("all_players")||"All"}
-              </span>
-            </div>
-            {/* Compact scrollable player list — checkbox style */}
-            <div style={{
-              background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:10*z,
-              maxHeight:120*z, overflowY:"auto", padding:`${4*z}px`
-            }}>
-              {sortedPlayers.map(p => {
-                const checked = todayIds.includes(p.id);
-                return (
-                  <label key={p.id} style={{
-                    display:"flex", alignItems:"center", gap:8*z,
-                    padding:`${5*z}px ${6*z}px`, borderRadius:6*z, cursor:"pointer",
-                    background: checked ? theme.accent+"11" : "transparent"
-                  }}>
-                    <div style={{
-                      width:16*z, height:16*z, borderRadius:4*z, flexShrink:0,
-                      border:`2px solid ${checked ? "#50c878" : theme.border}`,
-                      background: checked ? "#50c878" : "transparent",
-                      display:"flex", alignItems:"center", justifyContent:"center"
-                    }}>
-                      {checked && <span style={{color:"#fff", fontSize:10*z, fontWeight:900, lineHeight:1}}>✓</span>}
-                    </div>
-                    <span style={{fontSize:12*z, color: checked ? theme.text : theme.sub, fontWeight: checked ? 600 : 400}}>
-                      {p.name}
-                    </span>
-                    {(state.favoredPlayerIds||[]).includes(p.id) && (
-                      <span style={{fontSize:10*z, color:"#f0c040", marginLeft:"auto"}}>★</span>
-                    )}
-                    <input type="checkbox" checked={checked} onChange={() => toggleTodayPlayer(p.id)}
-                      style={{position:"absolute", opacity:0, width:0, height:0}} />
-                  </label>
-                );
-              })}
-            </div>
-            <div style={{display:"flex", gap:6*z, marginTop:6*z}}>
-              <button onClick={() => _setTodayIds(sortedPlayers.map(p=>p.id))} style={{
-                flex:1, fontSize:10*z, color:theme.sub, background:"transparent",
-                border:`1px solid ${theme.border}`, borderRadius:6*z, padding:`${4*z}px`, cursor:"pointer"
-              }}>{t("select_all")||"All"}</button>
-              <button onClick={() => _setTodayIds(state.favoredPlayerIds||[])} style={{
-                flex:1, fontSize:10*z, color:theme.sub, background:"transparent",
-                border:`1px solid ${theme.border}`, borderRadius:6*z, padding:`${4*z}px`, cursor:"pointer"
-              }}>★ {t("starred")||"Starred"}</button>
-              <button onClick={() => _setTodayIds([])} style={{
-                flex:1, fontSize:10*z, color:theme.sub, background:"transparent",
-                border:`1px solid ${theme.border}`, borderRadius:6*z, padding:`${4*z}px`, cursor:"pointer"
-              }}>{t("clear")||"Clear"}</button>
-            </div>
+          {/* Today's Players selector — collapsible */}
+          <div style={{marginBottom:12*z, background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:10*z, overflow:"hidden"}}>
+            {/* Header */}
+            <button onClick={() => setTodayOpen(o => !o)}
+              style={{width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
+                padding:`${7*z}px ${10*z}px`, background:"transparent", border:"none", cursor:"pointer"}}>
+              <div style={{display:"flex", alignItems:"center", gap:6*z}}>
+                <span style={{fontSize:12*z}}>👥</span>
+                <span style={{fontSize:11*z, fontWeight:700, color:theme.sub, textTransform:"uppercase", letterSpacing:"0.5px"}}>
+                  {t("todays_players")||"Today's Players"}
+                </span>
+                {todayIds.length > 0 && (
+                  <span style={{fontSize:10*z, background:theme.accent+"22", color:theme.accent,
+                    border:`1px solid ${theme.accent}44`, borderRadius:10*z,
+                    padding:`${1*z}px ${6*z}px`, fontWeight:700}}>
+                    {todayIds.length}
+                  </span>
+                )}
+              </div>
+              <div style={{display:"flex", alignItems:"center", gap:8*z}}>
+                {todayIds.length > 0 && !todayOpen && (
+                  <span style={{fontSize:10*z, color:theme.sub, maxWidth:140*z,
+                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                    {sortedPlayers.filter(p=>todayIds.includes(p.id)).map(p=>p.name.split(" ")[0]).join(", ")}
+                  </span>
+                )}
+                <span style={{fontSize:10*z, color:theme.sub}}>{todayOpen ? "▲" : "▼"}</span>
+              </div>
+            </button>
+            {/* Checklist — shown when expanded */}
+            {todayOpen && (
+              <div style={{padding:`${0}px ${8*z}px ${8*z}px`}}>
+                <div style={{
+                  background:theme.card, border:`1px solid ${theme.border}`, borderRadius:8*z,
+                  maxHeight:160*z, overflowY:"auto", padding:`${4*z}px`
+                }}>
+                  {sortedPlayers.map(p => {
+                    const checked = todayIds.includes(p.id);
+                    return (
+                      <label key={p.id} style={{
+                        display:"flex", alignItems:"center", gap:8*z,
+                        padding:`${5*z}px ${6*z}px`, borderRadius:6*z, cursor:"pointer",
+                        background: checked ? theme.accent+"11" : "transparent"
+                      }}>
+                        <div style={{
+                          width:16*z, height:16*z, borderRadius:4*z, flexShrink:0,
+                          border:`2px solid ${checked ? "#50c878" : theme.border}`,
+                          background: checked ? "#50c878" : "transparent",
+                          display:"flex", alignItems:"center", justifyContent:"center"
+                        }}>
+                          {checked && <span style={{color:"#fff", fontSize:10*z, fontWeight:900, lineHeight:1}}>✓</span>}
+                        </div>
+                        <span style={{fontSize:12*z, color: checked ? theme.text : theme.sub, fontWeight: checked ? 600 : 400}}>
+                          {p.name}
+                        </span>
+                        {(state.favoredPlayerIds||[]).includes(p.id) && (
+                          <span style={{fontSize:10*z, color:"#f0c040", marginLeft:"auto"}}>★</span>
+                        )}
+                        <input type="checkbox" checked={checked} onChange={() => toggleTodayPlayer(p.id)}
+                          style={{position:"absolute", opacity:0, width:0, height:0}} />
+                      </label>
+                    );
+                  })}
+                </div>
+                <div style={{display:"flex", gap:6*z, marginTop:6*z}}>
+                  <button onClick={() => _setTodayIds(sortedPlayers.map(p=>p.id))} style={{
+                    flex:1, fontSize:10*z, color:theme.sub, background:"transparent",
+                    border:`1px solid ${theme.border}`, borderRadius:6*z, padding:`${4*z}px`, cursor:"pointer"
+                  }}>{t("select_all")||"All"}</button>
+                  <button onClick={() => _setTodayIds(state.favoredPlayerIds||[])} style={{
+                    flex:1, fontSize:10*z, color:theme.sub, background:"transparent",
+                    border:`1px solid ${theme.border}`, borderRadius:6*z, padding:`${4*z}px`, cursor:"pointer"
+                  }}>★ {t("starred")||"Starred"}</button>
+                  <button onClick={() => _setTodayIds([])} style={{
+                    flex:1, fontSize:10*z, color:theme.sub, background:"transparent",
+                    border:`1px solid ${theme.border}`, borderRadius:6*z, padding:`${4*z}px`, cursor:"pointer"
+                  }}>{t("clear")||"Clear"}</button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{height:1, background:theme.border, marginBottom:12*z}}/>

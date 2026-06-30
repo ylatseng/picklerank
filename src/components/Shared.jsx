@@ -111,7 +111,7 @@ export function MatchEloBreakdown({match, players, theme}) {
 }
 
 // ─── Match Cards ──────────────────────────────────────────────────────────────
-export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, onDelete, highlightPlayerId, lang, onReplay, myPlayerId, onSaveNote}) {
+export function MatchCard({match:m, players, theme, isAdmin, onEdit, onDelete, highlightPlayerId, lang, myPlayerId, onSaveNote}) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
   const [expanded, setExpanded] = useState(false);
@@ -121,12 +121,21 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
   const isParticipant = myPlayerId && m.teams?.flat()?.includes(myPlayerId);
   
   const getName=id=>players.find(p=>p.id===id)?.name??"?";
-  const t1=m.teamNames?.t1||m.teams?.[0]?.map(getName).join(" & ")||"TBD";
-  const t2=m.teamNames?.t2||m.teams?.[1]?.map(getName).join(" & ")||"TBD";
+  // Per-player name arrays (DUPR-style stacking) — falls back to a single
+  // custom team name if one was set (no per-player breakdown to stack then).
+  const team1Names = m.teamNames?.t1 ? [m.teamNames.t1] : (m.teams?.[0]?.map(getName)?.length ? m.teams[0].map(getName) : ["TBD"]);
+  const team2Names = m.teamNames?.t2 ? [m.teamNames.t2] : (m.teams?.[1]?.map(getName)?.length ? m.teams[1].map(getName) : ["TBD"]);
   const pSnap = highlightPlayerId ? m.ratingDeltas?.[highlightPlayerId] : null;
 
   // Render translations for the "singles" or "doubles" match type tags
   const typeTag = m.type === "singles" ? t("match_type_singles") : m.type === "doubles" ? t("match_type_doubles") : m.type;
+
+  // Responsive score-pill sizing: shrink width/gap as game count grows so the
+  // scoreboard fits without pushing past the card edge (covers legacy matches
+  // logged before the 5-game cap, which could have more games).
+  const gameCount = (m.games||[]).length;
+  const gamePillW = gameCount <= 4 ? 20*z : gameCount === 5 ? 17*z : 14*z;
+  const gamePillGap = gameCount <= 4 ? 14*z : gameCount === 5 ? 10*z : 7*z;
 
   return (
     <div style={S.matchCard}>
@@ -143,37 +152,48 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
         <span style={{fontSize:12*z,color:theme.sub}}>{fmtDate(m.date, lang)}</span>
       </div>
 
-      {/* Modern Horizontal Scoreboard Layout */}
-      <div style={{display: "flex", flexDirection: "column", gap: 10*z, marginBottom: 12*z, background: theme.bg, padding: 12*z, borderRadius: 8*z, border: `1px solid ${theme.border}`}}>
-        
-        {/* Team 1 Row */}
-        <div style={{display: "flex", alignItems: "center", justifyContent: "space-between"}}>
-          <div style={{flex: 1, fontSize: 14*z, fontWeight: m.winnerTeam===0 ? 800 : 600, color: m.winnerTeam===0 ? "#50c878" : theme.text, paddingRight: 10*z, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
-            {t1}
+      {/* DUPR-style Stacked Scoreboard Layout */}
+      <div style={{display: "flex", flexDirection: "column", marginBottom: 12*z, background: theme.bg, padding: 12*z, borderRadius: 8*z, border: `1px solid ${theme.border}`}}>
+
+        {/* Team 1 Block */}
+        <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8*z, paddingBottom: 8*z}}>
+          <div style={{flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2*z}}>
+            {team1Names.map((name, i) => (
+              <div key={`t1n-${i}`} style={{fontSize: 14*z, fontWeight: m.winnerTeam===0 ? 800 : 600, color: m.winnerTeam===0 ? "#50c878" : theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
+                {name}
+              </div>
+            ))}
           </div>
-          <div style={{display: "flex", gap: 14*z}}>
+          <div style={{display: "flex", gap: gamePillGap, flexShrink: 0, overflowX: "auto", maxWidth: "60%"}}>
             {(m.games||[]).map((g, i) => (
-              <div key={`t1-g${i}`} style={{width: 20*z, textAlign: "right", fontSize: 15*z, fontWeight: g.winner===0 ? 800 : 500, color: g.winner===0 ? "#50c878" : theme.sub}}>
+              <div key={`t1-g${i}`} style={{width: gamePillW, flexShrink: 0, textAlign: "right", fontSize: 15*z, fontWeight: g.winner===0 ? 800 : 500, color: g.winner===0 ? "#50c878" : theme.sub}}>
                 {g.a}
               </div>
             ))}
           </div>
         </div>
-        
-        {/* Team 2 Row */}
-        <div style={{display: "flex", alignItems: "center", justifyContent: "space-between"}}>
-          <div style={{flex: 1, fontSize: 14*z, fontWeight: m.winnerTeam===1 ? 800 : 600, color: m.winnerTeam===1 ? "#50c878" : theme.text, paddingRight: 10*z, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
-            {t2}
+
+        {/* Divider */}
+        <div style={{borderTop: `1px solid ${theme.border}`, margin: `${2*z}px 0 ${8*z}px`}}/>
+
+        {/* Team 2 Block */}
+        <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8*z}}>
+          <div style={{flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2*z}}>
+            {team2Names.map((name, i) => (
+              <div key={`t2n-${i}`} style={{fontSize: 14*z, fontWeight: m.winnerTeam===1 ? 800 : 600, color: m.winnerTeam===1 ? "#50c878" : theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
+                {name}
+              </div>
+            ))}
           </div>
-          <div style={{display: "flex", gap: 14*z}}>
+          <div style={{display: "flex", gap: gamePillGap, flexShrink: 0, overflowX: "auto", maxWidth: "60%"}}>
             {(m.games||[]).map((g, i) => (
-              <div key={`t2-g${i}`} style={{width: 20*z, textAlign: "right", fontSize: 15*z, fontWeight: g.winner===1 ? 800 : 500, color: g.winner===1 ? "#50c878" : theme.sub}}>
+              <div key={`t2-g${i}`} style={{width: gamePillW, flexShrink: 0, textAlign: "right", fontSize: 15*z, fontWeight: g.winner===1 ? 800 : 500, color: g.winner===1 ? "#50c878" : theme.sub}}>
                 {g.b}
               </div>
             ))}
           </div>
         </div>
-        
+
       </div>
 
       {m.notes && (
@@ -197,7 +217,6 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onShare, on
             <button style={{...S.iconBtn, background: expanded ? theme.bg : "transparent", borderRadius: 6*z}} onClick={()=>setExpanded(!expanded)} title="ELO Stats">📊</button>
           )}
           {onEdit && <button style={S.iconBtn} onClick={()=>onEdit(m)} title="Edit">✏️</button>}
-          {onReplay && <button style={S.iconBtn} onClick={onReplay} title="Rematch">🔄</button>}
           {(isParticipant || isAdmin) && onSaveNote && (
             <button style={{...S.iconBtn, color: noteText ? theme.accent : theme.sub}} onClick={()=>setShowNote(v=>!v)} title="My Note">✍️</button>
           )}
@@ -562,16 +581,40 @@ export function PlayerPicker({ opts, value, onChange, placeholder, theme, disabl
   const z = theme.zoom || 1.0;
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  const [showAll, setShowAll] = React.useState(false);
+  const [vp, setVp] = React.useState(null); // visible viewport {height, top}, tracks keyboard
+
+  // Read Today's Players from sessionStorage (set via MatchesSubNav or QuickLog)
+  const todayIds = React.useMemo(() => {
+    try { return JSON.parse(sessionStorage.getItem("ql_today_players") || "[]"); } catch { return []; }
+  }, [open]); // re-read each time the sheet opens
+
+  // When the on-screen keyboard opens (e.g. user taps search), visualViewport
+  // shrinks/shifts. Track it so the sheet can resize to stay fully visible
+  // above the keyboard instead of being covered by it.
+  React.useEffect(() => {
+    if (!open) { setVp(null); return; }
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setVp({ height: vv.height, top: vv.offsetTop });
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => { vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update); };
+  }, [open]);
 
   const selected = opts?.find(o => o.value === value);
-  const filtered = (opts || []).filter(o =>
-    o.value !== "" &&
-    (!search || o.label.toLowerCase().includes(search.toLowerCase()))
-  );
+  const hasTodayFilter = todayIds.length > 0 && !search;
+  const allOpts = (opts || []).filter(o => o.value !== "");
+  const todayOpts = hasTodayFilter ? allOpts.filter(o => todayIds.includes(o.value)) : [];
+  const restOpts  = hasTodayFilter ? allOpts.filter(o => !todayIds.includes(o.value)) : allOpts;
+  const filtered = search
+    ? allOpts.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+    : null; // null = use split view
 
   if (disabled) {
     return (
-      <div style={{...S.select, opacity:0.5, cursor:"not-allowed", display:"flex", alignItems:"center"}}>
+      <div style={{...S.select, opacity:0.5, cursor:"not-allowed", display:"flex", alignItems:"center", minWidth:0}}>
         <span style={{flex:1, color:value?theme.text:theme.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
           {selected?.label || placeholder || "—"}
         </span>
@@ -582,9 +625,9 @@ export function PlayerPicker({ opts, value, onChange, placeholder, theme, disabl
   return (
     <>
       {/* Trigger */}
-      <button onClick={() => { setSearch(""); setOpen(true); }}
+      <button onClick={() => { setSearch(""); setOpen(true); setShowAll(false); }}
         style={{...S.select, display:"flex", alignItems:"center",
-          justifyContent:"space-between", textAlign:"left", cursor:"pointer"}}>
+          justifyContent:"space-between", textAlign:"left", cursor:"pointer", minWidth:0}}>
         <span style={{flex:1, color: value ? theme.text : theme.sub,
           overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
           {selected?.label || placeholder || "—"}
@@ -592,13 +635,17 @@ export function PlayerPicker({ opts, value, onChange, placeholder, theme, disabl
         <span style={{fontSize:10*z, color:theme.sub, flexShrink:0, marginLeft:6*z}}>▾</span>
       </button>
 
-      {/* Bottom sheet */}
+      {/* Bottom sheet — sized to visualViewport so the keyboard never covers it */}
       {open && (
         <div onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}
-          style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+          style={{position:"fixed", left:0, right:0,
+            top: vp ? vp.top : 0,
+            height: vp ? vp.height : "100%",
+            background:"rgba(0,0,0,0.5)",
             zIndex:4000, display:"flex", alignItems:"flex-end"}}>
           <div style={{background:theme.card, borderRadius:`${14*z}px ${14*z}px 0 0`,
-            width:"100%", maxHeight:"70vh", display:"flex", flexDirection:"column",
+            width:"100%", maxHeight: vp ? Math.max(vp.height - 16, 120) : "70vh",
+            display:"flex", flexDirection:"column",
             boxShadow:"0 -4px 24px rgba(0,0,0,0.25)"}}>
 
             {/* Handle + header */}
@@ -618,50 +665,95 @@ export function PlayerPicker({ opts, value, onChange, placeholder, theme, disabl
               </div>
             </div>
 
-            {/* Search bar */}
+            {/* Search bar — not auto-focused, so opening the sheet never pops the keyboard */}
             <div style={{padding:`${4*z}px ${12*z}px ${8*z}px`}}>
-              <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
-                placeholder={t("search_players_placeholder") || "Search players..."}
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder={"🔍 " + (t("search_players_placeholder") || "Search players...")}
                 style={{...S.input, margin:0, fontSize:14*z, padding:`${8*z}px ${12*z}px`}}
               />
             </div>
 
-            {/* Chip grid — 3 columns, compact, all visible */}
-            <div style={{overflowY:"auto", flex:1,
-              padding:`${4*z}px ${10*z}px ${24*z}px`,
-              display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:6*z}}>
-              {filtered.length === 0 && (
-                <div style={{gridColumn:"1/-1", textAlign:"center", color:theme.sub,
-                  fontSize:12*z, padding:`${20*z}px`}}>
-                  {t("no_data")||"No players found"}
-                </div>
-              )}
-              {filtered.map(o => {
-                const isSelected = o.value === value;
-                const isDisabled = o.disabled;
+            {/* Chip grid — Today's Players first, then rest */}
+            <div style={{overflowY:"auto", flex:1, padding:`${4*z}px ${10*z}px ${24*z}px`}}>
+              {(() => {
+                const renderChip = (o) => {
+                  const isSelected = o.value === value;
+                  const isDisabled = o.disabled;
+                  return (
+                    <button key={o.value} disabled={isDisabled}
+                      onClick={() => { onChange(o.value); setOpen(false); setSearch(""); setShowAll(false); }}
+                      style={{
+                        padding:`${9*z}px ${4*z}px`,
+                        borderRadius:8*z, boxSizing:"border-box",
+                        fontSize:Math.min(12*z, 14), fontWeight: isSelected ? 700 : 400,
+                        border:`1.5px solid ${isSelected ? theme.accent : theme.border}`,
+                        background: isSelected ? theme.accent+"22" : theme.bg,
+                        color: isDisabled ? theme.sub : isSelected ? theme.accent : theme.text,
+                        cursor: isDisabled ? "not-allowed" : "pointer",
+                        opacity: isDisabled ? 0.35 : 1,
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        gap:3*z, minHeight:36*z,
+                      }}>
+                      {isSelected && <span style={{fontSize:10*z}}>✓</span>}
+                      <span style={{overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%"}}>
+                        {o.label}
+                      </span>
+                    </button>
+                  );
+                };
+
+                // Search mode — flat filtered list
+                if (filtered !== null) {
+                  if (filtered.length === 0) return (
+                    <div style={{textAlign:"center", color:theme.sub, fontSize:12*z, padding:`${20*z}px`}}>
+                      {t("no_data")||"No players found"}
+                    </div>
+                  );
+                  return <div style={{display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:6*z}}>{filtered.map(renderChip)}</div>;
+                }
+
+                // Split mode — Today's Players on top, rest below
                 return (
-                  <button key={o.value} disabled={isDisabled}
-                    onClick={() => { onChange(o.value); setOpen(false); setSearch(""); }}
-                    style={{
-                      padding:`${9*z}px ${4*z}px`,
-                      borderRadius:8*z, boxSizing:"border-box",
-                      fontSize:Math.min(12*z, 14), fontWeight: isSelected ? 700 : 400,
-                      border:`1.5px solid ${isSelected ? theme.accent : isDisabled ? theme.border : theme.border}`,
-                      background: isSelected ? theme.accent+"22" : theme.bg,
-                      color: isDisabled ? theme.sub : isSelected ? theme.accent : theme.text,
-                      cursor: isDisabled ? "not-allowed" : "pointer",
-                      opacity: isDisabled ? 0.35 : 1,
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      gap:3*z, minHeight:36*z,
-                    }}>
-                    {isSelected && <span style={{fontSize:10*z}}>✓</span>}
-                    <span style={{overflow:"hidden", textOverflow:"ellipsis",
-                      whiteSpace:"nowrap", maxWidth:"100%"}}>
-                      {o.label}
-                    </span>
-                  </button>
+                  <>
+                    {/* Today's Players section */}
+                    {todayOpts.length > 0 && (
+                      <>
+                        <div style={{fontSize:10*z, fontWeight:700, color:theme.accent, textTransform:"uppercase",
+                          letterSpacing:"0.5px", marginBottom:6*z}}>
+                          👥 {t("todays_players")||"Today's Players"}
+                        </div>
+                        <div style={{display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:6*z, marginBottom:12*z}}>
+                          {todayOpts.map(renderChip)}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Divider + show/hide rest */}
+                    {todayOpts.length > 0 && restOpts.length > 0 && (
+                      <button onClick={() => setShowAll(v => !v)}
+                        style={{width:"100%", background:"transparent", border:"none",
+                          borderTop:`1px solid ${theme.border}`, color:theme.sub,
+                          fontSize:10*z, padding:`${8*z}px 0`, cursor:"pointer", marginBottom:showAll ? 8*z : 0}}>
+                        {showAll ? "▲ " : "▼ "}{showAll ? (t("clear")||"Hide") : `${t("all_players")||"All players"} (${restOpts.length} more)`}
+                      </button>
+                    )}
+
+                    {/* Rest of roster */}
+                    {(todayOpts.length === 0 || showAll) && restOpts.length > 0 && (
+                      <div style={{display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:6*z}}>
+                        {restOpts.map(renderChip)}
+                      </div>
+                    )}
+
+                    {/* Empty state */}
+                    {todayOpts.length === 0 && restOpts.length === 0 && (
+                      <div style={{textAlign:"center", color:theme.sub, fontSize:12*z, padding:`${20*z}px`}}>
+                        {t("no_data")||"No players found"}
+                      </div>
+                    )}
+                  </>
                 );
-              })}
+              })()}
             </div>
 
             {/* Clear selection */}

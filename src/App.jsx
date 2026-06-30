@@ -83,7 +83,7 @@ import { Sel, Err } from './components/Shared.jsx';
 import {
   APP_MODES, APP_ACCENTS, APP_FONTS, setLang, t, replayAllMatches, computeStats, APP_VERSION, 
   loadState, saveState, blankState, pingPresence, clearPresence, genId, DEFAULT_RATING,
-  syncPendingMatches, readPendingMatches, queueMatchOffline, readCache
+  syncPendingMatches, readPendingMatches, queueMatchOffline, readCache, subscribeToState
 } from './engine.js';
 
 import { Header, BottomNav } from './components/Navigation.jsx';
@@ -532,13 +532,13 @@ export default function App() {
 
   const hashPin = (id, pin) => btoa(id + "-" + pin);
 
+  // FETCH CLOUD DATA UPDATED FOR REAL-TIME SYNC
   useEffect(() => {
     let isFetching = false;
     const fetchCloudData = async (isInitialLoad = false) => {
       if (isFetching) return;
       isFetching = true;
       try {
-        // Step 1: always show cache immediately if available (instant, synchronous)
         if (isInitialLoad) {
           const cached = readCache();
           if (cached) {
@@ -546,29 +546,28 @@ export default function App() {
             setState(prev => ({ ...prev, ...safeCache }));
             setIsLoading(false);
 
-            // Step 2a: if offline, we're done — cache is all we have
             if (!navigator.onLine) {
               setIsLoading(false);
               isFetching = false;
               return;
             }
           } else if (!navigator.onLine) {
-            // Offline and no cache at all — show the "first load needs internet" message
-            // isLoading stays true briefly then clears so user sees the message
             setIsLoading(false);
             isFetching = false;
             return;
           }
         }
 
-        // Step 2b: online — fetch fresh from Firestore (or first-ever load with no cache)
         const cloudData = await loadState();
         if (cloudData && cloudData.players !== undefined) {
-          // Explicitly delete activeView from cloudData — it may still be stored in old
-          // Firestore documents from before we excluded it. Never let cloud overwrite
-          // local navigation state.
           const { activeView: _ignored, ...safeCloudData } = cloudData;
-          setState(prev => ({ ...prev, ...safeCloudData })); // activeView never in safeCloudData
+          setState(prev => {
+            // GUARD 1: Prevent one-time load from overwriting new local matches
+            const currentMatches = prev.matches || [];
+            const incomingMatches = safeCloudData.matches || [];
+            if (incomingMatches.length < currentMatches.length) return prev;
+            return { ...prev, ...safeCloudData };
+          }); 
         }
       } catch (error) {
         console.error("Firebase Error:", error);
@@ -578,10 +577,26 @@ export default function App() {
       }
     };
     fetchCloudData(true);
-    // No background polling — background setState was causing isCurrentlyVerified
-    // to briefly recalculate to false (when state.players reference changed),
-    // flashing the welcome/PIN screen mid-session.
-    // Data is fresh on every app open via cache-first + Firestore load.
+
+    // 🔥 THE FIX: Start listening to Firebase in real-time
+    const unsub = subscribeToState((cloudData) => {
+      setState(prev => {
+        // GUARD 2: Never let a stale Firebase snapshot wipe local matches
+        const currentMatches = prev.matches || [];
+        const incomingMatches = cloudData.matches || [];
+        
+        if (incomingMatches.length < currentMatches.length) {
+          console.warn("Ignored stale snapshot to protect local data.");
+          return prev; 
+        }
+        
+        const { activeView: _ignored, ...safeCloudData } = cloudData;
+        return { ...prev, ...safeCloudData };
+      });
+    });
+
+    // Clean up the listener if the app closes
+    return () => unsub();
   }, []);
 
   // isCurrentlyVerified is cached in a ref to prevent flash when state.players
@@ -779,6 +794,72 @@ export default function App() {
   },[stats, state.leaderboardFormat]);
 
   const profilePlayer = profileId ? stats.find(p=>p.id===profileId) : null;
+
+  // ── Feature A: Re-register SW event notifications on every app open ──────
+  React.useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    navigator.serviceWorker.ready.then(reg => {
+      const events = state.events || [];
+      const now = Date.now();
+      events.forEach(ev => {
+        if (!ev.date) return;
+        const notifyAt = new Date(ev.date).getTime() - 60 * 60 * 1000;
+        if (notifyAt <= now) return;
+        reg.active?.postMessage({
+          type: 'SCHEDULE_NOTIFICATION',
+          title: `🥒 Pickleball in 1 hour: ${ev.title}`,
+          body: `📍 ${ev.venue || 'TBD'} · Tap to open PickleRank`,
+          tag: `pr-event-${ev.id}`,
+          timestamp: notifyAt,
+        });
+      });
+    }).catch(() => {});
+  }, [state.events]);
+
+  // ── Feature B: In-app event banner (within-1-hour alert) ─────────────────
+  const [eventBanner, setEventBanner] = React.useState(null);
+  const [eventBannerDismissed, setEventBannerDismissed] = React.useState({});
+
+  React.useEffect(() => {
+    const check = () => {
+      const events = state.events || [];
+      const now = Date.now();
+      const soonEv = events.find(ev => {
+        if (!ev.date) return false;
+        const ms = new Date(ev.date).getTime() - now;
+        return ms > 0 && ms <= 60 * 60 * 1000 && !eventBannerDismissed[ev.id];
+      });
+      if (soonEv) {
+        const mins = Math.ceil((new Date(soonEv.date).getTime() - now) / 60000);
+        setEventBanner({ id: soonEv.id, title: soonEv.title, venue: soonEv.venue, minutesUntil: mins });
+      } else {
+        setEventBanner(null);
+      }
+    };
+    check();
+    const interval = setInterval(check, 60000);
+    return () => clearInterval(interval);
+  }, [state.events, eventBannerDismissed]);
+
+  // ── Feature C: RSVP nudge ─────────────────────────────────────────────────
+  const [rsvpNudge, setRsvpNudge] = React.useState(null);
+  const [rsvpNudgeDismissed, setRsvpNudgeDismissed] = React.useState({});
+
+  React.useEffect(() => {
+    const pid = user?.myPlayerId;
+    if (!pid) return;
+    const events = state.events || [];
+    const now = Date.now();
+    const unresponded = events.find(ev => {
+      if (!ev.date || new Date(ev.date).getTime() < now) return false;
+      const isInvited = ev.invitees?.includes(pid);
+      const hasRsvp = ev.rsvps?.[pid];
+      return isInvited && !hasRsvp && !rsvpNudgeDismissed[ev.id];
+    });
+    setRsvpNudge(unresponded ? { id: unresponded.id, title: unresponded.title, date: unresponded.date } : null);
+  }, [state.events, user?.myPlayerId, rsvpNudgeDismissed]);
+
   const nav = (view, extra={}) => {
     const mains = document.querySelectorAll("main");
     const m = mains[mains.length - 1];
@@ -1030,6 +1111,63 @@ export default function App() {
                 fontSize:12, fontWeight:700
               }}>
                 ❌ {t("sync_error")||"Sync failed — your matches are still saved locally. Will retry when reconnected."}
+              </div>
+            )}
+
+            {/* ── Feature B: In-app event banner — fires when event is ≤60 min away ── */}
+            {eventBanner && !syncStatus && isOnline && (
+              <div style={{
+                position:"fixed", top:0, left:0, right:0, zIndex:1999,
+                background:"#f0a830", color:"#fff",
+                padding:"8px 12px",
+                paddingTop:"calc(8px + env(safe-area-inset-top))",
+                display:"flex", alignItems:"center", justifyContent:"space-between", gap:8,
+                boxShadow:"0 2px 8px rgba(0,0,0,0.25)"
+              }}>
+                <span style={{fontSize:14}}>🏓</span>
+                <span style={{flex:1, fontSize:12*(theme.zoom||1), fontWeight:700, minWidth:0,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                  {eventBanner.title} — {eventBanner.minutesUntil} min away
+                  {eventBanner.venue ? ` · ${eventBanner.venue}` : ""}
+                </span>
+                <button
+                  onClick={() => { setEventBannerDismissed(d => ({...d, [eventBanner.id]: true})); setEventBanner(null); }}
+                  style={{background:"rgba(255,255,255,0.25)", border:"none", borderRadius:4,
+                    color:"#fff", cursor:"pointer", fontSize:13, fontWeight:700,
+                    padding:"1px 8px", flexShrink:0, lineHeight:1.4}}>
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* ── Feature C: RSVP nudge — remind logged-in user to respond to upcoming event ── */}
+            {rsvpNudge && !eventBanner && (
+              <div style={{
+                position:"fixed", top:0, left:0, right:0, zIndex:1998,
+                background:theme.card, borderBottom:`2px solid ${theme.accent}`,
+                padding:"8px 12px",
+                paddingTop:"calc(8px + env(safe-area-inset-top))",
+                display:"flex", alignItems:"center", justifyContent:"space-between", gap:8,
+                boxShadow:"0 2px 8px rgba(0,0,0,0.15)"
+              }}>
+                <span style={{fontSize:14}}>📅</span>
+                <span style={{flex:1, fontSize:11*(theme.zoom||1), color:theme.text, minWidth:0,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                  <span style={{fontWeight:700, color:theme.accent}}>{rsvpNudge.title}</span>
+                  {" — "}{t("going")||"Going"}?
+                </span>
+                <button onClick={() => { setRsvpNudgeDismissed(d => ({...d, [rsvpNudge.id]: true})); nav("events"); }}
+                  style={{background:theme.accent, border:"none", borderRadius:6,
+                    color: theme.invert ? "#fff" : "#0d1a10",
+                    cursor:"pointer", fontSize:11*(theme.zoom||1), fontWeight:700,
+                    padding:`${4*(theme.zoom||1)}px ${8*(theme.zoom||1)}px`, flexShrink:0}}>
+                  RSVP →
+                </button>
+                <button onClick={() => setRsvpNudgeDismissed(d => ({...d, [rsvpNudge.id]: true}))}
+                  style={{background:"transparent", border:"none", color:theme.sub,
+                    cursor:"pointer", fontSize:13, padding:"0 2px", flexShrink:0}}>
+                  ✕
+                </button>
               </div>
             )}
 

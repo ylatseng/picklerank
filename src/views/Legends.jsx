@@ -313,7 +313,6 @@ export default function Legends({ theme }) {
               <ItemRow icon="🔥" title={t("legend_hot_title")} desc={t("legend_hot_desc")} />
               <ItemRow icon="🧊" title={t("legend_cold_title")} desc={t("legend_cold_desc")} />
               <ItemRow icon="⚡" title={t("legend_motd_title")||"⚡ Quick Log"} desc={"Quick-logged matches show a ⚡ badge in History. Tap the floating ⚡ button from any screen to log a score instantly."} />
-              <ItemRow icon="🔄" title={t("legend_rematch_title")||"🔄 Rematch"} desc={"Tap the 🔄 button on any match card in History to open Quick Log with the same players pre-filled."} />
               <ItemRow icon="🔑" title={"🔑 Admin Player"} desc={"Players granted admin rights by the group admin show a 🔑 badge next to their name on the leaderboard."} />
               <ItemRow icon={<span style={{width:10*z,height:10*z,borderRadius:"50%",background:"#50c878",display:"inline-block",boxShadow:"0 0 5px #50c878"}}/>} title={t("legend_online_title")} desc={t("legend_online_desc")} />
               <ItemRow icon="📊" title={t("legend_conf_icon_title")} desc={t("legend_conf_icon_desc")} />

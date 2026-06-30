@@ -1,6 +1,38 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { registerSW } from 'virtual:pwa-register'
 import App from './App.jsx'
+
+// ── PWA service worker registration & auto-update ───────────────────────────
+// Previously the app manually registered /public/sw.js, but vite-plugin-pwa
+// generates its own Workbox sw.js at build time which silently overwrites
+// that file — so the manual registration was talking to a SW that doesn't
+// actually exist in production, and updates never reloaded the page. This
+// uses the plugin's own registration helper instead, and forces a reload as
+// soon as a new version has installed (iOS standalone PWAs don't reliably
+// pick up background updates on their own, even via pull-to-refresh).
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    // A new version finished installing in the background. Activate it and
+    // reload immediately so the user always gets the latest build next time
+    // they open the app — no stale "why isn't this updating" confusion.
+    updateSW(true);
+  },
+  onOfflineReady() {
+    // App shell cached for offline use — nothing to do, just informational.
+  },
+});
+
+// Re-check for an update whenever the app regains focus/visibility. iOS
+// PWAs launched from the home screen don't get the browser's normal
+// "check for SW update on navigation" behavior, so this is the main way
+// updates get noticed in practice.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    updateSW();
+  }
+});
 
 // ── iOS PWA viewport-fit=cover ───────────────────────────────────────────────
 // Without `viewport-fit=cover`, env(safe-area-inset-*) values are always 0 even
