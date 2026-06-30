@@ -26,8 +26,8 @@ export const RELEASES = [
       "🐛 FIX: UI/UX: Added System Health Dashboard to Settings for automated diagnostics..",
       "🔔 FIX: Mobile Optimization: Added viewport-fit support and safe-area padding for notch/bezel compatibility.",
       "🛡️ PERF: Integrated large-dataset stress testing for rating engine.",
-    
-  },
+    ]
+    },
   {
     version: "2.2.53",
     date: "2026-06-29",
