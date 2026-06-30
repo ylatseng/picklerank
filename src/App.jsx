@@ -139,7 +139,7 @@ function PinVerification({ player, onVerify, onCancel, onAdminLogin, theme }) {
 
       {/* Top bar with back button */}
       <div style={{
-        padding:`${14*z}px ${16*z}px`,
+        padding:`calc(${14*z}px + env(safe-area-inset-top)) calc(${16*z}px + env(safe-area-inset-right)) ${14*z}px calc(${16*z}px + env(safe-area-inset-left))`,
         background:theme.nav,
         borderBottom:`1px solid ${theme.border}`,
         display:"flex", alignItems:"center"
@@ -255,7 +255,7 @@ function WelcomeModal({ players, onSelect, onCreate, onAdminLogin, theme, user, 
   const sortedPlayers = [...players].sort((a,b) => a.name.localeCompare(b.name));
 
   return (
-    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:9999, overflowY:"auto", padding:`${Math.min(16*z, 20)}px ${Math.min(14*z, 16)}px`, boxSizing:"border-box"}}>
+    <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:9999, overflowY:"auto", padding:`calc(${Math.min(16*z, 20)}px + env(safe-area-inset-top)) calc(${Math.min(14*z, 16)}px + env(safe-area-inset-right)) calc(${Math.min(16*z, 20)}px + env(safe-area-inset-bottom)) calc(${Math.min(14*z, 16)}px + env(safe-area-inset-left))`, boxSizing:"border-box"}}>
       <div style={{background:theme.card, border:`1px solid ${theme.border}`, borderRadius:Math.min(16*z,16), padding:Math.min(24*z,20), width:"100%", maxWidth:"min(400px, 100%)", margin:"0 auto", boxShadow:"0 10px 30px rgba(0,0,0,0.5)", position:"relative", boxSizing:"border-box"}}>
         
         {/* Top row: Language + Zoom controls */}
@@ -975,6 +975,7 @@ export default function App() {
                 position:"fixed", top:0, left:0, right:0, zIndex:2000,
                 background:"#e05050", color:"#fff",
                 padding:"6px 12px",
+                paddingTop:"calc(6px + env(safe-area-inset-top))",
                 fontSize:12, fontWeight:700,
                 display:"flex", alignItems:"center", justifyContent:"space-between", gap:6
               }}>
@@ -1003,6 +1004,7 @@ export default function App() {
                 position:"fixed", top:0, left:0, right:0, zIndex:2000,
                 background:"#f0a830", color:"#fff",
                 padding:"8px 16px", textAlign:"center",
+                paddingTop:"calc(8px + env(safe-area-inset-top))",
                 fontSize:`${12*(theme.zoom||1)}px`, fontWeight:700
               }}>
                 ⏳ {t("syncing_matches")||"Syncing your offline matches to the server..."}
@@ -1013,6 +1015,7 @@ export default function App() {
                 position:"fixed", top:0, left:0, right:0, zIndex:2000,
                 background:"#50c878", color:"#fff",
                 padding:"8px 16px", textAlign:"center",
+                paddingTop:"calc(8px + env(safe-area-inset-top))",
                 fontSize:12, fontWeight:700
               }}>
                 ✅ {t("sync_done")||"All matches synced successfully!"}
@@ -1023,6 +1026,7 @@ export default function App() {
                 position:"fixed", top:0, left:0, right:0, zIndex:2000,
                 background:"#e05050", color:"#fff",
                 padding:"8px 16px", textAlign:"center",
+                paddingTop:"calc(8px + env(safe-area-inset-top))",
                 fontSize:12, fontWeight:700
               }}>
                 ❌ {t("sync_error")||"Sync failed — your matches are still saved locally. Will retry when reconnected."}
