@@ -6,11 +6,11 @@ export function makeS(t) {
     // env(safe-area-inset-*) covers the notch / Dynamic Island / home indicator
     // when the app is saved to the home screen and launched fullscreen on iOS.
     // Falls back to 0 on Android and desktop browsers (no inset reported).
-    app:        { color:t.text, minHeight:"100dvh", maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column",
+    app:        { color:t.text, height:"100dvh", maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column",
                   overscrollBehavior:"none" }, // prevents pull-to-refresh browser reload in PWA
     header:     { background:t.card, borderBottom:`1px solid ${t.border}`,
                   padding:`calc(${f(12)}px + env(safe-area-inset-top, 0px)) calc(${f(16)}px + env(safe-area-inset-right, 0px)) ${f(12)}px calc(${f(16)}px + env(safe-area-inset-left, 0px))`,
-                  position:"sticky", top:0, zIndex:100 },
+                  flexShrink:0, zIndex:100 },
     headerInner:{ display:"flex", alignItems:"center", gap:f(10) },
     appName:    { fontSize:f(19), fontWeight:800, letterSpacing:"-0.5px", color:t.text },
     appSub:     { fontSize:f(10), letterSpacing:"0.5px", textTransform:"uppercase", fontWeight:600 },

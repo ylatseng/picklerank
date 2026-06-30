@@ -25,12 +25,26 @@
         --safe-area-top: env(safe-area-inset-top);
         --safe-area-bottom: env(safe-area-inset-bottom);
       }
+      html, body {
+        height: 100%;
+        margin: 0;
+      }
       body {
         /* Prevent bounce on iOS */
         overscroll-behavior-y: none;
-        /* Ensure background fills the entire screen including behind the notch */
-        padding-top: var(--safe-area-top);
-        padding-bottom: var(--safe-area-bottom);
+        /* Lock the page itself so it can't scroll — only <main> inside the
+           app scrolls. Without this, position:sticky on the header has no
+           proper scroll container to stick within, so it drifts with the
+           page instead of staying pinned. */
+        overflow: hidden;
+        position: fixed;
+        inset: 0;
+      }
+      #root {
+        height: 100%;
+        /* Safe-area insets are already applied individually by the header
+           (padding-top) and main/bottom-nav (padding-bottom) in styles.js —
+           applying it again here would double the gap under the notch. */
       }
     </style>
   </head>

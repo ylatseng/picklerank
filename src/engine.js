@@ -13,10 +13,20 @@ export const PROVISIONAL_K_MULTIPLIER = 2; // provisional players move up to 2x 
 export const STORAGE_KEY = "pkl_tracker_v4"; 
 
 // ─── Version & Changelog ──────────────────────────────────────────────────────
-export const APP_VERSION = "2.2.54";
+export const APP_VERSION = "2.2.55";
 export const APP_UPDATED = "2026-06-29";
 
 export const RELEASES = [
+    {
+    version: "2.2.55",
+    date: "2026-06-29",
+    title: "Notch Layout & Sticky Header Fix",
+    changes: [
+      "🔔 FIX: Welcome screen, PIN verification screen, and offline/sync banners now respect the iPhone notch/Dynamic Island instead of rendering behind it.",
+      "🐛 FIX: Removed duplicate safe-area padding on <body> that was creating an oversized gap below the notch on iPhone.",
+      "🐛 FIX: Top header (PickleRank / Matches / History / etc.) no longer scrolls with page content — locked html/body/#root to the viewport so <main> is the sole scroll container, fixing header drift on both iOS and Android.",
+    ]
+    },
     {
     version: "2.2.54",
     date: "2026-06-29",
