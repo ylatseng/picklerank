@@ -1,8 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { t, DEFAULT_RATING, genId, ratingColor, processImage, shortName, isLargeZoom } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, Empty, Err, Sel, Avatar, ConfirmInline } from '../components/Shared.jsx';
-import { usePersistentFormState } from '../hooks.js';
+import { Sec, Empty, Err, Sel, Avatar, ConfirmInline, usePersistentFormState } from '../components/Shared.jsx';
 
 export default function Players({players,state,set,nav,theme,isAdmin,user,setUser}) {
   const S=makeS(theme);
@@ -51,9 +50,12 @@ export default function Players({players,state,set,nav,theme,isAdmin,user,setUse
   }
 
   const isOnline = (pid) => {
-    const lastSeen = (state.presence || {})[pid];
-    if (!lastSeen) return false;
-    return (Date.now() - lastSeen) < 90000;
+    const presenceVal = (state.presence || {})[pid];
+    if (!presenceVal) return false;
+    // Handle both old shape (number) and new shape ({ ts, sid })
+    const ts = typeof presenceVal === "object" ? presenceVal.ts : presenceVal;
+    if (!ts || ts < 100) return false;
+    return (Date.now() - ts) < 90000;
   };
 
   function add(){

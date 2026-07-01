@@ -83,7 +83,7 @@ import { Sel, Err } from './components/Shared.jsx';
 import {
   APP_MODES, APP_ACCENTS, APP_FONTS, setLang, t, replayAllMatches, computeStats, APP_VERSION, 
   loadState, saveState, blankState, pingPresence, clearPresence, genId, DEFAULT_RATING,
-  syncPendingMatches, readPendingMatches, queueMatchOffline, readCache, subscribeToState, clearLocalCache
+  syncPendingMatches, readPendingMatches, queueMatchOffline, readCache, subscribeToState
 } from './engine.js';
 
 import { Header, BottomNav } from './components/Navigation.jsx';
@@ -416,7 +416,7 @@ export default function App() {
   const [activeView, setActiveView] = useState("dashboard");
   const [profileId, setProfileId] = useState(null);
   const [historyPlayerId, setHistoryPlayerId] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !readCache());
   // ── Undo last match ────────────────────────────────────────────────────────
   // Store the last logged match IDs in a ref (no re-render needed), plus
   // an undo toast visible for 30 seconds. Undo removes those matches by ID.
@@ -561,13 +561,7 @@ export default function App() {
         const cloudData = await loadState();
         if (cloudData && cloudData.players !== undefined) {
           const { activeView: _ignored, ...safeCloudData } = cloudData;
-          setState(prev => {
-            // GUARD 1: Prevent one-time load from overwriting new local matches
-            const currentMatches = prev.matches || [];
-            const incomingMatches = safeCloudData.matches || [];
-            if (incomingMatches.length < currentMatches.length) return prev;
-            return { ...prev, ...safeCloudData };
-          }); 
+          setState(prev => ({ ...prev, ...safeCloudData }));
         }
       } catch (error) {
         console.error("Firebase Error:", error);
@@ -580,19 +574,8 @@ export default function App() {
 
     // 🔥 THE FIX: Start listening to Firebase in real-time
     const unsub = subscribeToState((cloudData) => {
-      setState(prev => {
-        // GUARD 2: Never let a stale Firebase snapshot wipe local matches
-        const currentMatches = prev.matches || [];
-        const incomingMatches = cloudData.matches || [];
-        
-        if (incomingMatches.length < currentMatches.length) {
-          console.warn("Ignored stale snapshot to protect local data.");
-          return prev; 
-        }
-        
-        const { activeView: _ignored, ...safeCloudData } = cloudData;
-        return { ...prev, ...safeCloudData };
-      });
+      const { activeView: _ignored, ...safeCloudData } = cloudData;
+      setState(prev => ({ ...prev, ...safeCloudData }));
     });
 
     // Clean up the listener if the app closes

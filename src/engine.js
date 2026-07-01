@@ -15,39 +15,20 @@ export const STORAGE_KEY = "pkl_tracker_v4";
 export const MAX_GAMES_PER_MATCH = 5;
 
 // ─── Version & Changelog ──────────────────────────────────────────────────────
-export const APP_VERSION = "2.2.68";
-export const APP_UPDATED = "2026-06-30";
-
+export const APP_VERSION = "2.2.72";
+export const APP_UPDATED = "2026-07-01";
 
 export const RELEASES = [
-
     {
-    version: "2.2.68",
-    date: "2026-06-30",
-    title: "clearLocalCache() Wired Into Logout + Vite HMR Fix",
+    version: "2.2.72",
+    date: "2026-07-01",
+    title: "Blank Screen Fix, Flash Fix, Legends Tabs, Deleted User, Guard Removal",
     changes: [
-      "🐛 FIX: clearLocalCache() is now called on every logout in Settings.jsx. Wipes the main Firestore data cache and user_settings from localStorage so the next player on the device always loads fresh data — no ghost data from a previous session.",
-      "🐛 FIX: Vite Fast Refresh (HMR) error 'Could not Fast Refresh — usePersistentFormState export is incompatible' fixed by moving the hook to its own file (src/hooks.js). Events.jsx, MatchModes.jsx, Players.jsx now import from '../hooks.js'.",
-    ]
-    },
-
-    {
-    version: "2.2.67",
-    date: "2026-06-30",
-    title: "Fix: State Overwrite Race Condition",
-    changes: [
-      "🐛 FIX: Resolved data contamination issue where switching users restored cached 'ghost' data from previous sessions.",
-	    "🐛 FIX: Integrated 'clearLocalCache()' into logout flow to wipe storage on user switch.",
-	    "🐛 FIX: Refined Firestore snapshot listeners to prevent stale snapshots from overwriting local changes.",
-    ]
-	  },
-  
-     {
-    version: "2.2.66",
-    date: "2026-06-30",
-    title: "Fix: Deleted Matches Reappearing on Other Devices",
-    changes: [
-      "🐛 FIX: Match deletions (and trash operations) made on one device were not propagating to other connected devices. Root cause: a match-count guard in the Firestore snapshot handler was blocking any snapshot that had fewer matches than the current in-memory state — which correctly describes every deletion. The guard was added to prevent stale snapshots from wiping newly-added matches, but that risk is fully covered by the earlier fix that removed writeCache() from the snapshot callback. Since localStorage is never overwritten by a snapshot, no data loss can occur even if a briefly-stale snapshot is applied. The guard has been removed. Deletions, trash operations, and all match-count decreases from other devices now propagate in real time.",
+      "🐛 FIX (CRITICAL): Blank screen error — Settings.jsx imported clearLocalCache from engine.js but engine.js didn't export it. Added clearLocalCache() to engine.js and wired it into the logout flow in Settings.jsx. clearLocalCache() wipes the Firestore data cache and user_settings from localStorage on logout so the next player loads fresh data.",
+      "🐛 FIX (CRITICAL): Removed both match-count guards (GUARD 1 in fetchCloudData, GUARD 2 in subscribeToState) from App.jsx. These blocked any Firestore data with fewer matches than local state — which describes every deletion, and the moment an updated app has a stale cache. Deletions and post-update data now sync correctly.",
+      "🐛 FIX: Eliminated the half-second loading screen flash. isLoading now initialises to false when localStorage cache exists — returning users see the UI immediately.",
+      "🐛 FIX: Legends tab switching no longer jumps to the top of the page. switchTab now scrolls the parent <main> to 0 to reveal the sticky tab bar. Also fixed: two Accordion components both had id='1-3' causing PickleRank vs DUPR to open the Tournament Formats section instead.",
+      "🐛 FIX: Deleted players now show 'Deleted User' instead of '?' in all match cards and history (4 fixes in Shared.jsx, 3 in engine.js shortName/computeStats).",
     ]
     },
     {
@@ -1647,7 +1628,7 @@ export function avatarColor(name) {
   return colors[Math.abs(h) % colors.length];
 }
 export function initials(name) {
-  if (!name) return "?";
+  if (!name) return "Deleted User";
   const parts = name.trim().split(" ");
   return parts.length >= 2 ? (parts[0][0]+parts[parts.length-1][0]).toUpperCase() : name.slice(0,2).toUpperCase();
 }
@@ -1917,13 +1898,12 @@ export async function clearPresence(playerId) {
     // Fails silently if offline
   }
 }
-
-// Clear Local Storage cache and sessionStorage when the user logs out or switches accounts.
+// Clear localStorage cache and sessionStorage when the user logs out.
+// Prevents ghost data from a previous user appearing on the next login.
 export function clearLocalCache() {
-  localStorage.removeItem(STORAGE_KEY); // Wipes your main match data cache
-  localStorage.removeItem("user_settings"); // Wipes user-specific preferences
-  sessionStorage.clear(); // Wipes draft states (QuickLog, Match modes)
-  console.log("Local cache cleared for user logout.");
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  try { localStorage.removeItem("user_settings"); } catch {}
+  try { sessionStorage.clear(); } catch {}
 }
 
 // ─── Feature: Balanced Team Suggester ─────────────────────────────────────────
@@ -1997,7 +1977,7 @@ export function computePartnerMatrix(matches) {
 // Given 3 just-logged matches and the full post-session derived players array,
 // computes a rich summary for the recap card.
 export function computeSessionSummary(sessionMatches, preMatchPlayers, postMatchPlayers) {
-  const getName = id => postMatchPlayers.find(p => p.id === id)?.name ?? '?';
+  const getName = id => postMatchPlayers.find(p => p.id === id)?.name ?? "Deleted User";
   const getPost = id => postMatchPlayers.find(p => p.id === id);
   const getPre  = id => preMatchPlayers.find(p => p.id === id);
   const allIds  = [...new Set(sessionMatches.flatMap(m => m.teams.flat()))];
@@ -2044,7 +2024,7 @@ export function computeMatchOfDay(matches, players, windowHours = 48) {
   const recent = matches.filter(m => m.date && new Date(m.date).getTime() > cutoff);
   const pool = recent.length > 0 ? recent : matches.slice(-5); // fallback to last 5
 
-  const getName = id => players.find(p => p.id === id)?.name ?? '?';
+  const getName = id => players.find(p => p.id === id)?.name ?? "Deleted User";
   let best = null, bestScore = -1;
 
   pool.forEach(m => {
