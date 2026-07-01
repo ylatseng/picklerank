@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { makeS } from '../styles.js';
-import { Sec, ConfirmInline, usePersistentFormState } from '../components/Shared.jsx';
+import { Sec, ConfirmInline } from '../components/Shared.jsx';
+import { usePersistentFormState } from '../hooks.js';
 import { t, genId, getLang } from '../engine.js';
 
 // Register service worker and schedule a notification for an event

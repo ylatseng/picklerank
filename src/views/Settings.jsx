@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { t, setLang, APP_MODES, APP_ACCENTS, APP_FONTS, processImage, APP_VERSION, APP_UPDATED, blankState } from '../engine.js';
+import { t, setLang, APP_MODES, APP_ACCENTS, APP_FONTS, processImage, APP_VERSION, APP_UPDATED, blankState, clearLocalCache } from '../engine.js';
 import { makeS } from '../styles.js';
 import { Sec, Err, ConfirmInline, Sel, PinManager } from '../components/Shared.jsx';
 import { doc, setDoc } from "firebase/firestore";
@@ -204,6 +204,10 @@ export default function Settings({state, user, setShared, setUser, nav, theme, m
       }
       keysToRemove.forEach(k => sessionStorage.removeItem(k));
     } catch (e) { /* sessionStorage may be unavailable */ }
+
+    // Wipe localStorage cache so the next player on this device loads fresh
+    // data from Firestore instead of seeing a ghost of the previous session.
+    clearLocalCache();
 
     setUser({ 
       myPlayerId: "", 

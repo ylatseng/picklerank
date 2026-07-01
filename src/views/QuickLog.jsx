@@ -103,13 +103,13 @@ export default function QuickLog({ players, state, set, theme, onClose, showUndo
   const [done, setDone]   = useState(false);
   const doneTimerRef      = useRef(null); // prevents race when logging two matches quickly
 
-  // "Today's players" filter — defaults to starred players, user can adjust
+  // "Today's players" filter — starts empty; user explicitly picks who's here today
   const [todayIds, setTodayIds] = useState(() => {
     try {
       const saved = sessionStorage.getItem("ql_today_players");
       if (saved) return JSON.parse(saved);
     } catch {}
-    return state.favoredPlayerIds || [];
+    return [];
   });
   const [todayOpen, setTodayOpen] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem("ql_today_players")||"[]").length === 0; }

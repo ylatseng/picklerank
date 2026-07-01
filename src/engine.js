@@ -15,10 +15,41 @@ export const STORAGE_KEY = "pkl_tracker_v4";
 export const MAX_GAMES_PER_MATCH = 5;
 
 // ─── Version & Changelog ──────────────────────────────────────────────────────
-export const APP_VERSION = "2.2.65";
+export const APP_VERSION = "2.2.68";
 export const APP_UPDATED = "2026-06-30";
 
+
 export const RELEASES = [
+
+    {
+    version: "2.2.68",
+    date: "2026-06-30",
+    title: "clearLocalCache() Wired Into Logout + Vite HMR Fix",
+    changes: [
+      "🐛 FIX: clearLocalCache() is now called on every logout in Settings.jsx. Wipes the main Firestore data cache and user_settings from localStorage so the next player on the device always loads fresh data — no ghost data from a previous session.",
+      "🐛 FIX: Vite Fast Refresh (HMR) error 'Could not Fast Refresh — usePersistentFormState export is incompatible' fixed by moving the hook to its own file (src/hooks.js). Events.jsx, MatchModes.jsx, Players.jsx now import from '../hooks.js'.",
+    ]
+    },
+
+    {
+    version: "2.2.67",
+    date: "2026-06-30",
+    title: "Fix: State Overwrite Race Condition",
+    changes: [
+      "🐛 FIX: Resolved data contamination issue where switching users restored cached 'ghost' data from previous sessions.",
+	    "🐛 FIX: Integrated 'clearLocalCache()' into logout flow to wipe storage on user switch.",
+	    "🐛 FIX: Refined Firestore snapshot listeners to prevent stale snapshots from overwriting local changes.",
+    ]
+	  },
+  
+     {
+    version: "2.2.66",
+    date: "2026-06-30",
+    title: "Fix: Deleted Matches Reappearing on Other Devices",
+    changes: [
+      "🐛 FIX: Match deletions (and trash operations) made on one device were not propagating to other connected devices. Root cause: a match-count guard in the Firestore snapshot handler was blocking any snapshot that had fewer matches than the current in-memory state — which correctly describes every deletion. The guard was added to prevent stale snapshots from wiping newly-added matches, but that risk is fully covered by the earlier fix that removed writeCache() from the snapshot callback. Since localStorage is never overwritten by a snapshot, no data loss can occur even if a briefly-stale snapshot is applied. The guard has been removed. Deletions, trash operations, and all match-count decreases from other devices now propagate in real time.",
+    ]
+    },
     {
     version: "2.2.65",
     date: "2026-06-30",
@@ -1886,6 +1917,15 @@ export async function clearPresence(playerId) {
     // Fails silently if offline
   }
 }
+
+// Clear Local Storage cache and sessionStorage when the user logs out or switches accounts.
+export function clearLocalCache() {
+  localStorage.removeItem(STORAGE_KEY); // Wipes your main match data cache
+  localStorage.removeItem("user_settings"); // Wipes user-specific preferences
+  sessionStorage.clear(); // Wipes draft states (QuickLog, Match modes)
+  console.log("Local cache cleared for user logout.");
+}
+
 // ─── Feature: Balanced Team Suggester ─────────────────────────────────────────
 // Given 4 player IDs + a rating map, returns all 3 possible pairings sorted
 // by fairness (smallest avg-rating gap = most balanced first).

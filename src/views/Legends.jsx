@@ -241,7 +241,7 @@ export default function Legends({ theme }) {
                 desc={t("legend_tf_collapse_desc", "When a round finishes, its accordion auto-collapses to free up screen space. Tap the header any time to expand and review or edit. Future rounds only appear once all prior rounds are complete.")} />
             </Accordion>
 
-            <Accordion id="1-4" title={t("legend_sec_h2h", "Head-to-Head (H2H) Statistics")}>
+            <Accordion id="1-8" title={t("legend_sec_h2h", "Head-to-Head (H2H) Statistics")}>
               {h2hModes.map(mode => (
                 <ItemRow key={mode.title} icon={mode.icon} title={mode.title} desc={mode.desc} />
               ))}
@@ -270,7 +270,7 @@ export default function Legends({ theme }) {
               </div>
             </Accordion>
 
-            <Accordion id="1-3" title={t("legend_sec_dupr", "PickleRank vs DUPR")}>
+            <Accordion id="1-7" title={t("legend_sec_dupr", "PickleRank vs DUPR")}>
               <div style={{fontSize:11*z, color:theme.sub, lineHeight:1.6, marginBottom:10*z}}>{t("legend_vs_dupr_intro")}</div>
               <div style={{borderRadius:8*z, overflow:"hidden", border:`1px solid ${theme.border}`, marginBottom:12*z}}>
                 <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", background:theme.bg, borderBottom:`1px solid ${theme.border}`}}>

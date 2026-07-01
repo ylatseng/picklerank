@@ -83,7 +83,7 @@ import { Sel, Err } from './components/Shared.jsx';
 import {
   APP_MODES, APP_ACCENTS, APP_FONTS, setLang, t, replayAllMatches, computeStats, APP_VERSION, 
   loadState, saveState, blankState, pingPresence, clearPresence, genId, DEFAULT_RATING,
-  syncPendingMatches, readPendingMatches, queueMatchOffline, readCache, subscribeToState
+  syncPendingMatches, readPendingMatches, queueMatchOffline, readCache, subscribeToState, clearLocalCache
 } from './engine.js';
 
 import { Header, BottomNav } from './components/Navigation.jsx';
