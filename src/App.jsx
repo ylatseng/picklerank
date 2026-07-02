@@ -83,7 +83,7 @@ import { Sel, Err } from './components/Shared.jsx';
 import {
   APP_MODES, APP_ACCENTS, APP_FONTS, setLang, t, replayAllMatches, computeStats, APP_VERSION, 
   loadState, saveState, blankState, pingPresence, clearPresence, genId, DEFAULT_RATING,
-  syncPendingMatches, readPendingMatches, queueMatchOffline, readCache, subscribeToState
+  syncPendingMatches, readPendingMatches, queueMatchOffline, readCache, subscribeToState, clearLocalCache
 } from './engine.js';
 
 import { Header, BottomNav } from './components/Navigation.jsx';
@@ -685,7 +685,7 @@ export default function App() {
     // or the device switches to someone else.
     return () => {
       clearPresence(pid);
-      setState(prev => ({ ...prev, presence: { ...(prev.presence || {}), [pid]: 0 } }));
+      setState(prev => ({ ...prev, presence: { ...(prev.presence || {}), [pid]: { ts: 0, sid: "" } } }));
     };
   }, [user.myPlayerId]);
 
@@ -697,13 +697,30 @@ export default function App() {
     const ping = () => {
       if (document.visibilityState === "hidden") return;
       if (!navigator.onLine) return; // skip presence ping when offline — avoids silent Firestore error
-      pingPresence(pid);
-      setState(prev => ({ ...prev, presence: { ...(prev.presence || {}), [pid]: Date.now() } }));
+      pingPresence(pid, mySessionId.current);
+      setState(prev => ({ ...prev, presence: { ...(prev.presence || {}), [pid]: { ts: Date.now(), sid: mySessionId.current } } }));
     };
     ping();
     const interval = setInterval(ping, 60000);
     return () => clearInterval(interval);
   }, [user.myPlayerId]);
+
+  // Session UUID — generated once per login for dual-device detection
+  const mySessionId = React.useRef(genId());
+  const [dualDeviceWarning, setDualDeviceWarning] = React.useState(false);
+
+  useEffect(() => {
+    const pid = user.myPlayerId;
+    if (!pid || !isCurrentlyVerified || dualDeviceWarning) return;
+    const presenceVal = state.presence?.[pid];
+    if (!presenceVal) return;
+    const firestoreTs  = typeof presenceVal === "object" ? presenceVal.ts  : presenceVal;
+    const firestoreSid = typeof presenceVal === "object" ? presenceVal.sid : null;
+    if (!firestoreTs || firestoreTs < 100) return;
+    const isRecent = (Date.now() - firestoreTs) < 90000;
+    const isDifferentSession = firestoreSid && firestoreSid !== mySessionId.current;
+    if (isRecent && isDifferentSession) setDualDeviceWarning(true);
+  }, [state.presence, user.myPlayerId, isCurrentlyVerified, dualDeviceWarning]);
 
   // ── Compute Active Appearance Settings ─────────────────────────────────────
   // We resolve the theme variables using the currently logged in player's dictionary.
@@ -1058,6 +1075,36 @@ export default function App() {
                     padding:"1px 8px", flexShrink:0, lineHeight:1.4}}
                 >
                   ✕
+                </button>
+              </div>
+            )}
+
+            {/* ── Dual-device warning ── */}
+            {dualDeviceWarning && (
+              <div style={{
+                position:"fixed", top:0, left:0, right:0, zIndex:3000,
+                background:"#e05050", color:"#fff",
+                padding:"12px 16px", paddingTop:"calc(12px + env(safe-area-inset-top))",
+                boxShadow:"0 2px 12px rgba(0,0,0,0.4)"
+              }}>
+                <div style={{fontWeight:800, fontSize:14, marginBottom:6}}>
+                  ⚠️ {t("dual_device_title")||"Logged in on another device"}
+                </div>
+                <div style={{fontSize:12, marginBottom:10, opacity:0.9}}>
+                  {t("dual_device_desc")||"Your account is active on another device. Only one session allowed at a time."}
+                </div>
+                <button onClick={() => {
+                  clearPresence(user.myPlayerId);
+                  clearLocalCache();
+                  setUserSettings(u => ({ ...u, myPlayerId:"", verifiedHash:"", isAdmin:false }));
+                  setDualDeviceWarning(false);
+                  nav("dashboard");
+                }} style={{
+                  background:"rgba(255,255,255,0.2)", border:"1px solid rgba(255,255,255,0.5)",
+                  color:"#fff", borderRadius:8, padding:"6px 16px",
+                  fontWeight:700, fontSize:12, cursor:"pointer"
+                }}>
+                  {t("dual_device_logout")||"Log out this device"}
                 </button>
               </div>
             )}

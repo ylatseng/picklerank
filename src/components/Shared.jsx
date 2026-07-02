@@ -111,6 +111,17 @@ export function MatchEloBreakdown({match, players, theme}) {
 }
 
 // ─── Match Cards ──────────────────────────────────────────────────────────────
+
+function renderMatchNote(m, z) {
+  if (!m.notes && !m.sysNoteKey) return null;
+  if (m.sysNoteKey) {
+    const vars = m.sysNoteVars || {};
+    let sysText = t(m.sysNoteKey) || m.notes?.split(" — ")[0] || "";
+    Object.entries(vars).forEach(([k,v]) => { sysText = sysText.replace("{"+k+"}", v); });
+    return m.userNote ? sysText + " — " + m.userNote : sysText;
+  }
+  return m.notes;
+}
 export function MatchCard({match:m, players, theme, isAdmin, onEdit, onDelete, highlightPlayerId, lang, myPlayerId, onSaveNote}) {
   const S = makeS(theme);
   const z = theme.zoom || 1.0;
@@ -196,11 +207,11 @@ export function MatchCard({match:m, players, theme, isAdmin, onEdit, onDelete, h
 
       </div>
 
-      {m.notes && (
+      {(m.notes||m.sysNoteKey) && (() => { const nd=renderMatchNote(m,z); return nd ? (
         <div style={{fontSize: 12*z, color: theme.sub, marginBottom: 12*z, display: 'flex', alignItems: 'flex-start', gap: 6*z, background: theme.bg, padding: "8px 10px", borderRadius: 6*z, border: `1px solid ${theme.border}`}}>
-          <span>📝</span> <span style={{fontStyle: 'italic', lineHeight: 1.4}}>{m.notes}</span>
+          <span>📝</span> <span style={{fontStyle: 'italic', lineHeight: 1.4}}>{nd}</span>
         </div>
-      )}
+      ) : null; })()}
 
       <div style={{display:"flex", alignItems:"center", gap:4*z}}>
         {/* Rating delta pill — left, doesn't grow */}
@@ -291,11 +302,11 @@ export function MiniMatchCard({match:m,players,theme}){
         </div>
       </div>
 
-      {m.notes && (
+      {(m.notes||m.sysNoteKey) && (() => { const nd=renderMatchNote(m,z); return nd ? (
         <div style={{fontSize: 10*z, color: theme.sub, marginTop: 8*z, borderTop: `1px dashed ${theme.border}`, paddingTop: 6*z, display: "flex", gap: 4*z}}>
-          <span>📝</span> <span style={{fontStyle: 'italic', whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{m.notes}</span>
+          <span>📝</span> <span style={{fontStyle: 'italic', whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{nd}</span>
         </div>
-      )}
+      ) : null; })()}
 
     </div>
   ); 

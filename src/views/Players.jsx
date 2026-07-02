@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { t, DEFAULT_RATING, genId, ratingColor, processImage, shortName, isLargeZoom } from '../engine.js';
 import { makeS } from '../styles.js';
-import { Sec, Empty, Err, Sel, Avatar, ConfirmInline, usePersistentFormState } from '../components/Shared.jsx';
+import { Sec, Empty, Err, Sel, Avatar, ConfirmInline } from '../components/Shared.jsx';
+import { usePersistentFormState } from '../hooks.js';
 
 export default function Players({players,state,set,nav,theme,isAdmin,user,setUser}) {
   const S=makeS(theme);

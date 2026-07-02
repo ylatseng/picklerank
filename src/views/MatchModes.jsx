@@ -83,11 +83,13 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
 
   function upSp(k,v){setSp(p=>({...p,[k]:v})); setErr("");}
   function upTn(k,v){setTnames(t=>({...t,[k]:v}));}
-  function addGame(){setGames(g=>[...g,{a:"",b:""}]);}
+  const MAX_GAMES = 5;
+  function addGame(){ if(games.length >= MAX_GAMES) return; setGames(g=>[...g,{a:"",b:""}]); }
   function rmGame(i){setGames(g=>g.filter((_,idx)=>idx!==i));}
   function updGame(i,side,val){
     const cleanVal = val.replace(/-/g, '');
     setGames(g=>g.map((gm,idx)=>idx===i?{...gm,[side]:cleanVal}:gm));
+    setErr("");
   }
   function getTeams(){return type==="singles"?[[sp.s1],[sp.s2]]:[[sp.d1a,sp.d1b],[sp.d2a,sp.d2b]];}
   
@@ -426,7 +428,8 @@ export function LogMatch({state,players,set,nav,theme,user,showUndo}) {
           </div>
           );
         })}
-        <button style={S.btnSecondary} onClick={addGame}>{t("add_game_btn")}</button>
+        <button style={{...S.btnSecondary, opacity: games.length >= MAX_GAMES ? 0.4 : 1}} onClick={addGame} disabled={games.length >= MAX_GAMES}>{t("add_game_btn")}</button>
+        {games.length >= MAX_GAMES && <div style={{fontSize:10*(theme.zoom||1), color:"#f0a830", marginTop:4*(theme.zoom||1)}}>{t("max_games_reached")||"Max 5 games per match."}</div>}
       </CollapsibleSec>
       
       <CollapsibleSec title={t("date_venue_sec")} theme={theme} defaultOpen={false}>
@@ -583,6 +586,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
   function updScore(rIdx, team, val){
      const cleanVal = val.replace(/-/g, '');
      setRoundScores(rs => rs.map((r, i) => i === rIdx ? {...r, [team]: cleanVal} : r));
+     setErr("");
   }
   
   function saveCurrentGroup() {
@@ -615,7 +619,7 @@ export function SessionMode({ players, state, set, nav, theme, isAdmin, user, sh
         // Stagger timestamps so Round 3 appears on top in reverse-chrono History
         const matchDate = new Date(baseTime + i * 1000).toISOString();
         const roundNote = `${(t("session_round_note")||"Session #{num} Round {round} of 3").replace("{num}", sessionNum).replace("{round}", i+1)}${notes.trim() ? " — " + notes.trim() : ""}`;
-        matchesToLog.push({id:genId(),type:"doubles",date:matchDate,teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:null, notes:roundNote, loggedBy: user?.myPlayerId || "guest"});
+        matchesToLog.push({id:genId(),type:"doubles",date:matchDate,teams:[t1Ids, t2Ids],winnerTeam,games:[{a:s1, b:s2, winner: winnerTeam}],teamNames:{t1:null,t2:null},winTo,winBy,team1Wins:t1w,team2Wins:t2w,venue:null, notes:roundNote, sysNoteKey:"session_round_note", sysNoteVars:{num:sessionNum, round:i+1}, userNote:notes.trim()||null, loggedBy: user?.myPlayerId || "guest"});
     }
 
     // Compute rich summary (inline card, not a modal)
@@ -1023,6 +1027,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
   function updScore(rIdx, team, val){
      const cleanVal = val.replace(/-/g, '');
      setRoundScores(rs => rs.map((r, i) => i === rIdx ? {...r, [team]: cleanVal} : r));
+     setErr("");
   }
   
   const kotcLeaderboard = sessionIds.map((id, pIdx) => {
@@ -1069,7 +1074,7 @@ export function KingOfCourt({ players, state, set, nav, theme, isAdmin, user, sh
           games: [{a:s1, b:s2, winner: winnerTeam}],
           teamNames: {t1:null, t2:null}, winTo, winBy,
           team1Wins: t1w, team2Wins: t2w, venue: null,
-          notes: `${(t("kotc_match_note")||"King of the Court #{num}: Match {round} of 3").replace("{num}", kotcNum).replace("{round}", i+1)}${notes.trim() ? " — " + notes.trim() : ""}`,
+          notes: `${(t("kotc_match_note")||"King of the Court #{num}: Match {round} of 3").replace("{num}", kotcNum).replace("{round}", i+1)}${notes.trim() ? " — " + notes.trim() : ""}`, sysNoteKey: "kotc_match_note", sysNoteVars: { num: kotcNum, round: i+1 }, userNote: notes.trim()||null,
           loggedBy: user?.myPlayerId || "guest"
         });
     }
@@ -1582,7 +1587,7 @@ export function TournamentMode({ players: roster, state, set, nav, theme, user, 
           team1Wins: m.winner === 0 ? 1 : 0,
           team2Wins: m.winner === 1 ? 1 : 0,
           venue: null,
-          notes: `${formatLabel} #${tourneyNum}: ${roundDisplay}${notes.trim() ? " — " + notes.trim() : ""}`,
+          notes: `${formatLabel} #${tourneyNum}: ${roundDisplay}${notes.trim() ? " — " + notes.trim() : ""}`, sysNoteKey: "tourney_match_note", sysNoteVars: { format: formatLabel, num: tourneyNum, round: roundDisplay }, userNote: notes.trim()||null,
           loggedBy: user?.myPlayerId || "guest",
         });
       });

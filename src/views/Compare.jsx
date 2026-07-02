@@ -77,8 +77,18 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state,
     }
 
 
-  // Trust the Pure Elo Predictor (Drop the historical blend, trust the overall ratings)
-    const exp = calcExpected(r1, r2);
+  // ── Match Predictor: blend pure ELO with actual H2H results ────────────────
+  // Pure ELO gives a baseline probability from ratings. Actual H2H results
+  // from this specific matchup are blended in as evidence accumulates.
+  // Weight toward actual results grows with match count (max 60% at 10+ matches).
+  const eloProb = calcExpected(r1, r2);
+  let blendedProb = eloProb;
+  if (h2h && h2h.total > 0) {
+    const h2hWinRate = h2h.t1w / h2h.total;
+    const h2hWeight = Math.min(h2h.total / 10, 0.6);
+    blendedProb = eloProb * (1 - h2hWeight) + h2hWinRate * h2hWeight;
+  }
+  const exp = blendedProb;
     // Provisional (new) players move faster, so their predicted swing should reflect that too
     const k1 = format === "singles"
       ? dynamicKFactor(p1?.singlesPlayed || 0)
@@ -135,6 +145,11 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state,
       {isReady && h2h && (
         <>
           <Sec title={t("match_predictor")} theme={theme}>
+            {h2h && h2h.total > 0 && (
+              <div style={{fontSize:10*(theme.zoom||1), color:theme.sub, marginBottom:8*(theme.zoom||1), fontStyle:"italic"}}>
+                {t("predictor_blended")||`Blended: ELO rating ${((1-Math.min(h2h.total/10,0.6))*100).toFixed(0)}% + H2H record (${h2h.total} matches) ${(Math.min(h2h.total/10,0.6)*100).toFixed(0)}%`}
+              </div>
+            )}
             <div style={{display:"flex", gap:12*z, textAlign:"center"}}>
               <div style={{flex:1, background:theme.bg, padding:10*z, borderRadius:8*z, border:`1px solid ${theme.border}`}}>
                 <div style={{fontSize:12*z, fontWeight:600}}>{t1Name}</div>
@@ -158,8 +173,9 @@ export default function Compare({players,matches,compareIds,set,nav,theme,state,
           {/* ── Rating Trajectory Overlay ─────────────────────────────── */}
           {(() => {
             const histKey = format === "singles" ? "ratingHistorySingles" : "ratingHistoryDoubles";
-            const h1 = p1?.[histKey] || [];
-            const h2 = p2?.[histKey] || [];
+            // ratingHistory stores {rating, date} objects — extract numbers for plotting
+            const h1 = (p1?.[histKey] || []).map(e => typeof e === "object" ? e.rating : e).filter(Number.isFinite);
+            const h2 = (p2?.[histKey] || []).map(e => typeof e === "object" ? e.rating : e).filter(Number.isFinite);
             if (h1.length < 2 && h2.length < 2) return null;
             // Align both histories to the same scale
             const allVals = [...h1, ...h2];
